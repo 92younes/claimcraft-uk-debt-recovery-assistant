@@ -12,7 +12,9 @@ import { AssessmentReport } from './components/AssessmentReport';
 import { TimelineBuilder } from './components/TimelineBuilder';
 import { EvidenceUpload } from './components/EvidenceUpload';
 import { ChatInterface } from './components/ChatInterface';
-import { analyzeEvidence, startClarificationChat, sendChatMessage, draftUKClaim, reviewDraft, getClaimStrengthAssessment, refineDraft } from './services/geminiService';
+import { DisclaimerModal } from './components/DisclaimerModal';
+import { analyzeEvidence, startClarificationChat, sendChatMessage, getClaimStrengthAssessment } from './services/geminiService';
+import { DocumentBuilder } from './services/documentBuilder';
 import { getStoredAuth } from './services/xeroService';
 import { searchCompaniesHouse } from './services/companiesHouse';
 import { assessClaimViability, calculateCourtFee, calculateCompensation } from './services/legalRules';
@@ -40,6 +42,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('landing');
   const [dashboardClaims, setDashboardClaims] = useState<ClaimState[]>([]);
   const [showEligibility, setShowEligibility] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Wizard State
@@ -93,13 +96,24 @@ const App: React.FC = () => {
 
   // --- Navigation Handlers ---
   const handleStartNewClaim = () => {
-    // 1. Trigger Eligibility Check
+    // 1. Show disclaimer FIRST
+    setShowDisclaimer(true);
+  };
+
+  const handleDisclaimerAccepted = () => {
+    setShowDisclaimer(false);
+    // 2. Then show eligibility check
     setShowEligibility(true);
+  };
+
+  const handleDisclaimerDeclined = () => {
+    setShowDisclaimer(false);
+    // User declined, stay on dashboard
   };
 
   const handleEligibilityPassed = () => {
     setShowEligibility(false);
-    // 2. Reset Wizard and Enter
+    // 3. Reset Wizard and Enter
     setClaimData({ ...INITIAL_STATE, id: Math.random().toString(36).substr(2, 9) });
     setStep(Step.SOURCE);
     setIsEditingAnalysis(false);
@@ -385,13 +399,20 @@ const App: React.FC = () => {
 
   const handleDraftClaim = async () => {
     setIsProcessing(true);
-    setProcessingText(`Drafting ${claimData.selectedDocType}...`);
+    setProcessingText(`Generating ${claimData.selectedDocType}...`);
     try {
-      const result = await draftUKClaim(claimData);
+      // Use new DocumentBuilder with template + AI hybrid approach
+      const result = await DocumentBuilder.generateDocument(claimData);
       setClaimData(prev => ({ ...prev, generated: result }));
       setStep(Step.DRAFT);
-    } catch (e) {
-      setError("Drafting failed.");
+
+      // Show validation warnings to user if any
+      if (result.validation?.warnings && result.validation.warnings.length > 0) {
+        console.warn('Document warnings:', result.validation.warnings);
+      }
+    } catch (e: any) {
+      setError(e.message || "Document generation failed. Please check your data and try again.");
+      console.error('Draft generation error:', e);
     } finally {
       setIsProcessing(false);
     }
@@ -399,10 +420,15 @@ const App: React.FC = () => {
   
   const handleRefineDraft = async () => {
      if (!refineInstruction || !claimData.generated) return;
-     
+
      setIsProcessing(true);
      try {
-        const refined = await refineDraft(claimData.generated.content, refineInstruction);
+        // Use new DocumentBuilder.refineDocument with validation
+        const refined = await DocumentBuilder.refineDocument(
+          claimData.generated.content,
+          refineInstruction,
+          claimData
+        );
         setClaimData(prev => ({
             ...prev,
             generated: { ...prev.generated!, content: refined }
@@ -410,40 +436,18 @@ const App: React.FC = () => {
         setRefineInstruction('');
         setShowRefineInput(false);
      } catch (e) {
-        console.error("Refinement failed");
+        console.error("Refinement failed:", e);
+        setError("Failed to refine document. Please try again.");
      } finally {
         setIsProcessing(false);
      }
   };
 
   const handlePrePreview = async () => {
-    setIsProcessing(true);
-    setProcessingText("AI Legal Assistant Reviewing Evidence...");
-    try {
-       const review = await reviewDraft(claimData);
-       
-       // Auto-Fix Logic
-       let updatedGenerated = claimData.generated;
-       if (review.correctedContent && updatedGenerated) {
-          updatedGenerated = {
-             ...updatedGenerated,
-             content: review.correctedContent
-          };
-       }
-
-       setClaimData(prev => ({
-          ...prev,
-          generated: updatedGenerated ? { ...updatedGenerated!, review } : null
-       }));
-       
-       setIsFinalized(false); 
-       setStep(Step.PREVIEW);
-    } catch (e) {
-       setError("Review failed. Proceeding to preview.");
-       setStep(Step.PREVIEW);
-    } finally {
-       setIsProcessing(false);
-    }
+    // Validation is now built into DocumentBuilder.generateDocument()
+    // So we can go straight to preview
+    setIsFinalized(false);
+    setStep(Step.PREVIEW);
   };
 
   const handleConfirmDraft = async () => {
@@ -810,6 +814,7 @@ const App: React.FC = () => {
             {view === 'wizard' && renderWizardStep()}
          </div>
       </main>
+      <DisclaimerModal isOpen={showDisclaimer} onAccept={handleDisclaimerAccepted} onDecline={handleDisclaimerDeclined} />
       <XeroConnectModal isOpen={showXeroModal} onClose={() => setShowXeroModal(false)} onImport={handleXeroImport} />
       <CsvImportModal isOpen={showCsvModal} onClose={() => setShowCsvModal(false)} onImport={handleBulkImport} />
       <EligibilityModal isOpen={showEligibility} onClose={() => setShowEligibility(false)} onEligible={handleEligibilityPassed} />

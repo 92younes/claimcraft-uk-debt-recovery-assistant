@@ -56,6 +56,11 @@ export interface GeneratedContent {
   briefDetails?: string; // For N1 Box
   legalBasis: string;
   nextSteps: string[];
+  validation?: {
+    isValid: boolean;
+    warnings: string[];
+    generatedAt: string;
+  };
   review?: {
     isPass: boolean;
     critique: string;
