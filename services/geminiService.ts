@@ -2,9 +2,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType } from "../types";
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = import.meta.env.VITE_API_KEY;
   if (!apiKey) {
-    throw new Error("API_KEY is not defined");
+    throw new Error("API_KEY (Gemini) is not defined. Please set VITE_API_KEY in your .env file.");
   }
   return new GoogleGenAI({ apiKey });
 };

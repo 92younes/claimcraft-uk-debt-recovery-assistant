@@ -24,9 +24,9 @@ interface ValidationResult {
 export class DocumentBuilder {
 
   private static getAnthropicClient(): Anthropic {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
     if (!apiKey) {
-      throw new Error("ANTHROPIC_API_KEY is not defined in environment variables");
+      throw new Error("ANTHROPIC_API_KEY is not defined in environment variables. Please set VITE_ANTHROPIC_API_KEY in your .env file.");
     }
     return new Anthropic({ apiKey });
   }

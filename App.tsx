@@ -67,18 +67,59 @@ const App: React.FC = () => {
   useEffect(() => {
     const auth = getStoredAuth();
     if (auth) setIsXeroConnected(true);
-    
+
     // Load local claims async
     const loadClaims = async () => {
         const storedClaims = await getStoredClaims();
         setDashboardClaims(storedClaims);
-        
+
         // If we have claims, auto-direct to dashboard for better UX
         if (storedClaims.length > 0) {
             setView('dashboard');
         }
     };
     loadClaims();
+  }, []);
+
+  // Validate API keys on mount
+  useEffect(() => {
+    const anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+    const geminiKey = import.meta.env.VITE_API_KEY;
+
+    if (!anthropicKey) {
+      console.error('❌ ANTHROPIC_API_KEY not set. Document generation will fail.');
+      console.log('📖 See .env.example for setup instructions');
+      console.log('💡 Create a .env file with: VITE_ANTHROPIC_API_KEY=your_key_here');
+    }
+
+    if (!geminiKey) {
+      console.error('❌ API_KEY (Gemini) not set. Evidence analysis will fail.');
+      console.log('📖 See .env.example for setup instructions');
+      console.log('💡 Create a .env file with: VITE_API_KEY=your_key_here');
+    }
+
+    if (anthropicKey && geminiKey) {
+      console.log('✅ All API keys configured correctly');
+    }
+  }, []);
+
+  // Cleanup old compliance logs monthly (GDPR compliance)
+  useEffect(() => {
+    const lastCleanup = localStorage.getItem('lastLogCleanup');
+    const monthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+
+    if (!lastCleanup || parseInt(lastCleanup) < monthAgo) {
+      import('./services/complianceLogger').then(({ clearOldComplianceLogs }) => {
+        clearOldComplianceLogs(12).then(count => {
+          if (count > 0) {
+            console.log(`🧹 Cleaned up ${count} compliance logs older than 12 months`);
+          }
+          localStorage.setItem('lastLogCleanup', Date.now().toString());
+        }).catch(err => {
+          console.warn('Compliance log cleanup failed (non-critical):', err);
+        });
+      });
+    }
   }, []);
 
   // Auto-save effect: Persist data whenever claimData changes while in wizard

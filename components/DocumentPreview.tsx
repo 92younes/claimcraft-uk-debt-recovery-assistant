@@ -106,6 +106,31 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   return (
     <div className="max-w-6xl mx-auto pb-20">
       
+      {/* Validation Warnings Panel */}
+      {data.generated?.validation?.warnings && data.generated.validation.warnings.length > 0 && (
+        <div className="mb-6 bg-amber-50 border-2 border-amber-200 rounded-xl overflow-hidden animate-fade-in no-print mx-4 md:mx-0 shadow-lg">
+          <div className="p-4 bg-amber-100 border-b border-amber-200 flex items-center gap-3">
+            <div className="p-2 rounded-full bg-amber-200">
+              <AlertTriangle className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <h3 className="font-bold text-amber-900">Quality Recommendations</h3>
+              <p className="text-sm text-amber-700">These suggestions may strengthen your claim, but are not required.</p>
+            </div>
+          </div>
+          <div className="p-5">
+            <ul className="space-y-2">
+              {data.generated.validation.warnings.map((warning, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-amber-900 bg-white p-3 rounded-lg border border-amber-200">
+                  <span className="text-amber-600 font-bold">•</span>
+                  <span>{warning}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* AI Review Panel - Always shows until approved */}
       {!isFinalized && review && (
         <div className="mb-8 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden animate-fade-in no-print ring-4 ring-slate-50 mx-4 md:mx-0">
@@ -130,7 +155,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                     <p className="text-slate-700 italic text-lg font-serif leading-relaxed">"{review.critique}"</p>
                  </div>
               </div>
-              
+
               {review.improvements && review.improvements.length > 0 && (
                  <div className="mb-8 pl-5">
                     <p className="text-xs font-bold text-slate-500 uppercase mb-3">Required Corrections</p>
@@ -149,7 +174,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                  <button onClick={onBack} className="px-5 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg font-medium transition-colors border border-slate-200 hover:border-slate-300 text-center">
                     Back & Edit Data
                  </button>
-                 <button 
+                 <button
                     onClick={onConfirm}
                     className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 ${review.isPass ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
                  >
