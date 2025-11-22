@@ -1,0 +1,5 @@
+{
+  "name": "ClaimCraft UK - Debt Recovery Assistant",
+  "description": "AI-powered assistant to help UK businesses recover debt via Small Claims (County Court). Upload invoices or connect Xero to auto-draft filings.",
+  "requestFramePermissions": []
+}
