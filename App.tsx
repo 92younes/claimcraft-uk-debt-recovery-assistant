@@ -229,8 +229,13 @@ const App: React.FC = () => {
   };
 
   const handleDeleteClaim = async (id: string) => {
-    await deleteClaimFromStorage(id);
-    setDashboardClaims(prev => prev.filter(c => c.id !== id));
+    try {
+      await deleteClaimFromStorage(id);
+      setDashboardClaims(prev => prev.filter(c => c.id !== id));
+    } catch (error) {
+      console.error('Failed to delete claim:', error);
+      setError('Failed to delete claim. Please try again.');
+    }
   };
 
   // GDPR Data Management Handlers
@@ -326,7 +331,13 @@ const App: React.FC = () => {
   // --- Wizard Logic (Existing) ---
   useEffect(() => {
     if (view !== 'wizard') return;
-    const interest = calculateInterest(claimData.invoice.totalAmount, claimData.invoice.dateIssued, claimData.invoice.dueDate);
+    const interest = calculateInterest(
+      claimData.invoice.totalAmount,
+      claimData.invoice.dateIssued,
+      claimData.invoice.dueDate,
+      claimData.claimant.type,
+      claimData.defendant.type
+    );
     const compensation = calculateCompensation(
         claimData.invoice.totalAmount,
         claimData.claimant.type,
@@ -345,7 +356,13 @@ const App: React.FC = () => {
       view
   ]);
 
-  const calculateInterest = (amount: number, dateIssued: string, dueDate?: string): InterestData => {
+  const calculateInterest = (
+    amount: number,
+    dateIssued: string,
+    dueDate: string | undefined,
+    claimantType: PartyType,
+    defendantType: PartyType
+  ): InterestData => {
     if (!dateIssued || !amount) return claimData.interest;
 
     // Determine the payment due date
@@ -363,8 +380,13 @@ const App: React.FC = () => {
     const diffTime = now.getTime() - paymentDue.getTime();
     const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
 
-    // Use correct Late Payment Act rate (BoE + 8% = 12.75%)
-    const annualRate = LATE_PAYMENT_ACT_RATE / 100;
+    // CRITICAL FIX: Use correct interest rate based on party types
+    // B2B = Late Payment of Commercial Debts (Interest) Act 1998 (BoE + 8% = 12.75%)
+    // B2C = County Courts Act 1984 s.69 (8% per annum)
+    const isB2B = claimantType === PartyType.BUSINESS && defendantType === PartyType.BUSINESS;
+    const interestRate = isB2B ? LATE_PAYMENT_ACT_RATE : 8.0; // 12.75% for B2B, 8% for B2C
+
+    const annualRate = interestRate / 100;
     const dailyRate = (amount * annualRate) / DAILY_INTEREST_DIVISOR;
     const totalInterest = dailyRate * daysOverdue;
 
@@ -483,7 +505,7 @@ const App: React.FC = () => {
         }
         
         // Calculate fees
-        const interest = calculateInterest(processed.invoice.totalAmount, processed.invoice.dateIssued, processed.invoice.dueDate);
+        const interest = calculateInterest(processed.invoice.totalAmount, processed.invoice.dateIssued, processed.invoice.dueDate, processed.claimant.type, processed.defendant.type);
         const compensation = calculateCompensation(processed.invoice.totalAmount, processed.claimant.type, processed.defendant.type);
         const totalClaim = processed.invoice.totalAmount + interest.totalInterest + compensation;
         const courtFee = calculateCourtFee(totalClaim);
@@ -523,7 +545,6 @@ const App: React.FC = () => {
     try {
        const aiStrength = await getClaimStrengthAssessment(claimData);
        assessment.strength = aiStrength.strength; // HIGH/MEDIUM/LOW
-       assessment.strengthScore = aiStrength.score; // 0-100 (internal)
        assessment.strengthAnalysis = aiStrength.analysis;
        assessment.weaknesses = aiStrength.weaknesses;
     } catch (e) {
@@ -580,7 +601,75 @@ const App: React.FC = () => {
       }
   };
 
+  // Pre-validation before document generation
+  const validateClaimData = (data: ClaimState): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+
+    // Validate Claimant
+    if (!data.claimant.name.trim()) {
+      errors.push("Claimant name is required");
+    }
+    if (!data.claimant.address.trim()) {
+      errors.push("Claimant address is required");
+    }
+    if (!data.claimant.city.trim()) {
+      errors.push("Claimant town/city is required");
+    }
+    if (!data.claimant.postcode.trim()) {
+      errors.push("Claimant postcode is required");
+    }
+    if (!data.claimant.county.trim()) {
+      errors.push("Claimant county is required");
+    }
+
+    // Validate Defendant
+    if (!data.defendant.name.trim()) {
+      errors.push("Defendant name is required");
+    }
+    if (!data.defendant.address.trim()) {
+      errors.push("Defendant address is required");
+    }
+    if (!data.defendant.city.trim()) {
+      errors.push("Defendant town/city is required");
+    }
+    if (!data.defendant.postcode.trim()) {
+      errors.push("Defendant postcode is required");
+    }
+    if (!data.defendant.county.trim()) {
+      errors.push("Defendant county is required");
+    }
+
+    // Validate Invoice
+    if (!data.invoice.invoiceNumber.trim()) {
+      errors.push("Invoice number is required");
+    }
+    if (!data.invoice.dateIssued) {
+      errors.push("Invoice date is required");
+    }
+    if (data.invoice.totalAmount <= 0) {
+      errors.push("Invoice amount must be greater than £0");
+    }
+
+    // Validate Timeline
+    if (!data.timeline || data.timeline.length === 0) {
+      errors.push("At least one timeline event is required");
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  };
+
   const handleDraftClaim = async () => {
+    // Pre-validate claim data
+    const validation = validateClaimData(claimData);
+    if (!validation.isValid) {
+      const errorMessage = `Cannot generate document. Please fix the following:\n\n${validation.errors.map(e => `• ${e}`).join('\n')}`;
+      setError(errorMessage);
+      return;
+    }
+
     setIsProcessing(true);
     setProcessingText(`Generating ${claimData.selectedDocType}...`);
     try {

@@ -289,8 +289,24 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       }
     });
 
-    if (detectedCases.length > 0) {
-      errors.push(`AI-generated case law citations detected (prohibited): ${detectedCases.slice(0, 3).join(', ')}${detectedCases.length > 3 ? '...' : ''}. Remove all case citations.`);
+    // Filter out false positives: exclude party names from "X v Y" pattern matches
+    const claimantFirstName = data.claimant.name.split(' ')[0];
+    const claimantLastName = data.claimant.name.split(' ').pop() || '';
+    const defendantFirstName = data.defendant.name.split(' ')[0];
+    const defendantLastName = data.defendant.name.split(' ').pop() || '';
+
+    const filteredCases = detectedCases.filter(match => {
+      // If match contains actual party names, it's likely a reference to the parties, not a case citation
+      return !match.includes(claimantFirstName) &&
+             !match.includes(claimantLastName) &&
+             !match.includes(defendantFirstName) &&
+             !match.includes(defendantLastName) &&
+             !match.includes(data.claimant.name) &&
+             !match.includes(data.defendant.name);
+    });
+
+    if (filteredCases.length > 0) {
+      errors.push(`AI-generated case law citations detected (prohibited): ${filteredCases.slice(0, 3).join(', ')}${filteredCases.length > 3 ? '...' : ''}. Remove all case citations.`);
     }
 
     // 7. Warnings (non-critical but recommended)

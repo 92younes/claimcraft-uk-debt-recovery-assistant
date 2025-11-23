@@ -78,6 +78,7 @@ export const deleteClaimFromStorage = async (id: string): Promise<void> => {
         });
     } catch (e) {
         console.error("Failed to delete claim from DB", e);
+        throw e; // Re-throw to allow caller to handle the error
     }
 }
 
