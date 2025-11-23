@@ -29,7 +29,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
       const validFiles: File[] = [];
       const invalidFiles: File[] = [];
 
-      fileList.forEach((file) => {
+      fileList.forEach((file: File) => {
         if (validateFileType(file)) {
           validFiles.push(file);
         } else {
