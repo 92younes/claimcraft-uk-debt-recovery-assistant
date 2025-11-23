@@ -264,17 +264,54 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       errors.push('Defendant name missing from document');
     }
 
-    // 6. Warnings (non-critical)
+    // 6. Check for AI-generated case law (PROHIBITED - SRA requirement)
+    const caseLawPatterns = [
+      /\b[A-Z][a-z]+ v\.? [A-Z][a-z]+\b/g,           // Smith v Jones, Smith v. Jones
+      /\[\d{4}\]\s+[A-Z]{2,}/g,                      // [2023] EWCA, [2024] UKSC
+      /\(\d{4}\)\s+[A-Z]{2,}/g,                      // (2023) QB, (2024) AC
+      /\bEWCA Civ\s+\d+/gi,                          // EWCA Civ 123
+      /\bUKSC\s+\d+/gi,                              // UKSC 45
+      /\b\d+\s+[A-Z]{2,}\s+\d+\b/g,                 // 2 AC 123, 3 WLR 456
+    ];
+
+    const detectedCases: string[] = [];
+    caseLawPatterns.forEach(pattern => {
+      const matches = document.match(pattern);
+      if (matches) {
+        detectedCases.push(...matches);
+      }
+    });
+
+    if (detectedCases.length > 0) {
+      errors.push(`AI-generated case law citations detected (prohibited): ${detectedCases.slice(0, 3).join(', ')}${detectedCases.length > 3 ? '...' : ''}. Remove all case citations.`);
+    }
+
+    // 7. Warnings (non-critical but recommended)
     if (data.evidence.length === 0) {
-      warnings.push('No evidence files attached. Consider uploading supporting documents.');
+      warnings.push('No evidence uploaded. Upload invoices, contracts, or email chains to strengthen your case (especially important if debtor disputes the claim).');
     }
 
     if (data.timeline.length < 2) {
-      warnings.push('Timeline has fewer than 2 events. More detail may strengthen your case.');
+      warnings.push(`Timeline has only ${data.timeline.length} event(s). Add more events (e.g., invoice sent, payment reminders, chaser emails) to demonstrate your efforts to resolve the debt before legal action.`);
     }
 
     if (!data.chatHistory || data.chatHistory.length === 0) {
-      warnings.push('No AI consultation conducted. Consider using the chat feature for case assessment.');
+      warnings.push('No AI legal consultation conducted. Use the chat feature (Step 5) to identify potential weaknesses in your case before sending the letter.');
+    }
+
+    // 8. Workflow-based warnings
+    if (data.invoice.dueDate) {
+      const dueDate = new Date(data.invoice.dueDate);
+      const now = new Date();
+      const daysSinceDue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (data.selectedDocType === DocumentType.LBA && daysSinceDue < 7) {
+        warnings.push(`Sending Letter Before Action only ${daysSinceDue} days after payment due date may seem aggressive. Consider sending a friendly reminder first to maintain the business relationship.`);
+      }
+
+      if (daysSinceDue > 180) {
+        warnings.push(`Debt is ${Math.floor(daysSinceDue / 30)} months overdue. Very old debts may be harder to recover and could approach the 6-year limitation period.`);
+      }
     }
 
     return {

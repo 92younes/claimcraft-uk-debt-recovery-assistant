@@ -91,6 +91,33 @@ export interface ChatMessage {
 
 export type ClaimStatus = 'draft' | 'review' | 'sent' | 'paid';
 
+export enum ClaimStage {
+  DRAFT = 'Draft',
+  OVERDUE = 'Overdue',
+  REMINDER_SENT = 'Reminder Sent',
+  FINAL_DEMAND = 'Final Demand',
+  LBA_SENT = 'LBA Sent',
+  COURT_CLAIM = 'Court Claim',
+  JUDGMENT = 'Judgment Obtained',
+  ENFORCEMENT = 'Enforcement',
+  SETTLED = 'Settled',
+  ABANDONED = 'Abandoned'
+}
+
+export interface WorkflowState {
+  currentStage: ClaimStage;
+  nextAction: string;
+  nextActionDue: string | null; // ISO date when next action should be taken
+  daysUntilEscalation: number | null; // Days before auto-escalation
+  autoEscalate: boolean; // Whether to show escalation warning
+  escalationWarning: string | null;
+  stageHistory: {
+    stage: ClaimStage;
+    enteredAt: string; // ISO date
+    notes?: string;
+  }[];
+}
+
 export interface ClaimState {
   id: string;
   status: ClaimStatus;
@@ -101,15 +128,16 @@ export interface ClaimState {
   invoice: InvoiceData;
   interest: InterestData;
   compensation: number; // Late Payment of Commercial Debts Act 1998
-  courtFee: number; 
+  courtFee: number;
   timeline: TimelineEvent[];
   evidence: EvidenceFile[]; // Store multiple files
-  userNotes: string; 
+  userNotes: string;
   chatHistory: ChatMessage[];
   assessment: AssessmentResult | null;
   selectedDocType: DocumentType;
   generated: GeneratedContent | null;
   signature: string | null; // Base64 signature image
+  workflow?: WorkflowState; // Workflow tracking
 }
 
 export const INITIAL_PARTY: Party = {

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ClaimState, DocumentType } from '../types';
-import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight } from 'lucide-react';
+import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight, Bell, Zap } from 'lucide-react';
+import { WorkflowEngine } from '../services/workflowEngine';
 
 interface DashboardProps {
   claims: ClaimState[];
@@ -14,21 +15,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ claims, onCreateNew, onRes
   const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest, 0);
   const activeClaims = claims.filter(c => c.status !== 'paid').length;
 
-  const getNextAction = (claim: ClaimState) => {
-    if (claim.status === 'draft') {
-      if (!claim.generated) return { label: "Draft Strategy", color: "text-blue-600 bg-blue-50 border-blue-100" };
-      if (claim.selectedDocType === DocumentType.LBA) return { label: "Finalize LBA", color: "text-purple-600 bg-purple-50 border-purple-100" };
-      return { label: "Finalize N1", color: "text-slate-800 bg-slate-100 border-slate-200" };
-    }
-    if (claim.status === 'review') return { label: "Ready to Sign", color: "text-green-600 bg-green-50 border-green-100" };
-    if (claim.status === 'sent') {
-      if (claim.selectedDocType === DocumentType.LBA) {
-         return { label: "Await Response", color: "text-amber-600 bg-amber-50 border-amber-100" };
-      }
-      return { label: "Court Pending", color: "text-slate-600 bg-slate-50 border-slate-200" };
-    }
-    return { label: "View Case", color: "text-slate-600" };
-  };
+  // Calculate workflow states for all claims (memoized for performance)
+  const claimsWithWorkflow = useMemo(() => {
+    return claims.map(claim => ({
+      claim,
+      workflow: WorkflowEngine.calculateWorkflowState(claim)
+    }));
+  }, [claims]);
+
+  // Count urgent actions
+  const urgentActions = useMemo(() => {
+    return claimsWithWorkflow.filter(({ workflow }) =>
+      WorkflowEngine.getUrgencyLevel(workflow) === 'critical' ||
+      WorkflowEngine.getUrgencyLevel(workflow) === 'high'
+    ).length;
+  }, [claimsWithWorkflow]);
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto animate-fade-in pt-20 md:pt-10">
@@ -75,12 +76,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ claims, onCreateNew, onRes
            </div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-           <div className="w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 border border-emerald-100">
-              <TrendingUp className="w-6 h-6" />
+           <div className={`w-12 h-12 rounded-lg flex items-center justify-center border ${urgentActions > 0 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+              {urgentActions > 0 ? <Bell className="w-6 h-6" /> : <TrendingUp className="w-6 h-6" />}
            </div>
            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Success Probability</p>
-              <p className="text-2xl font-bold text-slate-900 font-serif">High</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                {urgentActions > 0 ? 'Urgent Actions' : 'Success Probability'}
+              </p>
+              <p className={`text-2xl font-bold font-serif ${urgentActions > 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                {urgentActions > 0 ? urgentActions : 'High'}
+              </p>
            </div>
         </div>
       </div>
@@ -101,51 +106,110 @@ export const Dashboard: React.FC<DashboardProps> = ({ claims, onCreateNew, onRes
         <div className="space-y-4">
           <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider px-6 mb-2">
              <span>Case Details</span>
-             <span className="hidden md:block mr-24">Next Action</span>
+             <span className="hidden md:block mr-24">Workflow Stage</span>
           </div>
-          {claims.map((claim) => {
-            const action = getNextAction(claim);
+          {claimsWithWorkflow.map(({ claim, workflow }) => {
+            const urgency = WorkflowEngine.getUrgencyLevel(workflow);
+            const stageBadgeColor = WorkflowEngine.getStageBadgeColor(workflow.currentStage);
+
             return (
-            <div 
-              key={claim.id} 
+            <div
+              key={claim.id}
               onClick={() => onResume(claim)}
-              className="group bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:border-blue-500 hover:shadow-md transition-all cursor-pointer relative"
+              className={`group bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all cursor-pointer relative ${
+                urgency === 'critical' ? 'border-red-300 hover:border-red-500' :
+                urgency === 'high' ? 'border-orange-300 hover:border-orange-500' :
+                'border-slate-200 hover:border-blue-500'
+              }`}
             >
-               <div className="flex flex-col md:flex-row md:items-center gap-6">
-                  {/* Left: ID & Date */}
-                  <div className="flex items-center gap-4 min-w-[180px]">
-                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        <FileText className="w-5 h-5" />
+               {/* Urgency indicator */}
+               {workflow.autoEscalate && (
+                 <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-lg animate-pulse z-10">
+                   <Zap className="w-4 h-4 text-white" />
+                 </div>
+               )}
+
+               <div className="flex flex-col gap-4">
+                  {/* Top Row: ID, Parties, Stage */}
+                  <div className="flex flex-col md:flex-row md:items-center gap-4">
+                     {/* Left: ID & Date */}
+                     <div className="flex items-center gap-4 min-w-[180px]">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                           <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                           <p className="text-xs font-mono text-slate-500 mb-0.5">{claim.id.toUpperCase().slice(0,6)}</p>
+                           <p className="text-xs text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(claim.lastModified).toLocaleDateString()}</p>
+                        </div>
                      </div>
-                     <div>
-                        <p className="text-xs font-mono text-slate-500 mb-0.5">{claim.id.toUpperCase().slice(0,6)}</p>
-                        <p className="text-xs text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(claim.lastModified).toLocaleDateString()}</p>
+
+                     {/* Middle: Parties */}
+                     <div className="flex-grow grid md:grid-cols-2 gap-4">
+                         <div>
+                             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Defendant</p>
+                             <p className="font-bold text-slate-900 text-lg truncate">{claim.defendant.name || "Unknown Entity"}</p>
+                         </div>
+                         <div>
+                             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Value</p>
+                             <p className="font-mono text-slate-700">£{claim.invoice.totalAmount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p>
+                         </div>
+                     </div>
+
+                     {/* Right: Stage Badge */}
+                     <div className="flex items-center justify-between md:justify-end gap-4 min-w-[200px]">
+                         <span className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wide border ${stageBadgeColor}`}>
+                             {workflow.currentStage}
+                         </span>
+                         <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
                      </div>
                   </div>
 
-                  {/* Middle: Parties */}
-                  <div className="flex-grow grid md:grid-cols-2 gap-4">
-                      <div>
-                          <p className="text-xs text-slate-400 uppercase font-bold mb-1">Defendant</p>
-                          <p className="font-bold text-slate-900 text-lg truncate">{claim.defendant.name || "Unknown Entity"}</p>
-                      </div>
-                      <div>
-                          <p className="text-xs text-slate-400 uppercase font-bold mb-1">Value</p>
-                          <p className="font-mono text-slate-700">£{claim.invoice.totalAmount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p>
-                      </div>
-                  </div>
-
-                  {/* Right: Action */}
-                  <div className="flex items-center justify-between md:justify-end gap-4 min-w-[200px]">
-                      <span className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wide border ${action.color}`}>
-                          {action.label}
-                      </span>
-                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                  {/* Bottom Row: Next Action & Due Date */}
+                  <div className={`px-4 py-3 rounded-lg border-l-4 ${
+                    urgency === 'critical' ? 'bg-red-50 border-red-500' :
+                    urgency === 'high' ? 'bg-orange-50 border-orange-500' :
+                    urgency === 'medium' ? 'bg-blue-50 border-blue-500' :
+                    'bg-slate-50 border-slate-300'
+                  }`}>
+                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                           <Clock className="w-4 h-4 text-slate-500" />
+                           <span className="text-sm font-medium text-slate-700">Next: {workflow.nextAction}</span>
+                        </div>
+                        {workflow.nextActionDue && (
+                          <div className="flex items-center gap-2 text-sm">
+                             <span className={`font-bold ${
+                               urgency === 'critical' ? 'text-red-600' :
+                               urgency === 'high' ? 'text-orange-600' :
+                               'text-slate-600'
+                             }`}>
+                               Due: {new Date(workflow.nextActionDue).toLocaleDateString('en-GB')}
+                             </span>
+                             {workflow.daysUntilEscalation !== null && workflow.daysUntilEscalation <= 3 && (
+                               <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                 workflow.daysUntilEscalation < 0 ? 'bg-red-600 text-white' :
+                                 workflow.daysUntilEscalation === 0 ? 'bg-red-500 text-white' :
+                                 'bg-orange-500 text-white'
+                               }`}>
+                                 {workflow.daysUntilEscalation < 0 ? `${Math.abs(workflow.daysUntilEscalation)}d overdue` :
+                                  workflow.daysUntilEscalation === 0 ? 'TODAY' :
+                                  `${workflow.daysUntilEscalation}d`}
+                               </span>
+                             )}
+                          </div>
+                        )}
+                     </div>
+                     {workflow.escalationWarning && (
+                       <div className="mt-2 text-xs font-medium text-red-600 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          {workflow.escalationWarning}
+                       </div>
+                     )}
                   </div>
                </div>
-               
+
                {/* Delete Hover */}
-               <button 
+               <button
                   onClick={(e) => {
                     e.stopPropagation();
                     if(confirm("Archive this case file?")) onDelete(claim.id);
