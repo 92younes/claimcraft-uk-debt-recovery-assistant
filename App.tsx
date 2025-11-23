@@ -13,6 +13,7 @@ import { AssessmentReport } from './components/AssessmentReport';
 import { TimelineBuilder } from './components/TimelineBuilder';
 import { EvidenceUpload } from './components/EvidenceUpload';
 import { ChatInterface } from './components/ChatInterface';
+import { FloatingChatWidget } from './components/FloatingChatWidget';
 import { DisclaimerModal } from './components/DisclaimerModal';
 import { StatementOfTruthModal } from './components/StatementOfTruthModal';
 import { InterestRateConfirmModal } from './components/InterestRateConfirmModal';
@@ -46,12 +47,11 @@ enum Step {
 }
 
 // Wizard step definitions for progress indicator
+// Note: ASSESSMENT and QUESTIONS removed as separate steps for better UX
 const WIZARD_STEPS = [
   { number: Step.SOURCE, label: 'Data Source', description: 'Import or enter' },
   { number: Step.DETAILS, label: 'Claim Details', description: 'Parties & amounts' },
-  { number: Step.ASSESSMENT, label: 'Assessment', description: 'Legal check' },
   { number: Step.TIMELINE, label: 'Timeline', description: 'Event history' },
-  { number: Step.QUESTIONS, label: 'Consultation', description: 'AI guidance' },
   { number: Step.FINAL, label: 'Strategy', description: 'Document type' },
   { number: Step.DRAFT, label: 'Draft', description: 'Edit content' },
   { number: Step.PREVIEW, label: 'Review', description: 'Final check' }
@@ -79,6 +79,7 @@ const App: React.FC = () => {
 
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false); // For AI flow in Step 2
+  const [isChatOpen, setIsChatOpen] = useState(false); // Floating chat widget toggle
 
   // Accounting Integration State
   const [accountingConnection, setAccountingConnection] = useState<AccountingConnection | null>(null);
@@ -559,7 +560,7 @@ const App: React.FC = () => {
 
     setClaimData(prev => ({ ...prev, assessment }));
     setIsProcessing(false);
-    setStep(Step.ASSESSMENT);
+    // Assessment now shown inline in DETAILS step, no longer a separate step
   };
 
   const handleStartChat = async () => {
@@ -807,6 +808,13 @@ const App: React.FC = () => {
         if (claimData.source === 'manual' || isEditingAnalysis) {
             return (
                 <div className="space-y-8 animate-fade-in py-10 max-w-5xl mx-auto">
+                    <button
+                      onClick={() => setStep(Step.SOURCE)}
+                      className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back to Data Source
+                    </button>
                     <div className="text-center mb-8">
                         <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Claim Details</h2>
                         <p className="text-slate-500">Please ensure all details are correct before legal assessment.</p>
@@ -871,12 +879,29 @@ const App: React.FC = () => {
                             {isProcessing ? <Loader2 className="animate-spin" /> : <>Analyze & Assess Claim <ArrowRight className="w-5 h-5" /></>}
                         </button>
                     </div>
+
+                    {/* Inline Assessment Report */}
+                    {claimData.assessment && (
+                        <div className="mt-12 pt-8 border-t-2 border-slate-200">
+                            <AssessmentReport
+                                assessment={claimData.assessment}
+                                onContinue={() => setStep(Step.TIMELINE)}
+                            />
+                        </div>
+                    )}
                 </div>
             );
         } else {
             // AI/Xero Analysis Summary View
             return (
                 <div className="max-w-3xl mx-auto animate-fade-in py-10">
+                    <button
+                      onClick={() => setStep(Step.SOURCE)}
+                      className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back to Data Source
+                    </button>
                     <div className="flex items-center gap-4 mb-8">
                         <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center shadow-sm"><CheckCircle className="w-6 h-6 text-green-600" /></div>
                         <div><h2 className="text-3xl font-bold text-slate-900 font-serif">Analysis Complete</h2><p className="text-slate-600">We've extracted the key facts. Please verify.</p></div>
@@ -894,63 +919,64 @@ const App: React.FC = () => {
                     <div className="flex justify-end"><button onClick={runAssessment} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-xl font-bold shadow-lg flex items-center gap-3 transition-all transform hover:-translate-y-0.5">
                         {isProcessing ? <Loader2 className="animate-spin" /> : <>Run Legal Viability Check <ArrowRight className="w-5 h-5"/></>}
                     </button></div>
+
+                    {/* Inline Assessment Report */}
+                    {claimData.assessment && (
+                        <div className="mt-12 pt-8 border-t-2 border-slate-200">
+                            <AssessmentReport
+                                assessment={claimData.assessment}
+                                onContinue={() => setStep(Step.TIMELINE)}
+                            />
+                        </div>
+                    )}
                 </div>
             );
         }
 
-      case Step.ASSESSMENT:
-        return (
-            <div className="py-10">
-                <AssessmentReport 
-                    assessment={claimData.assessment} 
-                    onContinue={() => setStep(Step.TIMELINE)} 
-                />
-            </div>
-        );
-      
+      // Step.ASSESSMENT has been eliminated - assessment now shown inline in Step.DETAILS
+      // This improves UX by reducing wizard steps from 8 to 7 and eliminating a passive step
+
       case Step.TIMELINE:
         return (
             <div className="space-y-8 py-10">
-                <TimelineBuilder 
-                    events={claimData.timeline} 
-                    onChange={updateTimeline} 
-                    invoiceDate={claimData.invoice.dateIssued} 
+                <div className="max-w-4xl mx-auto">
+                    <button
+                        onClick={() => setStep(Step.DETAILS)}
+                        className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to Details
+                    </button>
+                </div>
+                <TimelineBuilder
+                    events={claimData.timeline}
+                    onChange={updateTimeline}
+                    invoiceDate={claimData.invoice.dateIssued}
                 />
-                <div className="flex justify-end max-w-4xl mx-auto">
-                    <button 
-                        onClick={handleStartChat} 
+                <div className="flex justify-between items-center max-w-4xl mx-auto">
+                    <button
+                        onClick={() => {
+                            setIsChatOpen(true);
+                            handleStartChat();
+                        }}
+                        className="text-slate-600 hover:text-slate-900 border-2 border-slate-200 hover:border-slate-300 px-6 py-3 rounded-xl transition-all flex items-center gap-2 font-medium shadow-sm"
+                    >
+                        <MessageSquareText className="w-4 h-4"/>
+                        Ask AI Questions (Optional)
+                    </button>
+                    <button
+                        onClick={() => setStep(Step.FINAL)}
                         className="bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-slate-800 transition-all flex items-center gap-2 font-medium shadow-lg"
                     >
-                        Proceed to AI Consultation <MessageSquareText className="w-4 h-4"/>
+                        Continue to Strategy <ArrowRight className="w-4 h-4"/>
                     </button>
                 </div>
             </div>
         );
 
-      case Step.QUESTIONS:
-        return (
-          <div className="relative">
-            {/* Skip Consultation Button */}
-            <div className="absolute top-4 right-4 z-10">
-              <button
-                onClick={() => setStep(Step.FINAL)}
-                className="bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium shadow-sm flex items-center gap-2 transition-all hover:shadow-md"
-                title="Skip AI consultation and proceed to document selection"
-              >
-                <ArrowRight className="w-4 h-4" />
-                Skip Consultation
-              </button>
-            </div>
+      // Step.QUESTIONS has been eliminated - chat now available as floating widget throughout wizard
+      // This improves UX by making AI consultation optional and non-blocking
 
-            <ChatInterface
-                messages={claimData.chatHistory}
-                onSendMessage={handleSendMessage}
-                onComplete={() => setStep(Step.FINAL)}
-                isThinking={isProcessing}
-             />
-          </div>
-        );
-      
       case Step.FINAL: {
         // Legal Compliance Logic: Check timeline for LBA
         const hasLBA = claimData.timeline.some(e =>
@@ -1084,6 +1110,14 @@ const App: React.FC = () => {
 
         return (
           <div className="space-y-8 animate-fade-in py-10 max-w-6xl mx-auto">
+            <button
+              onClick={() => setStep(Step.QUESTIONS)}
+              className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Consultation
+            </button>
+
             <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Select Document Type</h2>
                 <p className="text-slate-500">Choose the appropriate legal document based on your claim's current stage</p>
@@ -1832,6 +1866,17 @@ const App: React.FC = () => {
           'Court Document'
         }
       />
+
+      {/* Floating Chat Widget - Available throughout wizard */}
+      {view === 'wizard' && (
+        <FloatingChatWidget
+          messages={claimData.chatHistory}
+          onSendMessage={handleSendMessage}
+          isThinking={isProcessing}
+          isOpen={isChatOpen}
+          onToggle={() => setIsChatOpen(!isChatOpen)}
+        />
+      )}
     </div>
   );
 };
