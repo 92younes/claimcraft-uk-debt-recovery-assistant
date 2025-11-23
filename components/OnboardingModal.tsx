@@ -206,7 +206,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               </button>
               <button
                 onClick={() => setStage('eligibility')}
-                className="flex-1 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg"
+                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2 shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 I Understand & Accept
                 <ArrowRight className="w-4 h-4" />

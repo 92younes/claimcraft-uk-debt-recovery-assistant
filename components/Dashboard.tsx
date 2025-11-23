@@ -52,7 +52,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     <div className="p-6 md:p-10 max-w-7xl mx-auto animate-fade-in pt-20 md:pt-10">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 font-serif mb-2">Legal Dashboard</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 font-serif mb-2">Legal Dashboard</h1>
           <p className="text-slate-500">Overview of your active litigation files.</p>
         </div>
         <div className="flex flex-wrap gap-3 w-full md:w-auto">
@@ -83,7 +83,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button
               onClick={onCreateNew}
               aria-label="Create new claim case"
-              className="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-slate-700 focus:ring-offset-2"
+              className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <Plus className="w-4 h-4" aria-hidden="true" /> New Case File
             </button>

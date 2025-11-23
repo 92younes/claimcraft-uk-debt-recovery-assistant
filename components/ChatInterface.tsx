@@ -36,7 +36,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
         </div>
         <h2 className="text-2xl font-bold text-slate-900 font-serif">Case Consultation</h2>
         <p className="text-slate-500 text-xs uppercase tracking-widest font-bold mt-1">Confidential • Procedural Guidance</p>
-        <div className="flex items-center justify-center gap-2 mt-2 text-xs text-slate-400">
+        <div className="flex items-center justify-center gap-2 mt-2 text-xs text-slate-500">
           <Sparkles className="w-3 h-3" />
           <span>Powered by Google Gemini AI</span>
         </div>
@@ -45,7 +45,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
       {/* Chat Area */}
       <div className="flex-grow overflow-y-auto px-6 py-6 bg-white rounded-t-2xl border border-slate-200 shadow-xl space-y-6 scrollbar-thin scrollbar-thumb-slate-200">
         {messages.length === 0 && !isThinking && (
-             <div className="text-center text-slate-400 italic mt-10 text-sm">
+             <div className="text-center text-slate-500 italic mt-10 text-sm">
                Establishing secure link to AI legal assistant...
              </div>
         )}
@@ -56,7 +56,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
                {msg.role === 'user' ? <User className="w-5 h-5" /> : <Briefcase className="w-5 h-5" />}
             </div>
             <div className="flex flex-col max-w-[80%]">
-                <span className={`text-[10px] font-bold uppercase mb-1 ${msg.role === 'user' ? 'text-right text-slate-400' : 'text-left text-slate-500'}`}>
+                <span className={`text-[10px] font-bold uppercase mb-1 ${msg.role === 'user' ? 'text-right text-slate-500' : 'text-left text-slate-500'}`}>
                     {msg.role === 'user' ? 'Client' : 'Legal Assistant'}
                 </span>
                 <div className={`px-5 py-4 rounded-2xl text-sm leading-relaxed shadow-sm ${
