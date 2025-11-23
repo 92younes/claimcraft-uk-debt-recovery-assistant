@@ -4,16 +4,21 @@ This directory contains static files that are served directly by Vite.
 
 ## Required Files
 
-### 1. N1.pdf - Official HMCTS Claim Form ⚠️ **REQUIRED**
+### 1. N1.pdf - Official HMCTS Claim Form ✅ **PRESENT**
 
-**Status:** ❌ NOT PRESENT (You must add this file)
+**Status:** ✅ INSTALLED (Form N1_1224, December 2024 version)
 
 **What:** Official Form N1 (Claim Form) from HM Courts & Tribunals Service
 
-**Where to get it:**
+**Current Version Installed:**
+- **Form:** N1_1224 (December 2024 version)
+- **Size:** 119KB, 5 pages
+- **Format:** PDF 1.3 (fillable)
+- **Downloaded:** 2025-01-23
+
+**To update to a newer version:**
 - **Official Source:** https://www.gov.uk/government/publications/form-n1-claim-form-cpr-part-7
-- **Direct Link:** https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/1184952/n1-eng.pdf
-- **Form Version:** N1 (09.24) or later
+- **Current Direct Link:** https://assets.publishing.service.gov.uk/media/674d7ea12e91c6fb83fb5162/N1_1224.pdf
 - **Important:** Must be fillable PDF, not scanned image
 
 **How to add:**
