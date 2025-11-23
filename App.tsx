@@ -23,7 +23,7 @@ import { searchCompaniesHouse } from './services/companiesHouse';
 import { assessClaimViability, calculateCourtFee, calculateCompensation } from './services/legalRules';
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage } from './services/storageService';
 import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection } from './types';
-import { STATUTORY_INTEREST_RATE, DAILY_INTEREST_DIVISOR } from './constants';
+import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS } from './constants';
 import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle } from 'lucide-react';
 
 // New view state
@@ -249,38 +249,52 @@ const App: React.FC = () => {
   // --- Wizard Logic (Existing) ---
   useEffect(() => {
     if (view !== 'wizard') return;
-    const interest = calculateInterest(claimData.invoice.totalAmount, claimData.invoice.dateIssued);
+    const interest = calculateInterest(claimData.invoice.totalAmount, claimData.invoice.dateIssued, claimData.invoice.dueDate);
     const compensation = calculateCompensation(
-        claimData.invoice.totalAmount, 
-        claimData.claimant.type, 
+        claimData.invoice.totalAmount,
+        claimData.claimant.type,
         claimData.defendant.type
     );
-    const courtFee = calculateCourtFee(claimData.invoice.totalAmount + interest.totalInterest);
+    // Court fee should be based on total claim value (principal + interest + compensation)
+    const totalClaim = claimData.invoice.totalAmount + interest.totalInterest + compensation;
+    const courtFee = calculateCourtFee(totalClaim);
     setClaimData(prev => ({ ...prev, interest, courtFee, compensation }));
   }, [
-      claimData.invoice.totalAmount, 
-      claimData.invoice.dateIssued, 
-      claimData.claimant.type, 
+      claimData.invoice.totalAmount,
+      claimData.invoice.dateIssued,
+      claimData.invoice.dueDate,
+      claimData.claimant.type,
       claimData.defendant.type,
       view
   ]);
 
-  const calculateInterest = (amount: number, dateIssued: string): InterestData => {
+  const calculateInterest = (amount: number, dateIssued: string, dueDate?: string): InterestData => {
     if (!dateIssued || !amount) return claimData.interest;
-    
-    const start = new Date(dateIssued);
-    start.setDate(start.getDate() + 30); 
+
+    // Determine the payment due date
+    // If dueDate is provided, use it. Otherwise, assume default payment terms.
+    let paymentDue: Date;
+    if (dueDate) {
+      paymentDue = new Date(dueDate);
+    } else {
+      // Fallback: invoice date + default payment terms
+      paymentDue = new Date(dateIssued);
+      paymentDue.setDate(paymentDue.getDate() + DEFAULT_PAYMENT_TERMS_DAYS);
+    }
+
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - start.getTime());
-    const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    const dailyRate = (amount * STATUTORY_INTEREST_RATE) / DAILY_INTEREST_DIVISOR;
+    const diffTime = now.getTime() - paymentDue.getTime();
+    const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+    // Use correct Late Payment Act rate (BoE + 8% = 12.75%)
+    const annualRate = LATE_PAYMENT_ACT_RATE / 100;
+    const dailyRate = (amount * annualRate) / DAILY_INTEREST_DIVISOR;
     const totalInterest = dailyRate * daysOverdue;
 
     return {
-      daysOverdue: daysOverdue > 0 ? daysOverdue : 0,
-      dailyRate,
-      totalInterest: daysOverdue > 0 ? totalInterest : 0
+      daysOverdue,
+      dailyRate: parseFloat(dailyRate.toFixed(4)),
+      totalInterest: parseFloat(totalInterest.toFixed(2))
     };
   };
 
@@ -392,9 +406,10 @@ const App: React.FC = () => {
         }
         
         // Calculate fees
-        const interest = calculateInterest(processed.invoice.totalAmount, processed.invoice.dateIssued);
+        const interest = calculateInterest(processed.invoice.totalAmount, processed.invoice.dateIssued, processed.invoice.dueDate);
         const compensation = calculateCompensation(processed.invoice.totalAmount, processed.claimant.type, processed.defendant.type);
-        const courtFee = calculateCourtFee(processed.invoice.totalAmount + interest.totalInterest);
+        const totalClaim = processed.invoice.totalAmount + interest.totalInterest + compensation;
+        const courtFee = calculateCourtFee(totalClaim);
         
         processed = {
             ...processed,
@@ -607,11 +622,19 @@ const App: React.FC = () => {
                     </div>
                     <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
                         <h2 className="text-xl font-bold text-slate-800 mb-6 pb-2 border-b border-slate-100 font-serif">Claim Financials</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <Input label="Principal (£)" type="number" value={claimData.invoice.totalAmount} onChange={(e) => updateInvoice('totalAmount', parseFloat(e.target.value))} />
-                            <Input label="Invoice Date" type="date" value={claimData.invoice.dateIssued} onChange={(e) => updateInvoice('dateIssued', e.target.value)} />
                             <Input label="Invoice Ref" type="text" value={claimData.invoice.invoiceNumber} onChange={(e) => updateInvoice('invoiceNumber', e.target.value)} />
                         </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Input label="Invoice Date" type="date" value={claimData.invoice.dateIssued} onChange={(e) => updateInvoice('dateIssued', e.target.value)} />
+                            <Input label="Payment Due Date" type="date" value={claimData.invoice.dueDate} onChange={(e) => updateInvoice('dueDate', e.target.value)} />
+                        </div>
+                        {!claimData.invoice.dueDate && claimData.invoice.dateIssued && (
+                            <p className="text-xs text-slate-500 mt-2">
+                                💡 Due date not set - using {DEFAULT_PAYMENT_TERMS_DAYS} day payment terms by default
+                            </p>
+                        )}
                     </div>
                     <div className="flex justify-end pt-4">
                         <button onClick={runAssessment} disabled={!claimData.invoice.totalAmount || !claimData.claimant.name} className="bg-slate-900 text-white px-12 py-4 rounded-xl shadow-lg font-bold text-lg flex items-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed">

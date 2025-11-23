@@ -6,6 +6,8 @@
  */
 
 import { NangoClient } from './nangoClient';
+import { calculateCourtFee, calculateCompensation } from './legalRules';
+import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR } from '../constants';
 import {
   XeroInvoice,
   XeroContact,
@@ -16,10 +18,6 @@ import {
   InterestData,
   TimelineEvent
 } from '../types';
-
-// Bank of England base rate (as of Jan 2025) - In production, fetch from API
-const BOE_BASE_RATE = 4.75;
-const LATE_PAYMENT_ACT_RATE = BOE_BASE_RATE + 8.0; // Statutory rate
 
 export class XeroPuller {
   /**
@@ -124,7 +122,7 @@ export class XeroPuller {
 
     // Daily interest rate: (amount * annual rate) / 365
     const annualRate = LATE_PAYMENT_ACT_RATE / 100; // Convert percentage to decimal
-    const dailyRate = (amount * annualRate) / 365;
+    const dailyRate = (amount * annualRate) / DAILY_INTEREST_DIVISOR;
 
     // Total interest accrued
     const totalInterest = dailyRate * daysOverdue;
@@ -136,45 +134,7 @@ export class XeroPuller {
     };
   }
 
-  /**
-   * Calculate fixed compensation under Late Payment Act 1998
-   *
-   * Statutory compensation for late payment:
-   * - Up to £999.99: £40
-   * - £1,000 - £9,999.99: £70
-   * - £10,000+: £100
-   *
-   * @param amount - Invoice amount
-   * @returns Fixed compensation amount
-   */
-  static calculateCompensation(amount: number): number {
-    if (amount < 1000) {
-      return 40.00;
-    } else if (amount < 10000) {
-      return 70.00;
-    } else {
-      return 100.00;
-    }
-  }
-
-  /**
-   * Calculate court fee based on claim amount
-   * https://www.gov.uk/make-court-claim-for-money/court-fees
-   *
-   * @param amount - Total claim amount
-   * @returns Court fee
-   */
-  static calculateCourtFee(amount: number): number {
-    if (amount <= 300) return 35;
-    if (amount <= 500) return 50;
-    if (amount <= 1000) return 70;
-    if (amount <= 1500) return 80;
-    if (amount <= 3000) return 115;
-    if (amount <= 5000) return 205;
-    if (amount <= 10000) return 455;
-    if (amount <= 200000) return Math.min(5 / 100 * amount, 10000); // 5% capped at £10k
-    return 10000; // Max fee
-  }
+  // Compensation and court fee calculations now imported from legalRules.ts
 
   /**
    * Transform Xero contact to Party
@@ -219,9 +179,12 @@ export class XeroPuller {
     claimant: Party
   ): ClaimState {
     const interest = this.calculateInterest(invoice.Total, invoice.DueDate);
-    const compensation = this.calculateCompensation(invoice.Total);
+    const defendant = this.transformContactToParty(contact);
+
+    // Calculate compensation (requires party types for B2B check)
+    const compensation = calculateCompensation(invoice.Total, claimant.type, defendant.type);
     const totalClaim = invoice.Total + interest.totalInterest + compensation;
-    const courtFee = this.calculateCourtFee(totalClaim);
+    const courtFee = calculateCourtFee(totalClaim);
 
     // Build timeline
     const timeline: TimelineEvent[] = [
@@ -246,7 +209,7 @@ export class XeroPuller {
       lastModified: Date.now(),
       source: 'xero',
       claimant,
-      defendant: this.transformContactToParty(contact),
+      defendant,
       invoice: {
         invoiceNumber: invoice.InvoiceNumber,
         dateIssued: invoice.Date,

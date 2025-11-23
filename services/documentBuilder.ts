@@ -65,10 +65,16 @@ export class DocumentBuilder {
       .map((event, idx) => `       ${idx + 1}. ${this.formatDate(event.date)}: ${event.description}`)
       .join('\n\n');
 
-    // Determine interest start date (typically invoice date + 30 days for payment terms)
-    const invoiceDate = new Date(data.invoice.dateIssued);
-    const interestStartDate = new Date(invoiceDate);
-    interestStartDate.setDate(interestStartDate.getDate() + 30);
+    // Determine interest start date
+    // Use actual due date if provided, otherwise default to invoice date + 30 days
+    let interestStartDate: Date;
+    if (data.invoice.dueDate) {
+      interestStartDate = new Date(data.invoice.dueDate);
+    } else {
+      const invoiceDate = new Date(data.invoice.dateIssued);
+      interestStartDate = new Date(invoiceDate);
+      interestStartDate.setDate(interestStartDate.getDate() + 30);
+    }
 
     // Payment due description
     const paymentDueDesc = data.invoice.dueDate

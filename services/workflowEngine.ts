@@ -171,7 +171,17 @@ export class WorkflowEngine {
    */
   private static getNextActionDueDate(stage: ClaimStage, claim: ClaimState): string | null {
     const daysOverdue = claim.interest.daysOverdue;
-    const dueDate = new Date(claim.invoice.dueDate);
+
+    // Handle missing due date - calculate from invoice date + default terms
+    let dueDate: Date;
+    if (claim.invoice.dueDate) {
+      dueDate = new Date(claim.invoice.dueDate);
+    } else if (claim.invoice.dateIssued) {
+      dueDate = new Date(claim.invoice.dateIssued);
+      dueDate.setDate(dueDate.getDate() + 30); // Default payment terms
+    } else {
+      return null; // Cannot calculate without any date
+    }
 
     switch (stage) {
       case ClaimStage.DRAFT:
