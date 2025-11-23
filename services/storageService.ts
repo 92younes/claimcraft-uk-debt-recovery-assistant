@@ -123,11 +123,16 @@ export const exportAllUserData = async (): Promise<Blob> => {
  */
 export const deleteAllUserData = async (): Promise<void> => {
     try {
-        // 1. Delete all claims from IndexedDB
-        const allClaims = await getStoredClaims();
-        for (const claim of allClaims) {
-            await deleteClaimFromStorage(claim.id);
-        }
+        // 1. Delete all claims from IndexedDB (batch operation)
+        const db = await openDB();
+        await new Promise<void>((resolve, reject) => {
+            const transaction = db.transaction(STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.clear(); // Clears all records at once
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
 
         // 2. Delete OAuth tokens
         localStorage.removeItem('xeroAuth');

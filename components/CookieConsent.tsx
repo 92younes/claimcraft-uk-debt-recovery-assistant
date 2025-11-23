@@ -94,7 +94,7 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onDeclin
                     <li><strong>Claim Drafts:</strong> Your saved claims (debtor details, amounts, timelines)</li>
                     <li><strong>Application Settings:</strong> Theme preferences, UI state</li>
                     <li><strong>OAuth Tokens:</strong> Authentication for Xero/accounting integrations (if used)</li>
-                    <li><strong>Compliance Logs:</strong> Anonymized usage logs (retained for 12 months, then deleted)</li>
+                    <li><strong>Compliance Logs:</strong> Document generation logs (includes claim IDs, party names, document types, timestamps - retained for 12 months for legal audit purposes, then deleted)</li>
                   </ul>
                   <p className="text-xs text-slate-500 mt-2">
                     These are necessary for the application to function. Declining will prevent the app from saving your work.

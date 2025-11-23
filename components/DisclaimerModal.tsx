@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AlertTriangle, CheckCircle, X } from 'lucide-react';
 
 interface DisclaimerModalProps {
@@ -16,17 +16,63 @@ interface DisclaimerModalProps {
  * 3. They should consult a solicitor before filing
  *
  * This follows Garfield.law's approach - clear disclaimer BEFORE document generation.
+ * WCAG 2.1 AA compliant: focus trap, ESC handler, ARIA attributes
  */
 export const DisclaimerModal: React.FC<DisclaimerModalProps> = ({
   isOpen,
   onAccept,
   onDecline
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedElement = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Store previously focused element for restoration
+    previouslyFocusedElement.current = document.activeElement as HTMLElement;
+
+    // Focus modal when opened
+    modalRef.current?.focus();
+
+    // Handle ESC key to close
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onDecline();
+      }
+    };
+
+    // Add keyboard listener
+    document.addEventListener('keydown', handleEscape);
+
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      // Cleanup
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+
+      // Restore focus to previously focused element
+      previouslyFocusedElement.current?.focus();
+    };
+  }, [isOpen, onDecline]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="disclaimer-title"
+      aria-describedby="disclaimer-description"
+    >
+      <div
+        ref={modalRef}
+        tabIndex={-1}
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto focus:outline-none"
+      >
 
         {/* Header */}
         <div className="bg-amber-50 border-b-2 border-amber-200 p-6">
@@ -35,10 +81,10 @@ export const DisclaimerModal: React.FC<DisclaimerModalProps> = ({
               <AlertTriangle className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1">
-              <h2 className="text-2xl font-bold text-slate-900 font-serif mb-2">
+              <h2 id="disclaimer-title" className="text-2xl font-bold text-slate-900 font-serif mb-2">
                 Important Legal Notice
               </h2>
-              <p className="text-slate-600 text-sm">
+              <p id="disclaimer-description" className="text-slate-600 text-sm">
                 Please read this carefully before using ClaimCraft UK
               </p>
             </div>

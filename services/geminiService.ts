@@ -180,7 +180,9 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
 
   try {
     const result = JSON.parse(cleanJson(response.text || '{}'));
-    const score = result.score || 50;
+    // Use nullish coalescing to handle legitimate 0 scores
+    const rawScore = Number(result.score);
+    const score = Number.isFinite(rawScore) ? rawScore : 50;
     return {
       score,
       strength: scoreToStrength(score),
