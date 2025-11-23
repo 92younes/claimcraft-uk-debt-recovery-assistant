@@ -51,7 +51,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           <button
             onClick={() => handleChange('type', PartyType.INDIVIDUAL)}
             disabled={readOnly}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${
               party.type === PartyType.INDIVIDUAL
                 ? 'bg-slate-800 text-white shadow-md'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -62,7 +62,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           <button
             onClick={() => handleChange('type', PartyType.BUSINESS)}
             disabled={readOnly}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${
               party.type === PartyType.BUSINESS
                 ? 'bg-slate-800 text-white shadow-md'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -103,8 +103,8 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
         readOnly={readOnly}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <div className="col-span-2 md:col-span-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-3">
           <Input
             label="Town/City"
             value={party.city}
@@ -112,7 +112,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
             readOnly={readOnly}
           />
         </div>
-        <div className="col-span-1 md:col-span-1">
+        <div className="md:col-span-1">
           <div className="relative">
             <Input
               label="Postcode"
@@ -130,7 +130,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
             )}
           </div>
         </div>
-        <div className="col-span-1 md:col-span-2">
+        <div className="md:col-span-2">
           <Select
             label="County"
             options={UK_COUNTIES.map(s => ({ value: s, label: s }))}
