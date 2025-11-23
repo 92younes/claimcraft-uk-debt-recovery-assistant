@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
-import { Send, User, Scale, ArrowRight, Loader2, CheckCircle2, Briefcase, Gavel } from 'lucide-react';
+import { Send, User, Scale, ArrowRight, Loader2, CheckCircle2, Briefcase, Gavel, Sparkles } from 'lucide-react';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -36,6 +36,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
         </div>
         <h2 className="text-2xl font-bold text-slate-900 font-serif">Case Consultation</h2>
         <p className="text-slate-500 text-xs uppercase tracking-widest font-bold mt-1">Confidential • Procedural Guidance</p>
+        <div className="flex items-center justify-center gap-2 mt-2 text-xs text-slate-400">
+          <Sparkles className="w-3 h-3" />
+          <span>Powered by Google Gemini AI</span>
+        </div>
       </div>
 
       {/* Chat Area */}

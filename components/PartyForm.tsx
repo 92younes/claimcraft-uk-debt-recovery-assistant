@@ -22,7 +22,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
       
       <div className="mb-4">
         <label className="text-sm font-medium text-slate-700 mb-2 block">Party Type</label>
-        <div className="flex gap-4">
+        <div className="flex gap-4 mb-3">
           <button
             onClick={() => handleChange('type', PartyType.INDIVIDUAL)}
             disabled={readOnly}
@@ -46,6 +46,20 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
             Limited Company (Ltd/PLC)
           </button>
         </div>
+        {title.includes('Claimant') && party.type === PartyType.BUSINESS && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+            <p className="text-blue-900">
+              <strong>B2B Claim Benefits:</strong> Business-to-Business claims allow Late Payment of Commercial Debts (Interest) Act 1998 interest (8% + Bank of England base rate) plus £100 statutory compensation.
+            </p>
+          </div>
+        )}
+        {title.includes('Claimant') && party.type === PartyType.INDIVIDUAL && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
+            <p className="text-slate-700">
+              <strong>B2C Claim:</strong> Individual/Sole Trader claims use County Courts Act 1984 s.69 interest (8% per annum) without statutory compensation.
+            </p>
+          </div>
+        )}
       </div>
 
       <Input

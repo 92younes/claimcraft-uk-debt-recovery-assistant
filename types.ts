@@ -33,6 +33,12 @@ export interface InterestData {
   totalInterest: number;
 }
 
+export enum ClaimStrength {
+  HIGH = 'high',
+  MEDIUM = 'medium',
+  LOW = 'low'
+}
+
 export interface AssessmentResult {
   isViable: boolean;
   limitationCheck: { passed: boolean; message: string }; // Limitation Act 1980
@@ -40,7 +46,8 @@ export interface AssessmentResult {
   solvencyCheck: { passed: boolean; message: string }; // Companies House status
   recommendation: string;
   // New AI Fields
-  strengthScore?: number; // 0-100
+  strength?: ClaimStrength; // HIGH/MEDIUM/LOW based on score
+  strengthScore?: number; // 0-100 (internal use)
   strengthAnalysis?: string;
   weaknesses?: string[];
 }
