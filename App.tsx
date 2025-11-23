@@ -14,6 +14,7 @@ import { TimelineBuilder } from './components/TimelineBuilder';
 import { EvidenceUpload } from './components/EvidenceUpload';
 import { ChatInterface } from './components/ChatInterface';
 import { FloatingChatWidget } from './components/FloatingChatWidget';
+import { OnboardingModal } from './components/OnboardingModal';
 import { DisclaimerModal } from './components/DisclaimerModal';
 import { StatementOfTruthModal } from './components/StatementOfTruthModal';
 import { InterestRateConfirmModal } from './components/InterestRateConfirmModal';
@@ -30,7 +31,7 @@ import { assessClaimViability, calculateCourtFee, calculateCompensation } from '
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData } from './services/storageService';
 import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS } from './constants';
-import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen } from 'lucide-react';
+import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent } from 'lucide-react';
 
 // New view state
 type ViewState = 'landing' | 'dashboard' | 'wizard' | 'privacy' | 'terms';
@@ -61,8 +62,9 @@ const App: React.FC = () => {
   // High Level State
   const [view, setView] = useState<ViewState>('landing');
   const [dashboardClaims, setDashboardClaims] = useState<ClaimState[]>([]);
-  const [showEligibility, setShowEligibility] = useState(false);
-  const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false); // Combined disclaimer + eligibility
+  const [showEligibility, setShowEligibility] = useState(false); // Deprecated - kept for compatibility
+  const [showDisclaimer, setShowDisclaimer] = useState(false); // Deprecated - kept for compatibility
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Wizard State
@@ -91,6 +93,9 @@ const App: React.FC = () => {
   const [showInterestModal, setShowInterestModal] = useState(false);
   const [showLiPModal, setShowLiPModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  // Phase 2: Inline interest verification (replaces InterestRateConfirmModal)
+  const [hasVerifiedInterest, setHasVerifiedInterest] = useState(false);
 
   // Initialize Nango on mount
   useEffect(() => {
@@ -192,24 +197,37 @@ const App: React.FC = () => {
 
   // --- Navigation Handlers ---
   const handleStartNewClaim = () => {
-    // 1. Show disclaimer FIRST
-    setShowDisclaimer(true);
+    // Phase 2: Show combined onboarding modal (disclaimer + eligibility)
+    setShowOnboarding(true);
   };
 
+  // Phase 2: Combined onboarding handlers (replaces disclaimer + eligibility flow)
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    // Reset Wizard and Enter
+    setClaimData({ ...INITIAL_STATE, id: Math.random().toString(36).substr(2, 9) });
+    setStep(Step.SOURCE);
+    setIsEditingAnalysis(false);
+    setView('wizard');
+  };
+
+  const handleOnboardingDecline = () => {
+    setShowOnboarding(false);
+    // User declined, stay on landing/dashboard
+  };
+
+  // Deprecated handlers (kept for backward compatibility with old modals)
   const handleDisclaimerAccepted = () => {
     setShowDisclaimer(false);
-    // 2. Then show eligibility check
     setShowEligibility(true);
   };
 
   const handleDisclaimerDeclined = () => {
     setShowDisclaimer(false);
-    // User declined, stay on dashboard
   };
 
   const handleEligibilityPassed = () => {
     setShowEligibility(false);
-    // 3. Reset Wizard and Enter
     setClaimData({ ...INITIAL_STATE, id: Math.random().toString(36).substr(2, 9) });
     setStep(Step.SOURCE);
     setIsEditingAnalysis(false);
@@ -699,24 +717,25 @@ const App: React.FC = () => {
       }
     };
 
+    // Phase 2: Check inline interest verification (replaces modal)
+    if (!hasVerifiedInterest) {
+      setError("Please verify the interest rate calculation before generating documents.");
+      return;
+    }
+
     // COMPLIANCE MODAL FLOW:
-    // 1. Interest Rate Confirmation (all documents)
-    // 2. Litigant in Person Warning (N1 only)
+    // 1. Interest Rate Confirmation - NOW INLINE (Phase 2 UX improvement)
+    // 2. Litigant in Person Warning (N1 only) - Still modal
     // 3. Statement of Truth Warning (N1, N225, N225A - shown later in signature step)
 
-    // Store the action to execute after modals
-    setPendingAction(() => async () => {
-      // If N1, show LiP modal
-      if (claimData.selectedDocType === DocumentType.FORM_N1) {
-        setShowLiPModal(true);
-      } else {
-        // Otherwise, proceed directly
-        await proceedWithGeneration();
-      }
-    });
-
-    // Show interest confirmation modal first
-    setShowInterestModal(true);
+    // If N1, show LiP modal before generation
+    if (claimData.selectedDocType === DocumentType.FORM_N1) {
+      setPendingAction(() => proceedWithGeneration);
+      setShowLiPModal(true);
+    } else {
+      // Otherwise, proceed directly
+      await proceedWithGeneration();
+    }
   };
   
   const handleRefineDraft = async () => {
@@ -1193,11 +1212,67 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* Phase 2: Inline Interest Rate Verification (replaces modal) */}
+            {claimData.selectedDocType && (
+              <div className="mt-8 bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Percent className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-blue-900 text-lg mb-2">Interest Rate Verification Required</h3>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-white border border-blue-200 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 uppercase font-bold mb-1">Claimant (You)</p>
+                        <p className="font-bold text-slate-900 capitalize">{claimData.claimant.type}</p>
+                      </div>
+                      <div className="bg-white border border-blue-200 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 uppercase font-bold mb-1">Defendant (Debtor)</p>
+                        <p className="font-bold text-slate-900 capitalize">{claimData.defendant.type}</p>
+                      </div>
+                    </div>
+                    <div className="bg-white border border-blue-200 rounded-lg p-3 mb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-slate-600">Invoice Amount:</span>
+                        <span className="font-bold text-slate-900">£{claimData.invoice.totalAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-slate-600">Interest Rate:</span>
+                        <span className="font-bold text-blue-600">
+                          {claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS ? '12.75%' : '8%'} p.a.
+                        </span>
+                      </div>
+                      <div className="h-px bg-slate-200 my-2"></div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-bold text-slate-700">Total Interest:</span>
+                        <span className="font-bold text-lg text-slate-900">£{claimData.interest.totalInterest.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={hasVerifiedInterest}
+                        onChange={(e) => setHasVerifiedInterest(e.target.checked)}
+                        className="mt-1 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <span className="text-sm text-blue-900">
+                        <span className="font-bold">I verify that:</span> The party types are correct, and I understand the interest rate is based on{' '}
+                        {claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS
+                          ? 'Late Payment of Commercial Debts Act 1998 (B2B)'
+                          : 'County Courts Act 1984 s.69 (B2C/Mixed)'}
+                        . Incorrect classification can lead to claim rejection or cost sanctions.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Generate Button */}
             <div className="flex justify-end pt-4 border-t border-slate-200">
                 <button
                   onClick={handleDraftClaim}
-                  disabled={isProcessing || !claimData.selectedDocType}
+                  disabled={isProcessing || !claimData.selectedDocType || !hasVerifiedInterest}
                   className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-12 py-4 rounded-xl shadow-lg hover:shadow-2xl font-bold text-lg flex items-center gap-3 transition-all transform hover:-translate-y-1 disabled:transform-none"
                 >
                     {isProcessing ? <Loader2 className="animate-spin"/> : <><Wand2 className="w-5 h-5" /> Generate Document</>}
@@ -1780,6 +1855,14 @@ const App: React.FC = () => {
             )}
          </div>
       </main>
+      {/* Phase 2: Combined Onboarding Modal (Disclaimer + Eligibility) */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onComplete={handleOnboardingComplete}
+        onDecline={handleOnboardingDecline}
+      />
+
+      {/* Deprecated: Old separate modals kept for backward compatibility */}
       <DisclaimerModal isOpen={showDisclaimer} onAccept={handleDisclaimerAccepted} onDecline={handleDisclaimerDeclined} />
       <CsvImportModal isOpen={showCsvModal} onClose={() => setShowCsvModal(false)} onImport={handleBulkImport} />
       <EligibilityModal isOpen={showEligibility} onClose={() => setShowEligibility(false)} onEligible={handleEligibilityPassed} />
