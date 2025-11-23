@@ -32,6 +32,8 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const review = data.generated?.review;
 
   const handlePrint = () => {
@@ -84,6 +86,32 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   React.useEffect(() => {
      if(!isLetter) setViewMode('n1-form');
   }, [isLetter]);
+
+  // Generate PDF preview for N1 forms
+  React.useEffect(() => {
+    if (data.selectedDocType === DocumentType.FORM_N1 && !pdfPreviewUrl) {
+      setIsLoadingPreview(true);
+      generateN1PDF(data)
+        .then(pdfBytes => {
+          const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          setPdfPreviewUrl(url);
+        })
+        .catch(error => {
+          console.error('Failed to generate PDF preview:', error);
+        })
+        .finally(() => {
+          setIsLoadingPreview(false);
+        });
+    }
+
+    // Cleanup: revoke object URL when component unmounts
+    return () => {
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [data.selectedDocType]);
 
   if (sendSuccess) {
      return (
@@ -465,10 +493,48 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                )}
             </>
           ) : (
-            /* N1 FORM - SIGNATURE ADDITION */
+            /* N1 FORM - ACTUAL PDF PREVIEW */
             <>
-               {/* Page 1: The Form */}
-               <Page watermark={!isFinalized} className="!p-[10mm] !shadow-none !m-0 !mb-0 border-b border-slate-200">
+               {/* Show actual PDF instead of HTML recreation */}
+               {isLoadingPreview ? (
+                  <div className="w-full min-h-[800px] flex flex-col items-center justify-center bg-slate-100 rounded-lg p-8">
+                    <Loader2 className="w-12 h-12 animate-spin text-slate-400 mb-4" />
+                    <p className="text-slate-600 font-medium">Generating official N1 form preview...</p>
+                    <p className="text-slate-400 text-sm mt-2">Using HMCTS template (N1_1224, Dec 2024)</p>
+                  </div>
+               ) : pdfPreviewUrl ? (
+                  <div className="w-full px-4">
+                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded">
+                      <div className="flex items-start gap-3">
+                        <ShieldCheck className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-bold text-blue-900 text-sm">Official HMCTS Form N1 Preview</p>
+                          <p className="text-blue-700 text-xs mt-1">
+                            This is the actual court form (N1_1224, Dec 2024) with your data filled in.
+                            What you see here is exactly what you'll download and submit to court.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <iframe
+                      src={pdfPreviewUrl}
+                      className="w-full h-[1200px] border-2 border-slate-300 rounded-lg shadow-xl bg-white"
+                      title="N1 Claim Form Preview"
+                    />
+                  </div>
+               ) : (
+                  <div className="w-full min-h-[800px] flex flex-col items-center justify-center bg-red-50 rounded-lg border-2 border-red-200 p-8">
+                    <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+                    <p className="text-red-700 font-bold mb-2">Failed to generate PDF preview</p>
+                    <p className="text-red-600 text-sm mb-4">Please ensure N1.pdf template is in the public/ directory</p>
+                    <p className="text-red-500 text-xs max-w-md text-center">
+                      You can still download the form using the "Download PDF" button above.
+                    </p>
+                  </div>
+               )}
+               {/* REMOVED: HTML recreation of N1 form - now showing actual PDF */}
+               <div className="hidden">
+               <Page watermark={false} className="!p-[10mm] !shadow-none !m-0 !mb-0 border-b border-slate-200">
                   <div className="flex flex-col h-full text-xs leading-tight font-sans">
                      {/* Header Area */}
                      <div className="flex justify-between items-start mb-2">
@@ -585,6 +651,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                       </div>
                   </div>
                </Page>
+               </div>{/* End hidden HTML N1 recreation */}
             </>
           )}
         </div>
