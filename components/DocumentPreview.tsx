@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ClaimState, DocumentType } from '../types';
 import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown } from 'lucide-react';
 import { SignaturePad } from './SignaturePad';
-import { generateN1PDF } from '../services/pdfGenerator';
+import { generateN1PDF, generateN225PDF, generateN225APDF, generateN180PDF } from '../services/pdfGenerator';
 
 interface DocumentPreviewProps {
   data: ClaimState;
@@ -41,26 +41,59 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   };
 
   const handleDownloadPDF = async () => {
-    if (data.selectedDocType === DocumentType.FORM_N1) {
+    // Check if this document type has an official PDF form
+    const pdfFormTypes = [
+      DocumentType.FORM_N1,
+      DocumentType.DEFAULT_JUDGMENT,
+      DocumentType.ADMISSION,
+      DocumentType.DIRECTIONS_QUESTIONNAIRE
+    ];
+
+    if (pdfFormTypes.includes(data.selectedDocType)) {
       setIsGeneratingPdf(true);
       try {
-        const pdfBytes = await generateN1PDF(data);
+        let pdfBytes: Uint8Array;
+        let filename: string;
+
+        switch (data.selectedDocType) {
+          case DocumentType.FORM_N1:
+            pdfBytes = await generateN1PDF(data);
+            filename = `N1_Claim_Form_${data.invoice.invoiceNumber}.pdf`;
+            break;
+          case DocumentType.DEFAULT_JUDGMENT:
+            pdfBytes = await generateN225PDF(data);
+            filename = `N225_Default_Judgment_${data.invoice.invoiceNumber}.pdf`;
+            break;
+          case DocumentType.ADMISSION:
+            pdfBytes = await generateN225APDF(data);
+            filename = `N225A_Admission_${data.invoice.invoiceNumber}.pdf`;
+            break;
+          case DocumentType.DIRECTIONS_QUESTIONNAIRE:
+            pdfBytes = await generateN180PDF(data);
+            filename = `N180_Directions_Questionnaire_${data.invoice.invoiceNumber}.pdf`;
+            break;
+          default:
+            throw new Error('Unsupported PDF form type');
+        }
+
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `N1_Claim_Form_${data.invoice.invoiceNumber}.pdf`;
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       } catch (error) {
         console.error("Failed to generate PDF", error);
-        alert("Unable to generate the official PDF file. Ensure 'N1.pdf' is in the public folder, or use the 'Print' button to save as PDF.");
+        alert(`Unable to generate the official PDF file. Ensure the template PDF is in the public folder, or use the 'Print' button to save as PDF.\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
         setIsGeneratingPdf(false);
       }
     } else {
-      window.print(); // Fallback for letters
+      // For non-PDF forms (letters, etc.), use print dialog
+      window.print();
     }
   };
 

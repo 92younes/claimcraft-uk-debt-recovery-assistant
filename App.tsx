@@ -1122,17 +1122,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Official PDF Notice */}
-            {[DocumentType.DEFAULT_JUDGMENT, DocumentType.ADMISSION, DocumentType.DIRECTIONS_QUESTIONNAIRE].includes(claimData.selectedDocType) && (
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 flex items-start gap-4 animate-fade-in">
-                <AlertCircle className="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-blue-900 mb-1">Official Court Form</h4>
-                  <p className="text-sm text-blue-700">This document requires the official HMCTS form. Currently, a text template will be generated. For actual court filing, download the official PDF from gov.uk and complete it manually.</p>
-                </div>
-              </div>
-            )}
-
             {/* Generate Button */}
             <div className="flex justify-end pt-4 border-t border-slate-200">
                 <button
