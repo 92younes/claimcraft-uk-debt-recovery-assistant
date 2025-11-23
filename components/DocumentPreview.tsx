@@ -270,12 +270,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
               )}
 
               <div className="flex flex-col md:flex-row justify-end gap-4 pt-6 border-t border-slate-100">
-                 <button onClick={onBack} className="px-5 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg font-medium transition-colors border border-slate-200 hover:border-slate-300 text-center">
+                 <button onClick={onBack} className="px-5 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg font-medium transition-colors duration-200 border border-slate-200 hover:border-slate-300 text-center">
                     Back & Edit Data
                  </button>
                  <button
                     onClick={onConfirm}
-                    className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 ${review.isPass ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+                    className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all duration-200 transform hover:-translate-y-0.5 ${review.isPass ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
                  >
                     <CheckCircle className="w-4 h-4" /> {review.isPass ? "Approve & Finalize" : "Override & Approve"}
                  </button>
@@ -288,7 +288,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 mt-8 no-print gap-4 px-4 md:px-0">
         <button 
           onClick={onBack}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 transition-colors w-full md:w-auto justify-center"
+          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 transition-colors duration-200 w-full md:w-auto justify-center"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Editor
         </button>
@@ -297,19 +297,19 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
              <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm overflow-x-auto max-w-full">
                 <button 
                   onClick={() => setViewMode('letter')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${viewMode === 'letter' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap ${viewMode === 'letter' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Letter
                 </button>
                 <button 
                   onClick={() => setViewMode('info-sheet')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Info Sheet
                 </button>
                 <button 
                   onClick={() => setViewMode('reply-form')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Reply Form
                 </button>
@@ -322,7 +322,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                     <button 
                         onClick={handleDownloadPDF}
                         disabled={isGeneratingPdf}
-                        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors shadow-sm border border-slate-200 font-bold"
+                        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors duration-200 shadow-sm border border-slate-200 font-bold"
                     >
                         {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
                         <span className="hidden md:inline">Download PDF</span>
@@ -331,7 +331,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                 )}
                 <button 
                   onClick={handlePrint}
-                  className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors shadow-sm border border-slate-200 font-bold"
+                  className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors duration-200 shadow-sm border border-slate-200 font-bold"
                 >
                   <Printer className="w-4 h-4" /> 
                   <span className="hidden md:inline">Print</span>
@@ -339,7 +339,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                 <button 
                   onClick={handleSend}
                   disabled={isSending}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg transition-colors shadow-lg font-bold animate-fade-in"
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg transition-colors duration-200 shadow-lg font-bold animate-fade-in"
                 >
                   {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send (£2.50)</>}
                 </button>
@@ -412,7 +412,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                           ) : (
                             <button 
                                onClick={() => setIsSigning(true)} 
-                               className="h-full w-64 border-2 border-dashed border-slate-300 rounded bg-slate-50 flex items-center justify-center text-slate-400 gap-2 hover:bg-slate-100 hover:border-slate-400 transition-all no-print group"
+                               className="h-full w-64 border-2 border-dashed border-slate-300 rounded bg-slate-50 flex items-center justify-center text-slate-400 gap-2 hover:bg-slate-100 hover:border-slate-400 transition-all duration-200 no-print group"
                             >
                                <PenTool className="w-4 h-4 group-hover:text-blue-500" /> 
                                <span className="group-hover:text-blue-600 font-medium">Click to Sign Document</span>

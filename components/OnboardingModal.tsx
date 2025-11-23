@@ -199,14 +199,14 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             <div className="bg-slate-50 border-t border-slate-200 p-6 flex gap-4">
               <button
                 onClick={onDecline}
-                className="flex-1 px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-100 transition-colors duration-200 flex items-center justify-center gap-2"
               >
                 <X className="w-4 h-4" />
                 I Do Not Accept
               </button>
               <button
                 onClick={() => setStage('eligibility')}
-                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2 shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all duration-200 hover:-translate-y-0.5 flex items-center justify-center gap-2 shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 I Understand & Accept
                 <ArrowRight className="w-4 h-4" />
@@ -240,7 +240,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   </div>
                   <button
                     onClick={onDecline}
-                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors"
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors duration-200"
                   >
                     Close
                   </button>
@@ -271,13 +271,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       onClick={currentQuestion.no}
-                      className="py-4 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-red-400 hover:bg-red-50 hover:text-red-700 transition-all"
+                      className="py-4 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-red-400 hover:bg-red-50 hover:text-red-700 transition-all duration-200"
                     >
                       No
                     </button>
                     <button
                       onClick={currentQuestion.yes}
-                      className="py-4 rounded-xl bg-slate-900 text-white font-bold shadow-lg hover:bg-blue-600 hover:shadow-blue-200/50 transition-all"
+                      className="py-4 rounded-xl bg-slate-900 text-white font-bold shadow-lg hover:bg-blue-600 hover:shadow-blue-200/50 transition-all duration-200"
                     >
                       Yes
                     </button>

@@ -76,7 +76,7 @@ export const Input: React.FC<InputProps> = ({
         <input
           id={inputId}
           className={`
-            w-full px-3 py-2 border rounded-lg transition-colors duration-200
+            w-full px-3 py-2 border rounded-lg transition-colors duration-200 duration-200
             focus:outline-none focus:ring-2 focus:ring-offset-0
             disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed
             ${icon ? 'pl-10' : ''}
@@ -175,7 +175,7 @@ export const Select: React.FC<SelectProps> = ({
       <select
         id={selectId}
         className={`
-          px-3 py-2 border rounded-lg transition-colors duration-200
+          px-3 py-2 border rounded-lg transition-colors duration-200 duration-200
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
           disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed bg-white
           ${hasError ? 'border-red-500 focus:ring-red-500' : 'border-slate-300'}
@@ -263,7 +263,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
       <textarea
         id={textareaId}
         className={`
-          px-3 py-2 border rounded-lg transition-colors duration-200
+          px-3 py-2 border rounded-lg transition-colors duration-200 duration-200
           focus:outline-none focus:ring-2 focus:ring-offset-0
           disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed
           ${hasError ? 'border-red-500 focus:ring-red-500 focus:border-red-500' :

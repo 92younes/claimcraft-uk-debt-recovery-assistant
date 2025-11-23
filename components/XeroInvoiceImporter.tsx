@@ -179,7 +179,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-white border-b border-slate-200 p-6 flex items-center justify-between">
           <div>
@@ -196,7 +196,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors duration-200"
           >
             <X className="w-5 h-5 text-slate-400" />
           </button>
@@ -246,7 +246,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                       filter === f
                         ? 'bg-blue-600 text-white shadow-md'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -261,7 +261,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
               <div className="flex items-center justify-between py-2 border-y border-slate-200">
                 <button
                   onClick={handleToggleAll}
-                  className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                  className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors duration-200"
                 >
                   {selectAll ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                   {selectAll ? 'Deselect All' : 'Select All'}
@@ -286,7 +286,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
                     <div
                       key={row.invoice.InvoiceID}
                       onClick={() => handleToggleRow(index)}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
                         row.selected
                           ? 'border-blue-500 bg-blue-50'
                           : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm'
@@ -358,14 +358,14 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
           <div className="bg-slate-50 border-t border-slate-200 p-6 flex items-center justify-between gap-4">
             <button
               onClick={onClose}
-              className="px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors"
+              className="px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
             >
               Cancel
             </button>
             <button
               onClick={handleImport}
               disabled={isImporting || selectionSummary.count === 0}
-              className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]"
+              className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]"
             >
               {isImporting ? (
                 <>

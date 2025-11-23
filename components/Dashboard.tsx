@@ -66,7 +66,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {onConnectAccounting && (
               <button
                 onClick={onConnectAccounting}
-                className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all"
+                className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all duration-200"
               >
                 <LinkIcon className="w-4 h-4" />
                 {accountingConnection ? 'Manage' : 'Connect'} Accounting
@@ -76,14 +76,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button
               onClick={onImportCsv}
               aria-label="Import claims from CSV file"
-              className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <Upload className="w-4 h-4" aria-hidden="true" /> Import CSV
             </button>
             <button
               onClick={onCreateNew}
               aria-label="Create new claim case"
-              className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 transition-all duration-200 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <Plus className="w-4 h-4" aria-hidden="true" /> New Case File
             </button>
@@ -92,7 +92,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <div className="bg-slate-900 p-6 rounded-xl shadow-lg flex items-center gap-4 relative overflow-hidden">
+        <div className="bg-slate-900 p-6 rounded-xl shadow-md flex items-center gap-4 relative overflow-hidden">
            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10"></div>
            <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center text-white border border-white/10 backdrop-blur-sm">
               <Scale className="w-6 h-6" />
@@ -152,13 +152,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div
               key={claim.id}
               onClick={() => onResume(claim)}
-              className={`group bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all cursor-pointer relative ${
+              className={`group bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer relative ${
                 isUrgent ? 'border-red-300 hover:border-red-500' : 'border-slate-200 hover:border-blue-500'
               }`}
             >
                {/* Urgency indicator */}
                {isUrgent && (
-                 <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-lg animate-pulse z-10">
+                 <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md animate-pulse z-10">
                    <Zap className="w-4 h-4 text-white" />
                  </div>
                )}
@@ -168,7 +168,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div className="flex flex-col md:flex-row md:items-center gap-4">
                      {/* Left: ID & Date */}
                      <div className="flex items-center gap-4 min-w-[180px]">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors duration-200">
                            <FileText className="w-5 h-5" />
                         </div>
                         <div>
@@ -194,7 +194,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                          <span className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wide border ${stageBadgeColor}`}>
                              {claim.status}
                          </span>
-                         <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                         <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all duration-200" />
                      </div>
                   </div>
 
@@ -229,7 +229,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     if(confirm("Permanently delete this claim? This cannot be undone.")) onDelete(claim.id);
                   }}
                   aria-label={`Delete claim for ${claim.defendant.name || 'Unknown'}`}
-                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
                >
                   <Trash2 className="w-4 h-4" aria-hidden="true" />
                </button>
@@ -251,7 +251,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {onExportAllData && (
                 <button
                   onClick={onExportAllData}
-                  className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold shadow-sm flex items-center justify-center gap-2 transition-all"
+                  className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold shadow-sm flex items-center justify-center gap-2 transition-all duration-200"
                 >
                   <Download className="w-4 h-4" />
                   Export All Data
@@ -260,7 +260,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {onDeleteAllData && (
                 <button
                   onClick={onDeleteAllData}
-                  className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold shadow-sm flex items-center justify-center gap-2 transition-all"
+                  className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold shadow-sm flex items-center justify-center gap-2 transition-all duration-200"
                 >
                   <XCircle className="w-4 h-4" />
                   Delete All Data

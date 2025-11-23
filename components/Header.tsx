@@ -24,9 +24,9 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
         </div>
         
         <nav className="hidden md:flex items-center gap-10 text-sm font-medium text-slate-600">
-          <span className="hover:text-slate-900 transition-colors cursor-pointer">Features</span>
-          <span className="hover:text-slate-900 transition-colors cursor-pointer">Pricing</span>
-          <span className="hover:text-slate-900 transition-colors cursor-pointer">Protocol Guide</span>
+          <span className="hover:text-slate-900 transition-colors duration-200 cursor-pointer">Features</span>
+          <span className="hover:text-slate-900 transition-colors duration-200 cursor-pointer">Pricing</span>
+          <span className="hover:text-slate-900 transition-colors duration-200 cursor-pointer">Protocol Guide</span>
         </nav>
       </div>
     </header>

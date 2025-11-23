@@ -140,7 +140,7 @@ export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, 
       <div className="flex justify-center">
         <button 
           onClick={onContinue}
-          className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-lg shadow-lg font-medium transition-all flex items-center gap-2"
+          className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-lg shadow-lg font-medium transition-all duration-200 flex items-center gap-2"
         >
           Start Clarification Chat <MessageSquareText className="w-4 h-4" />
         </button>

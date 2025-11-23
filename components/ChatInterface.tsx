@@ -94,14 +94,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
              value={input}
              onChange={(e) => setInput(e.target.value)}
              placeholder="Answer clearly..."
-             className="flex-grow px-4 py-4 pr-14 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-slate-900 focus:outline-none transition-all text-sm shadow-inner"
+             className="flex-grow px-4 py-4 pr-14 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-slate-900 focus:outline-none transition-all duration-200 text-sm shadow-inner"
              disabled={isThinking}
              autoFocus
            />
            <button 
              type="submit" 
              disabled={!input.trim() || isThinking}
-             className="absolute right-2 top-2 bottom-2 bg-slate-900 text-white px-4 rounded-lg hover:bg-slate-800 disabled:bg-slate-300 transition-all shadow-md flex items-center justify-center"
+             className="absolute right-2 top-2 bottom-2 bg-slate-900 text-white px-4 rounded-lg hover:bg-slate-800 disabled:bg-slate-300 transition-all duration-200 shadow-md flex items-center justify-center"
            >
              <Send className="w-4 h-4" />
            </button>
@@ -110,7 +110,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Press Enter to send</span>
            <button 
              onClick={onComplete}
-             className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-white px-3 py-2 rounded-lg transition-colors uppercase tracking-wide border border-transparent hover:border-slate-200"
+             className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-white px-3 py-2 rounded-lg transition-colors duration-200 uppercase tracking-wide border border-transparent hover:border-slate-200"
            >
              Skip to Drafting <ArrowRight className="w-3 h-3" />
            </button>

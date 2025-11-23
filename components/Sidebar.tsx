@@ -48,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
           </div>
         </div>
         {onCloseMobile && (
-          <button onClick={onCloseMobile} className="md:hidden text-slate-400 hover:text-white transition-colors p-2">
+          <button onClick={onCloseMobile} className="md:hidden text-slate-400 hover:text-white transition-colors duration-200 p-2">
             <X className="w-6 h-6" />
           </button>
         )}
@@ -76,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
                     <LayoutDashboard className="w-4 h-4 text-white" />
                     <span className="text-sm font-bold">Dashboard</span>
                 </div>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800/50 cursor-pointer transition-colors">
+                <div className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800/50 cursor-pointer transition-colors duration-200">
                     <FolderOpen className="w-4 h-4" />
                     <span className="text-sm font-medium">Archived Claims</span>
                 </div>
@@ -85,7 +85,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
              <>
                <div 
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer transition-colors mb-6 border border-dashed border-slate-700"
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer transition-colors duration-200 mb-6 border border-dashed border-slate-700"
                >
                    <LayoutDashboard className="w-4 h-4" />
                    <span className="text-sm font-medium">Back to Dashboard</span>
@@ -128,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
 
       {/* Bottom Actions */}
       <div className="p-4 border-t border-slate-800 bg-slate-950/30 flex-shrink-0">
-         <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+         <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors duration-200">
             <ShieldAlert className="w-4 h-4" />
             <span>Legal Disclaimer</span>
          </button>

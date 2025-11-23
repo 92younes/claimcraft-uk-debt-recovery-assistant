@@ -52,11 +52,11 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onDeclin
       )}
 
       {/* Banner */}
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden pointer-events-auto animate-slide-up">
+      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden pointer-events-auto animate-slide-up">
         {/* Close Button */}
         <button
           onClick={handleDismiss}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors duration-200"
           aria-label="Dismiss"
         >
           <X className="w-5 h-5" />
@@ -151,7 +151,7 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onDeclin
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
             <button
               onClick={() => setShowDetails(!showDetails)}
-              className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors font-medium px-4 py-2 hover:bg-slate-100 rounded-lg"
+              className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors duration-200 font-medium px-4 py-2 hover:bg-slate-100 rounded-lg"
             >
               <Settings className="w-4 h-4" />
               {showDetails ? 'Hide details' : 'Show details'}
@@ -160,13 +160,13 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onDeclin
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={handleDecline}
-                className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-lg font-semibold hover:bg-slate-50 transition-all"
+                className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-lg font-semibold hover:bg-slate-50 transition-all duration-200"
               >
                 Decline
               </button>
               <button
                 onClick={handleAccept}
-                className="px-8 py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="px-8 py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
                 Accept & Continue
               </button>

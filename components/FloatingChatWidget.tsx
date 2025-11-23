@@ -57,7 +57,7 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
       {!isOpen && (
         <button
           onClick={onToggle}
-          className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white p-4 rounded-full shadow-2xl hover:bg-slate-800 transition-all hover:scale-110 flex items-center gap-2 group"
+          className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white p-4 rounded-full shadow-xl hover:bg-slate-800 transition-all duration-200 hover:scale-110 flex items-center gap-2 group"
           title="Open AI Legal Assistant"
         >
           <MessageSquare className="w-6 h-6" />
@@ -70,7 +70,7 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
       {/* Chat Widget Panel */}
       {isOpen && (
         <div
-          className="fixed bottom-6 right-6 z-50 w-96 h-[600px] bg-white rounded-2xl shadow-2xl border-2 border-slate-200 flex flex-col animate-fade-in"
+          className="fixed bottom-6 right-6 z-50 w-96 h-[600px] bg-white rounded-2xl shadow-xl border-2 border-slate-200 flex flex-col animate-fade-in"
           role="dialog"
           aria-modal="true"
           aria-labelledby="chat-widget-title"
@@ -91,7 +91,7 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
             </div>
             <button
               onClick={onToggle}
-              className="text-white/70 hover:text-white transition-colors p-1 hover:bg-white/10 rounded"
+              className="text-white/70 hover:text-white transition-colors duration-200 p-1 hover:bg-white/10 rounded"
               title="Close chat"
             >
               <Minimize2 className="w-4 h-4" />
@@ -152,14 +152,14 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Type your question..."
-                className="flex-grow px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 focus:outline-none transition-all"
+                className="flex-grow px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 focus:outline-none transition-all duration-200"
                 disabled={isThinking}
                 aria-label="Chat message input"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || isThinking}
-                className="bg-slate-900 text-white px-3 py-2 rounded-lg hover:bg-slate-800 disabled:bg-slate-300 transition-all flex items-center justify-center"
+                className="bg-slate-900 text-white px-3 py-2 rounded-lg hover:bg-slate-800 disabled:bg-slate-300 transition-all duration-200 flex items-center justify-center"
                 title="Send message"
               >
                 <Send className="w-4 h-4" />

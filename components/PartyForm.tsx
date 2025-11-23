@@ -51,7 +51,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           <button
             onClick={() => handleChange('type', PartyType.INDIVIDUAL)}
             disabled={readOnly}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors duration-200 duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${
               party.type === PartyType.INDIVIDUAL
                 ? 'bg-slate-800 text-white shadow-md'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -62,7 +62,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           <button
             onClick={() => handleChange('type', PartyType.BUSINESS)}
             disabled={readOnly}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors duration-200 duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${
               party.type === PartyType.BUSINESS
                 ? 'bg-slate-800 text-white shadow-md'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'

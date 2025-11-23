@@ -39,7 +39,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
                 {/* Step Circle */}
                 <div
                   className={`
-                    relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all
+                    relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-200
                     ${completed ? 'bg-green-600 border-green-600' :
                       current ? 'bg-blue-600 border-blue-600' :
                       'bg-white border-slate-300'}

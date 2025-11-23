@@ -71,7 +71,7 @@ export const DisclaimerModal: React.FC<DisclaimerModalProps> = ({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto focus:outline-none"
+        className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto focus:outline-none"
       >
 
         {/* Header */}
@@ -228,14 +228,14 @@ export const DisclaimerModal: React.FC<DisclaimerModalProps> = ({
         <div className="bg-slate-50 border-t border-slate-200 p-6 flex gap-4">
           <button
             onClick={onDecline}
-            className="flex-1 px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-100 transition-colors duration-200 flex items-center justify-center gap-2"
           >
             <X className="w-4 h-4" />
             I Do Not Accept
           </button>
           <button
             onClick={onAccept}
-            className="flex-1 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg"
+            className="flex-1 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
           >
             <CheckCircle className="w-4 h-4" />
             I Understand & Accept

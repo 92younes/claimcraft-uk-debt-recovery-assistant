@@ -115,8 +115,8 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
               disabled={isProcessing}
               ref={fileInputRef}
             />
-            <div className="h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all flex flex-col items-center justify-center text-center">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <div className="h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 flex flex-col items-center justify-center text-center">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200">
                 <Upload className="w-5 h-5 text-blue-600" />
               </div>
               <p className="font-medium text-slate-700">Click to upload Documents</p>
@@ -176,7 +176,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
         <button
           onClick={onAnalyze}
           disabled={files.length === 0 || isProcessing}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white py-3 rounded-lg font-medium shadow-md flex items-center justify-center gap-2 transition-all"
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white py-3 rounded-lg font-medium shadow-md flex items-center justify-center gap-2 transition-all duration-200"
         >
           {isProcessing ? (
             <>

@@ -48,7 +48,7 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header - Red warning theme */}
         <div className="sticky top-0 bg-red-600 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
@@ -62,7 +62,7 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
           </div>
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
           >
             <X className="w-5 h-5 text-white" />
           </button>
@@ -192,14 +192,14 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
         <div className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-200 p-6 rounded-b-2xl flex gap-3">
           <button
             onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors"
+            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
           >
             Cancel - Review Document
           </button>
           <button
             onClick={handleConfirm}
             disabled={!hasReadWarning || !confirmsTruth}
-            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors shadow-md disabled:shadow-none"
+            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 shadow-md disabled:shadow-none"
           >
             {hasReadWarning && confirmsTruth ? 'Proceed to Sign' : 'Complete Confirmations Above'}
           </button>

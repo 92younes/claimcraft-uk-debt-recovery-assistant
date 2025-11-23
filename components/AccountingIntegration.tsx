@@ -143,7 +143,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between rounded-t-2xl z-10">
           <div>
@@ -152,7 +152,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors duration-200"
           >
             <X className="w-5 h-5 text-slate-400" />
           </button>
@@ -189,7 +189,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
               return (
                 <div
                   key={provider.id}
-                  className={`border-2 rounded-xl p-5 transition-all ${
+                  className={`border-2 rounded-xl p-5 transition-all duration-200 ${
                     isConnected ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-white'
                   }`}
                 >
@@ -248,7 +248,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                       <>
                         <button
                           onClick={() => handleImport(provider.id)}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md"
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md"
                         >
                           <Download className="w-4 h-4" />
                           Import
@@ -256,7 +256,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                         <button
                           onClick={() => handleDisconnect(provider.id, provider.name)}
                           disabled={isDisconnecting}
-                          className="px-4 py-2 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-4 py-2 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isDisconnecting ? (
                             <Loader className="w-4 h-4 animate-spin" />
@@ -269,7 +269,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                       <button
                         onClick={() => handleConnect(provider.id)}
                         disabled={isConnecting}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isConnecting ? (
                           <>
@@ -325,7 +325,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
         <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 p-6 rounded-b-2xl">
           <button
             onClick={onClose}
-            className="w-full px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors"
+            className="w-full px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
           >
             Close
           </button>

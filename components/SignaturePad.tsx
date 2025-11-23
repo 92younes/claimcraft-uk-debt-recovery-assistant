@@ -110,7 +110,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
           <button 
             onClick={handleSave}
             disabled={!hasContent}
-            className="bg-slate-900 text-white hover:bg-slate-800 px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1 disabled:opacity-50 transition-colors"
+            className="bg-slate-900 text-white hover:bg-slate-800 px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1 disabled:opacity-50 transition-colors duration-200"
           >
              <Check className="w-4 h-4" /> Apply Signature
           </button>

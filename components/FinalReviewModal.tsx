@@ -143,7 +143,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
@@ -157,7 +157,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
           </div>
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
           >
             <X className="w-5 h-5 text-white" />
           </button>
@@ -238,7 +238,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
                 return (
                   <label
                     key={item.id}
-                    className={`flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    className={`flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
                       isChecked
                         ? 'bg-green-50 border-green-300'
                         : item.critical
@@ -287,7 +287,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
               </div>
               <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all ${
+                  className={`h-full transition-all duration-200 ${
                     allCriticalChecked ? 'bg-green-500' : 'bg-red-500'
                   }`}
                   style={{
@@ -344,14 +344,14 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
         <div className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-200 p-6 rounded-b-2xl flex gap-3">
           <button
             onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors"
+            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
           >
             Cancel - Review Document
           </button>
           <button
             onClick={handleConfirm}
             disabled={!canProceed}
-            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors shadow-md disabled:shadow-none"
+            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 shadow-md disabled:shadow-none"
           >
             {canProceed ? 'Download Form N1' : `Complete ${criticalItems.length - criticalItems.filter(i => checkedItems.has(i.id)).length} Critical Items`}
           </button>
