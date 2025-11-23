@@ -253,7 +253,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       {[0, 1, 2].map(i => (
                         <div
                           key={i}
-                          className={`w-2 h-2 rounded-full ${
+                          className={`w-3 h-3 rounded-full ${
                             i === eligibilityStep
                               ? 'bg-blue-600'
                               : i < eligibilityStep

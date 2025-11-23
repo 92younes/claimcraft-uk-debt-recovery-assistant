@@ -29,7 +29,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
   };
 
   return (
-    <div className="max-w-3xl mx-auto animate-fade-in flex flex-col h-[calc(100vh-180px)]">
+    <div className="max-w-2xl mx-auto animate-fade-in flex flex-col h-[calc(100vh-180px)]">
       <div className="text-center mb-6 flex-shrink-0">
         <div className="bg-slate-900 text-white w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-slate-300">
           <Gavel className="w-6 h-6" />

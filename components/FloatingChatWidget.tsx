@@ -109,7 +109,7 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
 
             {messages.map((msg) => (
               <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs ${
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs ${
                   msg.role === 'user'
                     ? 'bg-blue-100 text-blue-600'
                     : 'bg-slate-800 text-white'
@@ -128,7 +128,7 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
 
             {isThinking && (
               <div className="flex gap-2">
-                <div className="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center flex-shrink-0">
                   <Briefcase className="w-4 h-4" />
                 </div>
                 <div className="bg-white border border-slate-200 px-3 py-2 rounded-lg rounded-tl-sm flex items-center gap-2">

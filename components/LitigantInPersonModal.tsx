@@ -54,12 +54,12 @@ export const LitigantInPersonModal: React.FC<LitigantInPersonModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-orange-600 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-              <Scale className="w-7 h-7 text-white" />
+              <Scale className="w-8 h-8 text-white" />
             </div>
             <div>
               <h2 className="text-2xl font-bold">Litigant in Person Warning</h2>

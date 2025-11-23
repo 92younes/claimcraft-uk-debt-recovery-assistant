@@ -78,7 +78,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full max-w-md">
+    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full max-w-lg">
        <h3 className="text-sm font-bold text-slate-500 uppercase mb-2">Sign Here</h3>
        <div className="relative border border-slate-300 rounded-lg bg-slate-50 touch-none overflow-hidden">
           <canvas

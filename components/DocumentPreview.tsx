@@ -18,7 +18,7 @@ const Page = ({ children, className = "", watermark = false }: { children?: Reac
   <div className={`bg-white shadow-xl w-[210mm] min-h-[297mm] mx-auto p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-hidden flex-shrink-0 ${className}`}>
     {watermark && (
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50 opacity-15 select-none overflow-hidden">
-        <div className="transform -rotate-45 text-6xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-[10px] border-slate-900 p-10 rounded-3xl mix-blend-multiply">
+        <div className="transform -rotate-45 text-6xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-[10px] border-slate-900 p-10 rounded-2xl mix-blend-multiply">
            DRAFT - REVIEW PENDING
         </div>
       </div>
@@ -203,7 +203,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   }
 
   return (
-    <div className="max-w-6xl mx-auto pb-20">
+    <div className="max-w-7xl mx-auto pb-20">
       
       {/* Validation Warnings Panel */}
       {data.generated?.validation?.warnings && data.generated.validation.warnings.length > 0 && (
@@ -297,19 +297,19 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
              <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm overflow-x-auto max-w-full">
                 <button 
                   onClick={() => setViewMode('letter')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap ${viewMode === 'letter' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'letter' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Letter
                 </button>
                 <button 
                   onClick={() => setViewMode('info-sheet')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Info Sheet
                 </button>
                 <button 
                   onClick={() => setViewMode('reply-form')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Reply Form
                 </button>
@@ -598,7 +598,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                     <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
                     <p className="text-red-700 font-bold mb-2">Failed to generate PDF preview</p>
                     <p className="text-red-600 text-sm mb-4">Please ensure N1.pdf template is in the public/ directory</p>
-                    <p className="text-red-500 text-xs max-w-md text-center">
+                    <p className="text-red-500 text-xs max-w-lg text-center">
                       You can still download the form using the "Download PDF" button above.
                     </p>
                   </div>

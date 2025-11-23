@@ -198,36 +198,4 @@ export const resetCookieConsent = (): void => {
   localStorage.removeItem('cookieConsentDate');
 };
 
-// Custom animation styles (add to global CSS or Tailwind config)
-const styles = `
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(100px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.animate-slide-up {
-  animation: slide-up 0.4s ease-out;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-`;
-
-// Export styles for use in App
-export const cookieConsentStyles = styles;
+// Note: Animations (animate-slide-up, animate-fade-in) are now defined in index.html global styles

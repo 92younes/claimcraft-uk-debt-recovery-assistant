@@ -16,7 +16,7 @@ export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, 
            {assessment.isViable ? <Scale className="w-10 h-10 text-green-600" /> : <AlertTriangle className="w-10 h-10 text-amber-600" />}
         </div>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">Legal Assessment</h2>
-        <p className="text-slate-600 max-w-md mx-auto">{assessment.recommendation}</p>
+        <p className="text-slate-600 max-w-lg mx-auto">{assessment.recommendation}</p>
       </div>
 
       {/* AI Claim Strength Assessment */}

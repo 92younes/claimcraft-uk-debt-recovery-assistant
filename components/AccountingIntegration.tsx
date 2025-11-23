@@ -211,7 +211,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                         ? 'bg-green-100 text-green-700'
                         : 'bg-slate-100 text-slate-600'
                     }`}>
-                      <div className={`w-2 h-2 rounded-full ${
+                      <div className={`w-3 h-3 rounded-full ${
                         isConnected ? 'bg-green-500' : 'bg-slate-400'
                       }`} />
                       {isConnected ? 'Connected' : 'Not Connected'}

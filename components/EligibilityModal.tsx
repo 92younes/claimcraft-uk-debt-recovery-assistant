@@ -74,7 +74,7 @@ export const EligibilityModal: React.FC<EligibilityModalProps> = ({ isOpen, onCl
                   <span>Question {step + 1} of 3</span>
                   <div className="flex gap-1">
                     {[0,1,2].map(i => (
-                      <div key={i} className={`w-2 h-2 rounded-full ${i === step ? 'bg-blue-600' : i < step ? 'bg-green-400' : 'bg-slate-200'}`}></div>
+                      <div key={i} className={`w-3 h-3 rounded-full ${i === step ? 'bg-blue-600' : i < step ? 'bg-green-400' : 'bg-slate-200'}`}></div>
                     ))}
                   </div>
                 </div>

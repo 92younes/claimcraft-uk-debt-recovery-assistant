@@ -164,7 +164,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
             <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all duration-200 flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1 bg-slate-100 rounded-md">
+                  <div className="p-1 bg-slate-100 rounded-lg">
                     {getIcon(ev.type)}
                   </div>
                   <span className="text-xs font-bold uppercase text-slate-500 tracking-wide">{new Date(ev.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>

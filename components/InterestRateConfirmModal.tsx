@@ -65,7 +65,7 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-              <Percent className="w-7 h-7 text-white" />
+              <Percent className="w-8 h-8 text-white" />
             </div>
             <div>
               <h2 className="text-2xl font-bold">Interest Rate Confirmation</h2>

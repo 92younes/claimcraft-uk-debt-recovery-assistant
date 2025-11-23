@@ -58,7 +58,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="flex flex-wrap gap-3 w-full md:w-auto">
             {accountingConnection && (
               <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-sm font-medium text-green-700">Xero Connected</span>
               </div>
             )}
@@ -128,7 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Claims List (Case File Style) */}
       {claims.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
+        <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
               <FileText className="w-8 h-8" />
            </div>
