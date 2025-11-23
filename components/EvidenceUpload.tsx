@@ -1,7 +1,8 @@
 
-import React, { useRef } from 'react';
-import { Upload, X, FileText, Image as ImageIcon, Loader2, Tag } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Upload, X, FileText, Image as ImageIcon, Loader2, Tag, AlertCircle } from 'lucide-react';
 import { EvidenceFile } from '../types';
+import { validateFileType, getFileTypeError } from '../utils/validation';
 
 interface EvidenceUploadProps {
   files: EvidenceFile[];
@@ -11,16 +12,46 @@ interface EvidenceUploadProps {
   isProcessing: boolean;
 }
 
-export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({ 
-  files, onAddFiles, onRemoveFile, onAnalyze, isProcessing 
+export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
+  files, onAddFiles, onRemoveFile, onAnalyze, isProcessing
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileTypeError, setFileTypeError] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles: EvidenceFile[] = [];
+      // Clear any previous errors
+      setFileTypeError(null);
+
       const fileList = Array.from(e.target.files);
-      
+
+      // Validate all files before processing any
+      const invalidFiles: File[] = [];
+      fileList.forEach((file) => {
+        if (!validateFileType(file)) {
+          invalidFiles.push(file);
+        }
+      });
+
+      // If any invalid files, show error and stop processing
+      if (invalidFiles.length > 0) {
+        const errorMsg = invalidFiles.length === 1
+          ? getFileTypeError(invalidFiles[0])
+          : `${invalidFiles.length} files are not allowed. Please upload PDF, JPG, PNG, or Word documents only.`;
+
+        setFileTypeError(errorMsg);
+
+        // Reset input
+        if (fileInputRef.current) fileInputRef.current.value = '';
+
+        // Auto-clear error after 5 seconds
+        setTimeout(() => setFileTypeError(null), 5000);
+
+        return;
+      }
+
+      // All files valid - proceed with processing
+      const newFiles: EvidenceFile[] = [];
       let processedCount = 0;
 
       fileList.forEach((item) => {
@@ -57,12 +88,12 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <div className="grid grid-cols-1 gap-4 mb-6">
           <label className="relative block cursor-pointer group">
-            <input 
-              type="file" 
-              multiple 
-              className="hidden" 
-              accept="image/*,application/pdf" 
-              onChange={handleFileChange} 
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              accept="image/*,application/pdf,.doc,.docx"
+              onChange={handleFileChange}
               disabled={isProcessing}
               ref={fileInputRef}
             />
@@ -71,10 +102,24 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
                 <Upload className="w-5 h-5 text-blue-600" />
               </div>
               <p className="font-medium text-slate-700">Click to upload Documents</p>
-              <p className="text-xs text-slate-400">PDF, PNG, JPG supported</p>
+              <p className="text-xs text-slate-400">PDF, PNG, JPG, Word supported</p>
             </div>
           </label>
         </div>
+
+        {/* File Type Error Message */}
+        {fileTypeError && (
+          <div className="mb-6 bg-red-50 border-2 border-red-200 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-red-900">Invalid File Type</p>
+              <p className="text-sm text-red-700 mt-1">{fileTypeError}</p>
+              <p className="text-xs text-red-600 mt-2">
+                For security and court submission, only PDF, JPG, PNG, and Word documents are accepted.
+              </p>
+            </div>
+          </div>
+        )}
 
         {files.length > 0 && (
           <div className="space-y-3 mb-6">
