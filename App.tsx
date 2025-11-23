@@ -13,13 +13,16 @@ import { TimelineBuilder } from './components/TimelineBuilder';
 import { EvidenceUpload } from './components/EvidenceUpload';
 import { ChatInterface } from './components/ChatInterface';
 import { DisclaimerModal } from './components/DisclaimerModal';
+import { AccountingIntegration } from './components/AccountingIntegration';
+import { XeroInvoiceImporter } from './components/XeroInvoiceImporter';
 import { analyzeEvidence, startClarificationChat, sendChatMessage, getClaimStrengthAssessment } from './services/geminiService';
 import { DocumentBuilder } from './services/documentBuilder';
+import { NangoClient } from './services/nangoClient';
 import { getStoredAuth } from './services/xeroService';
 import { searchCompaniesHouse } from './services/companiesHouse';
 import { assessClaimViability, calculateCourtFee, calculateCompensation } from './services/legalRules';
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage } from './services/storageService';
-import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage } from './types';
+import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection } from './types';
 import { STATUTORY_INTEREST_RATE, DAILY_INTEREST_DIVISOR } from './constants';
 import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle } from 'lucide-react';
 
@@ -59,9 +62,29 @@ const App: React.FC = () => {
   
   const [showXeroModal, setShowXeroModal] = useState(false);
   const [isXeroConnected, setIsXeroConnected] = useState(false);
-  
+
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false); // For AI flow in Step 2
+
+  // Accounting Integration State
+  const [accountingConnection, setAccountingConnection] = useState<AccountingConnection | null>(null);
+  const [showAccountingModal, setShowAccountingModal] = useState(false);
+  const [showXeroImporter, setShowXeroImporter] = useState(false);
+
+  // Initialize Nango on mount
+  useEffect(() => {
+    NangoClient.initialize();
+
+    // Check if Xero is connected
+    const checkXeroConnection = async () => {
+      const connected = await NangoClient.isXeroConnected();
+      if (connected) {
+        const connection = NangoClient.getXeroConnection();
+        setAccountingConnection(connection);
+      }
+    };
+    checkXeroConnection();
+  }, []);
 
   // Load data on mount
   useEffect(() => {
@@ -180,6 +203,32 @@ const App: React.FC = () => {
     setDashboardClaims(prev => prev.filter(c => c.id !== id));
   };
 
+  // Xero Import Handlers
+  const handleOpenAccountingModal = () => {
+    setShowAccountingModal(true);
+  };
+
+  const handleAccountingConnectionChange = (connection: AccountingConnection | null) => {
+    setAccountingConnection(connection);
+  };
+
+  const handleXeroImport = async (importedClaims: ClaimState[]) => {
+    // Save all imported claims to storage
+    for (const claim of importedClaims) {
+      await saveClaimToStorage(claim);
+    }
+
+    // Reload claims from storage
+    const storedClaims = await getStoredClaims();
+    setDashboardClaims(storedClaims);
+
+    // Close importer
+    setShowXeroImporter(false);
+
+    // Show success message (you could add a toast notification here)
+    console.log(`✅ Successfully imported ${importedClaims.length} invoice(s) from Xero`);
+  };
+
   const handleExitWizard = async () => {
     const timestampedClaim = { ...claimData, lastModified: Date.now() };
 
@@ -294,9 +343,9 @@ const App: React.FC = () => {
     setStep(Step.DETAILS);
   };
 
-  const handleXeroImport = async (importedData: Partial<ClaimState>) => {
-    const mergedClaimant = (claimData.claimant.name && claimData.claimant.name.length > 0) 
-      ? claimData.claimant 
+  const handleLegacyXeroImport = async (importedData: Partial<ClaimState>) => {
+    const mergedClaimant = (claimData.claimant.name && claimData.claimant.name.length > 0)
+      ? claimData.claimant
       : { ...claimData.claimant, ...importedData.claimant };
     const mergedTimeline = [...(claimData.timeline || []), ...(importedData.timeline || [])];
     let newState = {
@@ -851,14 +900,37 @@ const App: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto relative scroll-smooth">
          <div className="md:pl-8 md:pr-8 md:pt-8 pb-20 min-h-full">
-            {view === 'dashboard' && <Dashboard claims={dashboardClaims} onCreateNew={handleStartNewClaim} onResume={handleResumeClaim} onDelete={handleDeleteClaim} onImportCsv={() => setShowCsvModal(true)} />}
+            {view === 'dashboard' && <Dashboard
+              claims={dashboardClaims}
+              onCreateNew={handleStartNewClaim}
+              onResume={handleResumeClaim}
+              onDelete={handleDeleteClaim}
+              onImportCsv={() => setShowCsvModal(true)}
+              accountingConnection={accountingConnection}
+              onConnectAccounting={handleOpenAccountingModal}
+            />}
             {view === 'wizard' && renderWizardStep()}
          </div>
       </main>
       <DisclaimerModal isOpen={showDisclaimer} onAccept={handleDisclaimerAccepted} onDecline={handleDisclaimerDeclined} />
-      <XeroConnectModal isOpen={showXeroModal} onClose={() => setShowXeroModal(false)} onImport={handleXeroImport} />
+      <XeroConnectModal isOpen={showXeroModal} onClose={() => setShowXeroModal(false)} onImport={handleLegacyXeroImport} />
       <CsvImportModal isOpen={showCsvModal} onClose={() => setShowCsvModal(false)} onImport={handleBulkImport} />
       <EligibilityModal isOpen={showEligibility} onClose={() => setShowEligibility(false)} onEligible={handleEligibilityPassed} />
+      <AccountingIntegration
+        isOpen={showAccountingModal}
+        onClose={() => setShowAccountingModal(false)}
+        onImportClick={() => {
+          setShowAccountingModal(false);
+          setShowXeroImporter(true);
+        }}
+        onConnectionChange={handleAccountingConnectionChange}
+      />
+      <XeroInvoiceImporter
+        isOpen={showXeroImporter}
+        onClose={() => setShowXeroImporter(false)}
+        onImport={handleXeroImport}
+        claimant={claimData.claimant}
+      />
     </div>
   );
 };

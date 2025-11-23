@@ -138,6 +138,61 @@ export interface ClaimState {
   generated: GeneratedContent | null;
   signature: string | null; // Base64 signature image
   workflow?: WorkflowState; // Workflow tracking
+  importSource?: {
+    provider: 'xero' | 'quickbooks';
+    invoiceId: string;
+    importedAt: string;
+  };
+}
+
+// Accounting Integration Types
+
+export interface AccountingConnection {
+  provider: 'xero' | 'quickbooks' | 'freeagent' | 'sage';
+  connectionId: string; // Nango connection ID
+  organizationName: string;
+  connectedAt: string; // ISO timestamp
+  lastSyncAt: string | null;
+}
+
+export interface XeroInvoice {
+  InvoiceID: string;
+  InvoiceNumber: string;
+  Type: 'ACCREC'; // Accounts Receivable
+  Contact: {
+    ContactID: string;
+    Name: string;
+  };
+  Date: string; // ISO date
+  DueDate: string;
+  Status: 'DRAFT' | 'SUBMITTED' | 'AUTHORISED' | 'PAID' | 'VOIDED';
+  LineAmountTypes: 'Exclusive' | 'Inclusive' | 'NoTax';
+  SubTotal: number;
+  TotalTax: number;
+  Total: number;
+  AmountDue: number;
+  AmountPaid: number;
+  CurrencyCode: string;
+  Reference?: string;
+}
+
+export interface XeroContact {
+  ContactID: string;
+  Name: string;
+  EmailAddress?: string;
+  Addresses?: {
+    AddressType: 'POBOX' | 'STREET';
+    AddressLine1?: string;
+    AddressLine2?: string;
+    City?: string;
+    Region?: string;
+    PostalCode?: string;
+    Country?: string;
+  }[];
+  Phones?: {
+    PhoneType: 'DEFAULT' | 'MOBILE' | 'FAX';
+    PhoneNumber?: string;
+  }[];
 }
 
 export const INITIAL_PARTY: Party = {

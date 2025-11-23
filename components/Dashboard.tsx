@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { ClaimState, DocumentType } from '../types';
-import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight, Bell, Zap } from 'lucide-react';
+import { ClaimState, DocumentType, AccountingConnection } from '../types';
+import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight, Bell, Zap, Link as LinkIcon } from 'lucide-react';
 import { WorkflowEngine } from '../services/workflowEngine';
 
 interface DashboardProps {
@@ -9,9 +9,19 @@ interface DashboardProps {
   onResume: (claim: ClaimState) => void;
   onDelete: (id: string) => void;
   onImportCsv: () => void;
+  accountingConnection?: AccountingConnection | null;
+  onConnectAccounting?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ claims, onCreateNew, onResume, onDelete, onImportCsv }) => {
+export const Dashboard: React.FC<DashboardProps> = ({
+  claims,
+  onCreateNew,
+  onResume,
+  onDelete,
+  onImportCsv,
+  accountingConnection,
+  onConnectAccounting
+}) => {
   const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest, 0);
   const activeClaims = claims.filter(c => c.status !== 'paid').length;
 
@@ -38,18 +48,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ claims, onCreateNew, onRes
           <h1 className="text-3xl font-bold text-slate-900 font-serif mb-2">Legal Dashboard</h1>
           <p className="text-slate-500">Overview of your active litigation files.</p>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
-            <button 
-            onClick={onImportCsv}
-            className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all"
+        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+            {accountingConnection && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-green-700">Xero Connected</span>
+              </div>
+            )}
+
+            {onConnectAccounting && (
+              <button
+                onClick={onConnectAccounting}
+                className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all"
+              >
+                <LinkIcon className="w-4 h-4" />
+                {accountingConnection ? 'Manage' : 'Connect'} Accounting
+              </button>
+            )}
+
+            <button
+              onClick={onImportCsv}
+              className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all"
             >
-            <Upload className="w-4 h-4" /> Import
+              <Upload className="w-4 h-4" /> Import CSV
             </button>
-            <button 
-            onClick={onCreateNew}
-            className="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:-translate-y-1"
+            <button
+              onClick={onCreateNew}
+              className="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:-translate-y-1"
             >
-            <Plus className="w-4 h-4" /> New Case File
+              <Plus className="w-4 h-4" /> New Case File
             </button>
         </div>
       </div>
