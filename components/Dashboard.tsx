@@ -22,7 +22,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   accountingConnection,
   onConnectAccounting
 }) => {
-  const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest, 0);
+  const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest + curr.compensation, 0);
   const activeClaims = claims.filter(c => c.status !== 'paid').length;
 
   // Calculate workflow states for all claims (memoized for performance)

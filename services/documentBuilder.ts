@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { ClaimState, GeneratedContent, DocumentType, PartyType, Party } from '../types';
 import { getTemplate, generateBriefDetails, getDisclaimer } from './documentTemplates';
 import { logDocumentGeneration } from './complianceLogger';
+import { DEFAULT_PAYMENT_TERMS_DAYS } from '../constants';
 
 /**
  * HYBRID TEMPLATE + AI DOCUMENT BUILDER
@@ -66,20 +67,20 @@ export class DocumentBuilder {
       .join('\n\n');
 
     // Determine interest start date
-    // Use actual due date if provided, otherwise default to invoice date + 30 days
+    // Use actual due date if provided, otherwise default to invoice date + default payment terms
     let interestStartDate: Date;
     if (data.invoice.dueDate) {
       interestStartDate = new Date(data.invoice.dueDate);
     } else {
       const invoiceDate = new Date(data.invoice.dateIssued);
       interestStartDate = new Date(invoiceDate);
-      interestStartDate.setDate(interestStartDate.getDate() + 30);
+      interestStartDate.setDate(interestStartDate.getDate() + DEFAULT_PAYMENT_TERMS_DAYS);
     }
 
     // Payment due description
     const paymentDueDesc = data.invoice.dueDate
       ? `on ${this.formatDate(data.invoice.dueDate)}`
-      : "within 30 days of the invoice date";
+      : `within ${DEFAULT_PAYMENT_TERMS_DAYS} days of the invoice date`;
 
     // Compensation clause (only for B2B)
     const compensationClause = data.compensation > 0

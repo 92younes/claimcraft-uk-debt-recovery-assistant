@@ -67,12 +67,12 @@ export const assessClaimViability = (state: ClaimState): AssessmentResult => {
   if (state.defendant.type === PartyType.BUSINESS && state.defendant.solvencyStatus === 'Insolvent') {
     solvencyCheck = {
       passed: false,
-      message: "Warning: Defendant is marked as Insolvent/Dissolved. Recovering money is highly unlikely."
+      message: "⚠️ Warning: Defendant company is Insolvent. Recovery is highly unlikely even if you win judgment."
     };
   } else if (state.defendant.type === PartyType.BUSINESS && state.defendant.solvencyStatus === 'Dissolved') {
     solvencyCheck = {
       passed: false,
-      message: "Defendant company is Dissolved. You cannot sue a company that does not exist."
+      message: "❌ Defendant company is Dissolved. You cannot pursue legal action against a non-existent entity."
     };
   }
 

@@ -18,6 +18,7 @@
  */
 
 import { ClaimState, ClaimStage, WorkflowState, TimelineEvent } from '../types';
+import { DEFAULT_PAYMENT_TERMS_DAYS } from '../constants';
 
 export class WorkflowEngine {
   /**
@@ -178,7 +179,7 @@ export class WorkflowEngine {
       dueDate = new Date(claim.invoice.dueDate);
     } else if (claim.invoice.dateIssued) {
       dueDate = new Date(claim.invoice.dateIssued);
-      dueDate.setDate(dueDate.getDate() + 30); // Default payment terms
+      dueDate.setDate(dueDate.getDate() + DEFAULT_PAYMENT_TERMS_DAYS);
     } else {
       return null; // Cannot calculate without any date
     }
