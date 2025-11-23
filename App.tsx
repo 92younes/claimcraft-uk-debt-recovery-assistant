@@ -14,6 +14,9 @@ import { TimelineBuilder } from './components/TimelineBuilder';
 import { EvidenceUpload } from './components/EvidenceUpload';
 import { ChatInterface } from './components/ChatInterface';
 import { DisclaimerModal } from './components/DisclaimerModal';
+import { StatementOfTruthModal } from './components/StatementOfTruthModal';
+import { InterestRateConfirmModal } from './components/InterestRateConfirmModal';
+import { LitigantInPersonModal } from './components/LitigantInPersonModal';
 import { AccountingIntegration } from './components/AccountingIntegration';
 import { XeroInvoiceImporter } from './components/XeroInvoiceImporter';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
@@ -81,6 +84,12 @@ const App: React.FC = () => {
   const [accountingConnection, setAccountingConnection] = useState<AccountingConnection | null>(null);
   const [showAccountingModal, setShowAccountingModal] = useState(false);
   const [showXeroImporter, setShowXeroImporter] = useState(false);
+
+  // Compliance Modal State
+  const [showSoTModal, setShowSoTModal] = useState(false);
+  const [showInterestModal, setShowInterestModal] = useState(false);
+  const [showLiPModal, setShowLiPModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // Initialize Nango on mount
   useEffect(() => {
@@ -355,7 +364,13 @@ const App: React.FC = () => {
     claimantType: PartyType,
     defendantType: PartyType
   ): InterestData => {
-    if (!dateIssued || !amount) return claimData.interest;
+    if (!dateIssued || !amount) {
+      return {
+        daysOverdue: 0,
+        dailyRate: 0,
+        totalInterest: 0
+      };
+    }
 
     // Determine the payment due date
     // If dueDate is provided, use it. Otherwise, assume default payment terms.
@@ -661,24 +676,46 @@ const App: React.FC = () => {
       return;
     }
 
-    setIsProcessing(true);
-    setProcessingText(`Generating ${claimData.selectedDocType}...`);
-    try {
-      // Use new DocumentBuilder with template + AI hybrid approach
-      const result = await DocumentBuilder.generateDocument(claimData);
-      setClaimData(prev => ({ ...prev, generated: result }));
-      setStep(Step.DRAFT);
+    // Define the actual generation function
+    const proceedWithGeneration = async () => {
+      setIsProcessing(true);
+      setProcessingText(`Generating ${claimData.selectedDocType}...`);
+      try {
+        // Use new DocumentBuilder with template + AI hybrid approach
+        const result = await DocumentBuilder.generateDocument(claimData);
+        setClaimData(prev => ({ ...prev, generated: result }));
+        setStep(Step.DRAFT);
 
-      // Show validation warnings to user if any
-      if (result.validation?.warnings && result.validation.warnings.length > 0) {
-        console.warn('Document warnings:', result.validation.warnings);
+        // Show validation warnings to user if any
+        if (result.validation?.warnings && result.validation.warnings.length > 0) {
+          console.warn('Document warnings:', result.validation.warnings);
+        }
+      } catch (e: any) {
+        setError(e.message || "Document generation failed. Please check your data and try again.");
+        console.error('Draft generation error:', e);
+      } finally {
+        setIsProcessing(false);
       }
-    } catch (e: any) {
-      setError(e.message || "Document generation failed. Please check your data and try again.");
-      console.error('Draft generation error:', e);
-    } finally {
-      setIsProcessing(false);
-    }
+    };
+
+    // COMPLIANCE MODAL FLOW:
+    // 1. Interest Rate Confirmation (all documents)
+    // 2. Litigant in Person Warning (N1 only)
+    // 3. Statement of Truth Warning (N1, N225, N225A - shown later in signature step)
+
+    // Store the action to execute after modals
+    setPendingAction(() => async () => {
+      // If N1, show LiP modal
+      if (claimData.selectedDocType === DocumentType.FORM_N1) {
+        setShowLiPModal(true);
+      } else {
+        // Otherwise, proceed directly
+        await proceedWithGeneration();
+      }
+    });
+
+    // Show interest confirmation modal first
+    setShowInterestModal(true);
   };
   
   const handleRefineDraft = async () => {
@@ -914,7 +951,7 @@ const App: React.FC = () => {
           </div>
         );
       
-      case Step.FINAL:
+      case Step.FINAL: {
         // Legal Compliance Logic: Check timeline for LBA
         const hasLBA = claimData.timeline.some(e =>
             e.type === 'chaser' &&
@@ -1134,6 +1171,7 @@ const App: React.FC = () => {
             </div>
           </div>
         );
+      }
       case Step.DRAFT:
         return (
             <div className="max-w-5xl mx-auto animate-fade-in py-10">
@@ -1725,6 +1763,74 @@ const App: React.FC = () => {
         onClose={() => setShowXeroImporter(false)}
         onImport={handleXeroImport}
         claimant={claimData.claimant}
+      />
+
+      {/* Compliance Modals */}
+      <InterestRateConfirmModal
+        isOpen={showInterestModal}
+        onClose={() => {
+          setShowInterestModal(false);
+          setPendingAction(null);
+        }}
+        onConfirm={() => {
+          setShowInterestModal(false);
+          if (pendingAction) {
+            pendingAction();
+          }
+        }}
+        claimantType={claimData.claimant.type}
+        debtorType={claimData.defendant.type}
+        interestRate={claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS ? LATE_PAYMENT_ACT_RATE : 8.0}
+        totalInterest={claimData.interest.totalInterest}
+        invoiceAmount={claimData.invoice.totalAmount}
+      />
+
+      <LitigantInPersonModal
+        isOpen={showLiPModal}
+        onClose={() => {
+          setShowLiPModal(false);
+          setPendingAction(null);
+        }}
+        onProceed={async () => {
+          setShowLiPModal(false);
+          // Proceed with document generation
+          setIsProcessing(true);
+          setProcessingText(`Generating ${claimData.selectedDocType}...`);
+          try {
+            const result = await DocumentBuilder.generateDocument(claimData);
+            setClaimData(prev => ({ ...prev, generated: result }));
+            setStep(Step.DRAFT);
+            if (result.validation?.warnings && result.validation.warnings.length > 0) {
+              console.warn('Document warnings:', result.validation.warnings);
+            }
+          } catch (e: any) {
+            setError(e.message || "Document generation failed. Please check your data and try again.");
+            console.error('Draft generation error:', e);
+          } finally {
+            setIsProcessing(false);
+          }
+        }}
+        claimValue={claimData.invoice.totalAmount + claimData.interest.totalInterest + claimData.compensation + claimData.courtFee}
+      />
+
+      <StatementOfTruthModal
+        isOpen={showSoTModal}
+        onClose={() => {
+          setShowSoTModal(false);
+          setPendingAction(null);
+        }}
+        onConfirm={() => {
+          setShowSoTModal(false);
+          if (pendingAction) {
+            pendingAction();
+          }
+        }}
+        documentType={
+          claimData.selectedDocType === DocumentType.FORM_N1 ? 'Form N1 (Claim Form)' :
+          claimData.selectedDocType === DocumentType.DEFAULT_JUDGMENT ? 'Default Judgment (N225)' :
+          claimData.selectedDocType === DocumentType.ADMISSION ? 'Admission (N225A)' :
+          'Court Document'
+        }
       />
     </div>
   );

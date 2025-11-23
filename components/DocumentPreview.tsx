@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ClaimState, DocumentType } from '../types';
 import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown } from 'lucide-react';
 import { SignaturePad } from './SignaturePad';
+import { FinalReviewModal } from './FinalReviewModal';
 import { generateN1PDF, generateN225PDF, generateN225APDF, generateN180PDF } from '../services/pdfGenerator';
 
 interface DocumentPreviewProps {
@@ -34,6 +35,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   const [sendSuccess, setSendSuccess] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [showFinalReview, setShowFinalReview] = useState(false);
   const review = data.generated?.review;
 
   const handlePrint = () => {
@@ -41,6 +43,17 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   };
 
   const handleDownloadPDF = async () => {
+    // Show Final Review Modal for Form N1 before download
+    if (data.selectedDocType === DocumentType.FORM_N1) {
+      setShowFinalReview(true);
+      return;
+    }
+
+    // For other documents, proceed directly
+    await performDownload();
+  };
+
+  const performDownload = async () => {
     // Check if this document type has an official PDF form
     const pdfFormTypes = [
       DocumentType.FORM_N1,
@@ -120,46 +133,56 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
      if(!isLetter) setViewMode('n1-form');
   }, [isLetter]);
 
-  // Generate PDF preview for N1 forms
+  // Generate PDF preview for N1 forms (regenerates when data changes)
   React.useEffect(() => {
-    let isMounted = true;
-    let objectUrl: string | null = null;
-
-    if (data.selectedDocType === DocumentType.FORM_N1 && !pdfPreviewUrl) {
-      setIsLoadingPreview(true);
-      generateN1PDF(data)
-        .then(pdfBytes => {
-          if (isMounted) {
-            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-            objectUrl = URL.createObjectURL(blob);
-            setPdfPreviewUrl(objectUrl);
-          }
-        })
-        .catch(error => {
-          if (isMounted) {
-            console.error('Failed to generate PDF preview:', error);
-          }
-        })
-        .finally(() => {
-          if (isMounted) {
-            setIsLoadingPreview(false);
-          }
-        });
+    if (data.selectedDocType !== DocumentType.FORM_N1) {
+      return;
     }
 
-    // Cleanup: revoke object URL only when component unmounts or doc type changes
+    let cancelled = false;
+    setIsLoadingPreview(true);
+
+    generateN1PDF(data)
+      .then(pdfBytes => {
+        if (cancelled) return;
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        setPdfPreviewUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+      })
+      .catch(error => {
+        if (!cancelled) {
+          console.error('Failed to generate PDF preview:', error);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingPreview(false);
+        }
+      });
+
     return () => {
-      isMounted = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-      // Also revoke existing URL if switching away from N1
-      if (pdfPreviewUrl && data.selectedDocType !== DocumentType.FORM_N1) {
+      cancelled = true;
+    };
+  }, [data]);
+
+  // Cleanup: revoke URL when it changes or component unmounts
+  React.useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
         URL.revokeObjectURL(pdfPreviewUrl);
-        setPdfPreviewUrl(null);
       }
     };
-  }, [data, pdfPreviewUrl]); // ✅ All dependencies included
+  }, [pdfPreviewUrl]);
+
+  // Reset preview URL when switching away from N1
+  React.useEffect(() => {
+    if (data.selectedDocType !== DocumentType.FORM_N1 && pdfPreviewUrl) {
+      setPdfPreviewUrl(null);
+    }
+  }, [data.selectedDocType, pdfPreviewUrl]);
 
   if (sendSuccess) {
      return (
@@ -704,6 +727,25 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
           )}
         </div>
       </div>
+
+      {/* Final Review Modal for N1 */}
+      <FinalReviewModal
+        isOpen={showFinalReview}
+        onClose={() => setShowFinalReview(false)}
+        onConfirm={async () => {
+          setShowFinalReview(false);
+          await performDownload();
+        }}
+        claimData={{
+          claimantName: data.claimant.name,
+          debtorName: data.defendant.name,
+          invoiceNumber: data.invoice.invoiceNumber,
+          invoiceAmount: data.invoice.totalAmount,
+          interest: data.interest.totalInterest,
+          courtFee: data.courtFee,
+          totalClaim: data.invoice.totalAmount + data.interest.totalInterest + data.compensation + data.courtFee
+        }}
+      />
     </div>
   );
 }

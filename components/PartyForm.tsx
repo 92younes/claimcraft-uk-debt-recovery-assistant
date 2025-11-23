@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Party, PartyType } from '../types';
 import { Input, Select } from './ui/Input';
 import { UK_COUNTIES } from '../constants';
+import { validateUKPostcode, formatUKPostcode } from '../utils/validation';
 
 interface PartyFormProps {
   title: string;
@@ -11,9 +12,36 @@ interface PartyFormProps {
 }
 
 export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, readOnly = false }) => {
+  const [postcodeError, setPostcodeError] = useState<string | null>(null);
+
+  // Validate postcode whenever it changes
+  useEffect(() => {
+    if (party.postcode && party.postcode.trim()) {
+      const isValid = validateUKPostcode(party.postcode);
+      if (!isValid) {
+        setPostcodeError('Invalid UK postcode format (e.g., SW1A 1AA)');
+      } else {
+        setPostcodeError(null);
+      }
+    } else {
+      setPostcodeError(null);
+    }
+  }, [party.postcode]);
+
   const handleChange = (field: keyof Party, value: string) => {
     if (readOnly) return;
+
+    // Auto-format postcode on blur (handled separately)
     onChange({ ...party, [field]: value });
+  };
+
+  const handlePostcodeBlur = () => {
+    if (party.postcode && party.postcode.trim()) {
+      const formatted = formatUKPostcode(party.postcode);
+      if (formatted !== party.postcode) {
+        onChange({ ...party, postcode: formatted });
+      }
+    }
   };
 
   return (
@@ -88,12 +116,22 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           />
         </div>
         <div className="col-span-1 md:col-span-1">
-           <Input
-            label="Postcode"
-            value={party.postcode}
-            onChange={(e) => handleChange('postcode', e.target.value)}
-            readOnly={readOnly}
-          />
+          <div className="relative">
+            <Input
+              label="Postcode"
+              value={party.postcode}
+              onChange={(e) => handleChange('postcode', e.target.value)}
+              onBlur={handlePostcodeBlur}
+              readOnly={readOnly}
+              className={postcodeError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}
+            />
+            {postcodeError && (
+              <p className="mt-1 text-xs text-red-600 flex items-start gap-1">
+                <span className="shrink-0">⚠️</span>
+                <span>{postcodeError}</span>
+              </p>
+            )}
+          </div>
         </div>
         <div className="col-span-1 md:col-span-2">
           <Select
