@@ -26,7 +26,7 @@ import { assessClaimViability, calculateCourtFee, calculateCompensation } from '
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData } from './services/storageService';
 import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS } from './constants';
-import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, HelpCircle, Calendar, PoundSterling, User } from 'lucide-react';
+import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen } from 'lucide-react';
 
 // New view state
 type ViewState = 'landing' | 'dashboard' | 'wizard' | 'privacy' | 'terms';
@@ -916,80 +916,230 @@ const App: React.FC = () => {
       
       case Step.FINAL:
         // Legal Compliance Logic: Check timeline for LBA
-        const hasLBA = claimData.timeline.some(e => 
-            e.type === 'chaser' && 
+        const hasLBA = claimData.timeline.some(e =>
+            e.type === 'chaser' &&
             (e.description.toLowerCase().includes('letter before action') || e.description.toLowerCase().includes('lba') || e.description.toLowerCase().includes('formal demand'))
         );
-        
+
         const recommendedDoc = hasLBA ? DocumentType.FORM_N1 : DocumentType.LBA;
 
+        // Document configurations with metadata
+        const documentConfigs = [
+          // PRE-ACTION STAGE
+          {
+            stage: 'Pre-Action',
+            docs: [
+              {
+                type: DocumentType.POLITE_CHASER,
+                icon: Mail,
+                title: 'Polite Payment Reminder',
+                description: 'Friendly pre-LBA reminder to maintain business relationship while requesting payment.',
+                when: 'Before formal legal action',
+                badge: null
+              },
+              {
+                type: DocumentType.LBA,
+                icon: Mail,
+                title: 'Letter Before Action',
+                description: 'Mandatory under Pre-Action Protocol. Must give debtor 30 days to respond before court filing.',
+                when: 'Required before N1',
+                badge: !hasLBA ? { text: 'REQUIRED FIRST', color: 'bg-green-500' } : null
+              }
+            ]
+          },
+          // FILING STAGE
+          {
+            stage: 'Court Filing',
+            docs: [
+              {
+                type: DocumentType.FORM_N1,
+                icon: Scale,
+                title: 'Form N1 (Claim Form)',
+                description: `Official court claim form. Commences legal proceedings. Court fee: £${claimData.courtFee}.`,
+                when: 'After 30-day LBA period',
+                badge: hasLBA ? { text: 'NEXT STEP', color: 'bg-blue-500' } : null
+              }
+            ]
+          },
+          // SETTLEMENT OPTIONS
+          {
+            stage: 'Settlement',
+            docs: [
+              {
+                type: DocumentType.PART_36_OFFER,
+                icon: FileText,
+                title: 'Part 36 Settlement Offer',
+                description: 'Formal settlement offer with cost consequences if not accepted. CPR Part 36 compliant.',
+                when: 'Any time before trial',
+                badge: null
+              },
+              {
+                type: DocumentType.INSTALLMENT_AGREEMENT,
+                icon: FileText,
+                title: 'Installment Payment Agreement',
+                description: 'Legally binding agreement for payment by installments. Default: 6 monthly payments.',
+                when: 'When debtor cannot pay in full',
+                badge: null
+              }
+            ]
+          },
+          // POST-FILING STAGE
+          {
+            stage: 'Post-Filing',
+            docs: [
+              {
+                type: DocumentType.DEFAULT_JUDGMENT,
+                icon: Gavel,
+                title: 'Default Judgment (N225)',
+                description: 'Application when defendant fails to respond within 14/28 days. Must file within 6 months.',
+                when: 'No defence filed',
+                badge: null
+              },
+              {
+                type: DocumentType.ADMISSION,
+                icon: Gavel,
+                title: 'Judgment on Admission (N225A)',
+                description: 'Application when defendant admits but disputes payment terms.',
+                when: 'Defendant admits claim',
+                badge: null
+              },
+              {
+                type: DocumentType.DEFENCE_RESPONSE,
+                icon: FileText,
+                title: 'Response to Defence',
+                description: 'Claimant\'s rebuttal to defendant\'s defence. Sets out why defence should be rejected.',
+                when: 'Defence filed by defendant',
+                badge: null
+              }
+            ]
+          },
+          // TRIAL PREPARATION
+          {
+            stage: 'Trial Preparation',
+            docs: [
+              {
+                type: DocumentType.DIRECTIONS_QUESTIONNAIRE,
+                icon: FileCheck,
+                title: 'Directions Questionnaire (N180)',
+                description: 'Required for small claims track allocation. Must complete for trial directions.',
+                when: 'After defence filed',
+                badge: null
+              },
+              {
+                type: DocumentType.TRIAL_BUNDLE,
+                icon: FolderOpen,
+                title: 'Trial Bundle',
+                description: 'Organized bundle of all documents for trial. Must comply with Practice Direction 39A.',
+                when: 'Before trial hearing',
+                badge: null
+              },
+              {
+                type: DocumentType.SKELETON_ARGUMENT,
+                icon: FileText,
+                title: 'Skeleton Argument',
+                description: 'Summary of legal arguments for trial. Outlines your case and legal basis.',
+                when: 'Before trial hearing',
+                badge: null
+              }
+            ]
+          }
+        ];
+
         return (
-          <div className="space-y-8 animate-fade-in py-10 max-w-5xl mx-auto">
+          <div className="space-y-8 animate-fade-in py-10 max-w-6xl mx-auto">
             <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Legal Strategy</h2>
-                <p className="text-slate-500">Based on your timeline, we recommend the following next step to remain compliant.</p>
+                <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Select Document Type</h2>
+                <p className="text-slate-500">Choose the appropriate legal document based on your claim's current stage</p>
             </div>
 
-            {/* Strategy Board */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
-                {/* OPTION 1: LBA */}
-                <div 
-                    onClick={() => setClaimData(p => ({...p, selectedDocType: DocumentType.LBA}))}
-                    className={`relative p-8 rounded-2xl border-2 transition-all cursor-pointer group overflow-hidden ${claimData.selectedDocType === DocumentType.LBA ? 'border-slate-900 bg-slate-900 text-white shadow-2xl scale-105 z-10' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
-                >
-                    {recommendedDoc === DocumentType.LBA && (
-                        <div className="absolute top-0 right-0 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow-sm flex items-center gap-1 z-20">
-                            <Check className="w-3 h-3" /> REQUIRED FIRST STEP
-                        </div>
-                    )}
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className={`p-3 rounded-xl ${claimData.selectedDocType === DocumentType.LBA ? 'bg-white/10' : 'bg-blue-50 text-blue-600'}`}>
-                            <Mail className="w-6 h-6" />
-                        </div>
-                        <h3 className="font-bold text-xl font-serif">Letter Before Action</h3>
-                    </div>
-                    <p className={`text-sm leading-relaxed mb-6 ${claimData.selectedDocType === DocumentType.LBA ? 'text-slate-300' : 'text-slate-500'}`}>
-                        Mandatory under the Pre-Action Protocol for Debt Claims. You must give the debtor 30 days to respond before filing in court.
-                    </p>
-                    {!hasLBA && (
-                        <div className={`text-xs p-3 rounded-lg flex items-start gap-2 ${claimData.selectedDocType === DocumentType.LBA ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-50 text-amber-700'}`}>
-                             <AlertTriangle className="w-4 h-4 shrink-0" />
-                             <span>You have not sent a compliant LBA yet. Starting here is strongly advised to avoid court sanctions.</span>
-                        </div>
-                    )}
-                </div>
+            {/* Document Selection by Stage */}
+            <div className="space-y-8">
+              {documentConfigs.map((stageGroup) => (
+                <div key={stageGroup.stage} className="space-y-4">
+                  {/* Stage Header */}
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent"></div>
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-4">{stageGroup.stage}</h3>
+                    <div className="h-px flex-1 bg-gradient-to-l from-slate-200 to-transparent"></div>
+                  </div>
 
-                {/* OPTION 2: N1 FORM */}
-                <div 
-                    onClick={() => setClaimData(p => ({...p, selectedDocType: DocumentType.FORM_N1}))}
-                    className={`relative p-8 rounded-2xl border-2 transition-all cursor-pointer group ${claimData.selectedDocType === DocumentType.FORM_N1 ? 'border-slate-900 bg-slate-900 text-white shadow-2xl scale-105 z-10' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
-                >
-                    {recommendedDoc === DocumentType.FORM_N1 && (
-                        <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow-sm flex items-center gap-1 z-20">
-                            <Check className="w-3 h-3" /> NEXT LOGICAL STEP
+                  {/* Documents Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {stageGroup.docs.map((doc) => {
+                      const Icon = doc.icon;
+                      const isSelected = claimData.selectedDocType === doc.type;
+
+                      return (
+                        <div
+                          key={doc.type}
+                          onClick={() => setClaimData(p => ({...p, selectedDocType: doc.type}))}
+                          className={`relative p-6 rounded-xl border-2 transition-all cursor-pointer group ${
+                            isSelected
+                              ? 'border-slate-900 bg-slate-900 text-white shadow-xl scale-105'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:shadow-md'
+                          }`}
+                        >
+                          {/* Badge */}
+                          {doc.badge && (
+                            <div className={`absolute top-0 right-0 ${doc.badge.color} text-white text-xs font-bold px-2 py-1 rounded-bl-lg shadow-sm flex items-center gap-1`}>
+                              <Check className="w-3 h-3" /> {doc.badge.text}
+                            </div>
+                          )}
+
+                          {/* Icon & Title */}
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/10' : 'bg-blue-50 text-blue-600'}`}>
+                              <Icon className="w-5 h-5" />
+                            </div>
+                            <h4 className="font-bold text-sm">{doc.title}</h4>
+                          </div>
+
+                          {/* Description */}
+                          <p className={`text-xs leading-relaxed mb-3 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                            {doc.description}
+                          </p>
+
+                          {/* When to use */}
+                          <div className={`text-xs font-medium ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
+                            ⏱ {doc.when}
+                          </div>
                         </div>
-                    )}
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className={`p-3 rounded-xl ${claimData.selectedDocType === DocumentType.FORM_N1 ? 'bg-white/10' : 'bg-blue-50 text-blue-600'}`}>
-                            <Scale className="w-6 h-6" />
-                        </div>
-                        <h3 className="font-bold text-xl font-serif">Form N1 (Claim Form)</h3>
-                    </div>
-                    <p className={`text-sm leading-relaxed mb-6 ${claimData.selectedDocType === DocumentType.FORM_N1 ? 'text-slate-300' : 'text-slate-500'}`}>
-                        The official document to commence legal proceedings in the County Court. Requires a court fee of £{claimData.courtFee}.
-                    </p>
-                    {!hasLBA && claimData.selectedDocType === DocumentType.FORM_N1 && (
-                        <div className="text-xs p-3 rounded-lg flex items-start gap-2 bg-red-500/20 text-red-200">
-                             <AlertTriangle className="w-4 h-4 shrink-0" />
-                             <span>Warning: Filing N1 without an LBA puts you at risk of costs, even if you win.</span>
-                        </div>
-                    )}
+                      );
+                    })}
+                  </div>
                 </div>
+              ))}
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-slate-100">
-                <button onClick={handleDraftClaim} disabled={isProcessing} className="bg-slate-900 hover:bg-slate-800 text-white px-12 py-4 rounded-xl shadow-lg hover:shadow-2xl font-bold text-lg flex items-center gap-3 transition-all transform hover:-translate-y-1">
+            {/* Warning for N1 without LBA */}
+            {claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 flex items-start gap-4 animate-fade-in">
+                <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-red-900 mb-1">Pre-Action Protocol Warning</h4>
+                  <p className="text-sm text-red-700">Filing N1 without a compliant Letter Before Action may result in cost sanctions, even if you win your case. The court may refuse to award you costs or order you to pay the defendant's costs.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Official PDF Notice */}
+            {[DocumentType.DEFAULT_JUDGMENT, DocumentType.ADMISSION, DocumentType.DIRECTIONS_QUESTIONNAIRE].includes(claimData.selectedDocType) && (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 flex items-start gap-4 animate-fade-in">
+                <AlertCircle className="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-blue-900 mb-1">Official Court Form</h4>
+                  <p className="text-sm text-blue-700">This document requires the official HMCTS form. Currently, a text template will be generated. For actual court filing, download the official PDF from gov.uk and complete it manually.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Generate Button */}
+            <div className="flex justify-end pt-4 border-t border-slate-200">
+                <button
+                  onClick={handleDraftClaim}
+                  disabled={isProcessing || !claimData.selectedDocType}
+                  className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-12 py-4 rounded-xl shadow-lg hover:shadow-2xl font-bold text-lg flex items-center gap-3 transition-all transform hover:-translate-y-1 disabled:transform-none"
+                >
                     {isProcessing ? <Loader2 className="animate-spin"/> : <><Wand2 className="w-5 h-5" /> Generate Document</>}
                 </button>
             </div>
