@@ -38,7 +38,7 @@ export class XeroPuller {
       );
 
       // Update last sync time
-      NangoClient.updateLastSync();
+      NangoClient.updateLastSync('xero');
 
       return response.Invoices || [];
     } catch (error) {

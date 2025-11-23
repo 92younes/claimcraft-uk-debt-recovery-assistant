@@ -107,7 +107,15 @@ export class DocumentBuilder {
       .replace(/\[TIMELINE_NUMBERED\]/g, timelineNumbered)
       .replace(/\[INTEREST_START_DATE\]/g, this.formatDate(interestStartDate.toISOString()))
       .replace(/\[PAYMENT_DUE_DESCRIPTION\]/g, paymentDueDesc)
-      .replace(/\[COMPENSATION_CLAUSE\]/g, compensationClause);
+      .replace(/\[COMPENSATION_CLAUSE\]/g, compensationClause)
+      // Additional placeholders for new document types
+      .replace(/\[DUE_DATE\]/g, data.invoice.dueDate ? this.formatDate(data.invoice.dueDate) : 'N/A')
+      .replace(/\[DAYS_OVERDUE\]/g, data.interest.daysOverdue.toString())
+      .replace(/\[SETTLEMENT_AMOUNT\]/g, (parseFloat(totalClaim) * 0.85).toFixed(2)) // 15% discount as settlement
+      .replace(/\[PAYMENT_DETAILS\]/g, '[TO BE SPECIFIED BY CLAIMANT]')
+      .replace(/\[NUMBER_OF_INSTALLMENTS\]/g, '6') // Default 6 month plan
+      .replace(/\[INSTALLMENT_AMOUNT\]/g, (parseFloat(totalClaim) / 6).toFixed(2))
+      .replace(/\[FIRST_PAYMENT_DATE\]/g, this.formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())); // 30 days from now
 
     return filled;
   }

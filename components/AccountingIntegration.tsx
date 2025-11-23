@@ -2,7 +2,7 @@
  * Accounting Integration Modal
  *
  * Allows users to connect/disconnect accounting systems and import invoices.
- * Currently supports: Xero (more platforms coming soon)
+ * Supports: Xero, QuickBooks, FreeAgent, Sage
  */
 
 import React, { useState, useEffect } from 'react';
@@ -10,10 +10,26 @@ import { X, Link as LinkIcon, Unlink, Download, CheckCircle, AlertCircle, Loader
 import { NangoClient } from '../services/nangoClient';
 import { AccountingConnection } from '../types';
 
+type AccountingProvider = 'xero' | 'quickbooks' | 'freeagent' | 'sage';
+
+interface ProviderConfig {
+  id: AccountingProvider;
+  name: string;
+  color: string;
+  icon: string;
+}
+
+const PROVIDERS: ProviderConfig[] = [
+  { id: 'xero', name: 'Xero', color: 'bg-blue-600', icon: 'X' },
+  { id: 'quickbooks', name: 'QuickBooks', color: 'bg-green-600', icon: 'Q' },
+  { id: 'freeagent', name: 'FreeAgent', color: 'bg-purple-600', icon: 'F' },
+  { id: 'sage', name: 'Sage', color: 'bg-teal-600', icon: 'S' }
+];
+
 interface AccountingIntegrationProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportClick: () => void; // Opens XeroInvoiceImporter
+  onImportClick: () => void; // Opens XeroInvoiceImporter (to be refactored for all providers)
   onConnectionChange?: (connection: AccountingConnection | null) => void;
 }
 
@@ -23,72 +39,77 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
   onImportClick,
   onConnectionChange
 }) => {
-  const [connection, setConnection] = useState<AccountingConnection | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [connections, setConnections] = useState<Map<AccountingProvider, AccountingConnection | null>>(new Map());
+  const [connectingProvider, setConnectingProvider] = useState<AccountingProvider | null>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<AccountingProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Load connection on mount
+  // Load all connections on mount
   useEffect(() => {
     if (isOpen) {
-      loadConnection();
+      loadAllConnections();
     }
   }, [isOpen]);
 
-  const loadConnection = async () => {
-    const isConnected = await NangoClient.isXeroConnected();
+  const loadAllConnections = async () => {
+    const newConnections = new Map<AccountingProvider, AccountingConnection | null>();
 
-    if (isConnected) {
-      const conn = NangoClient.getXeroConnection();
-      setConnection(conn);
-    } else {
-      setConnection(null);
+    for (const provider of PROVIDERS) {
+      const isConnected = await NangoClient.isConnected(provider.id);
+      if (isConnected) {
+        const conn = NangoClient.getConnection(provider.id);
+        newConnections.set(provider.id, conn);
+      } else {
+        newConnections.set(provider.id, null);
+      }
     }
+
+    setConnections(newConnections);
   };
 
-  const handleConnect = async () => {
-    setIsConnecting(true);
+  const handleConnect = async (provider: AccountingProvider) => {
+    setConnectingProvider(provider);
     setError(null);
     setSuccess(null);
 
     try {
-      const connectionId = await NangoClient.connectXero();
-      const newConnection = NangoClient.getXeroConnection();
+      await NangoClient.connect(provider);
+      const newConnection = NangoClient.getConnection(provider);
 
-      setConnection(newConnection);
-      setSuccess(`✅ Successfully connected to ${newConnection?.organizationName || 'Xero'}!`);
+      setConnections(prev => new Map(prev).set(provider, newConnection));
+      setSuccess(`✅ Successfully connected to ${newConnection?.organizationName || provider}!`);
 
-      // Notify parent
-      if (onConnectionChange && newConnection) {
+      // Notify parent (backward compatibility - only for Xero)
+      if (onConnectionChange && newConnection && provider === 'xero') {
         onConnectionChange(newConnection);
       }
 
       // Auto-close success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect to Xero');
+      setError(err instanceof Error ? err.message : `Failed to connect to ${provider}`);
       console.error('Connection error:', err);
     } finally {
-      setIsConnecting(false);
+      setConnectingProvider(null);
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect Xero? Existing imported invoices will remain, but you won\'t be able to import new ones.')) {
+  const handleDisconnect = async (provider: AccountingProvider, providerName: string) => {
+    if (!confirm(`Are you sure you want to disconnect ${providerName}? Existing imported invoices will remain, but you won't be able to import new ones.`)) {
       return;
     }
 
-    setIsDisconnecting(true);
+    setDisconnectingProvider(provider);
     setError(null);
 
     try {
-      await NangoClient.disconnectXero();
-      setConnection(null);
-      setSuccess('✅ Disconnected from Xero');
+      await NangoClient.disconnect(provider);
+      setConnections(prev => new Map(prev).set(provider, null));
+      setSuccess(`✅ Disconnected from ${providerName}`);
 
-      // Notify parent
-      if (onConnectionChange) {
+      // Notify parent (backward compatibility - only for Xero)
+      if (onConnectionChange && provider === 'xero') {
         onConnectionChange(null);
       }
 
@@ -97,26 +118,34 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to disconnect');
     } finally {
-      setIsDisconnecting(false);
+      setDisconnectingProvider(null);
     }
   };
 
-  const handleImport = () => {
+  const handleImport = (provider: AccountingProvider) => {
+    const connection = connections.get(provider);
+
     if (!connection) {
-      setError('Please connect to Xero first');
+      setError(`Please connect to ${provider} first`);
       return;
     }
 
-    onImportClick();
+    // Currently only Xero importer exists
+    // TODO: Create generic invoice importer for all providers
+    if (provider === 'xero') {
+      onImportClick();
+    } else {
+      setError(`Import functionality for ${provider} is coming soon. The connection is ready, but the invoice importer needs to be implemented.`);
+    }
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between rounded-t-2xl">
+        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between rounded-t-2xl z-10">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 font-serif">Accounting Integration</h2>
             <p className="text-sm text-slate-500 mt-1">Connect your accounting system to import overdue invoices</p>
@@ -149,132 +178,134 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
             </div>
           )}
 
-          {/* Xero Integration Card */}
-          <div className={`border-2 rounded-xl p-6 transition-all ${
-            connection ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-white'
-          }`}>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-4">
-                {/* Xero Logo */}
-                <div className="w-16 h-16 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-2xl">
-                  X
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900">Xero</h3>
-                  <p className="text-sm text-slate-600">Accounting software</p>
-                </div>
-              </div>
+          {/* Provider Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {PROVIDERS.map(provider => {
+              const connection = connections.get(provider.id);
+              const isConnected = !!connection;
+              const isConnecting = connectingProvider === provider.id;
+              const isDisconnecting = disconnectingProvider === provider.id;
 
-              {/* Status Badge */}
-              <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 ${
-                connection
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-slate-100 text-slate-600'
-              }`}>
-                <div className={`w-2 h-2 rounded-full ${
-                  connection ? 'bg-green-500' : 'bg-slate-400'
-                }`} />
-                {connection ? 'Connected' : 'Not Connected'}
-              </div>
-            </div>
-
-            {/* Connection Details (if connected) */}
-            {connection && (
-              <div className="mb-4 p-4 bg-white rounded-lg border border-green-200 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Organization:</span>
-                  <span className="font-medium text-slate-900">{connection.organizationName}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Connected:</span>
-                  <span className="font-medium text-slate-900">
-                    {new Date(connection.connectedAt).toLocaleDateString('en-GB')}
-                  </span>
-                </div>
-                {connection.lastSyncAt && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">Last sync:</span>
-                    <span className="font-medium text-slate-900">
-                      {new Date(connection.lastSyncAt).toLocaleDateString('en-GB')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              {connection ? (
-                <>
-                  <button
-                    onClick={handleImport}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg"
-                  >
-                    <Download className="w-4 h-4" />
-                    Import Invoices
-                  </button>
-                  <button
-                    onClick={handleDisconnect}
-                    disabled={isDisconnecting}
-                    className="px-6 py-3 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-lg font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isDisconnecting ? (
-                      <Loader className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Unlink className="w-4 h-4" />
-                    )}
-                    {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={handleConnect}
-                  disabled={isConnecting}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              return (
+                <div
+                  key={provider.id}
+                  className={`border-2 rounded-xl p-5 transition-all ${
+                    isConnected ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-white'
+                  }`}
                 >
-                  {isConnecting ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin" />
-                      Connecting to Xero...
-                    </>
-                  ) : (
-                    <>
-                      <LinkIcon className="w-4 h-4" />
-                      Connect Xero
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      {/* Provider Logo */}
+                      <div className={`w-12 h-12 ${provider.color} rounded-lg flex items-center justify-center text-white font-bold text-xl shrink-0`}>
+                        {provider.icon}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">{provider.name}</h3>
+                        <p className="text-xs text-slate-600">Accounting software</p>
+                      </div>
+                    </div>
 
-            {/* Help Text */}
-            {!connection && (
-              <p className="mt-4 text-xs text-slate-500 text-center">
-                A popup window will open for you to authorize ClaimCraft to read your Xero invoices
-              </p>
-            )}
+                    {/* Status Badge */}
+                    <div className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                      isConnected
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      <div className={`w-2 h-2 rounded-full ${
+                        isConnected ? 'bg-green-500' : 'bg-slate-400'
+                      }`} />
+                      {isConnected ? 'Connected' : 'Not Connected'}
+                    </div>
+                  </div>
+
+                  {/* Connection Details (if connected) */}
+                  {connection && (
+                    <div className="mb-3 p-3 bg-white rounded-lg border border-green-200 space-y-1.5">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-600">Organization:</span>
+                        <span className="font-medium text-slate-900">{connection.organizationName}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-600">Connected:</span>
+                        <span className="font-medium text-slate-900">
+                          {new Date(connection.connectedAt).toLocaleDateString('en-GB')}
+                        </span>
+                      </div>
+                      {connection.lastSyncAt && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-600">Last sync:</span>
+                          <span className="font-medium text-slate-900">
+                            {new Date(connection.lastSyncAt).toLocaleDateString('en-GB')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    {isConnected ? (
+                      <>
+                        <button
+                          onClick={() => handleImport(provider.id)}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md"
+                        >
+                          <Download className="w-4 h-4" />
+                          Import
+                        </button>
+                        <button
+                          onClick={() => handleDisconnect(provider.id, provider.name)}
+                          disabled={isDisconnecting}
+                          className="px-4 py-2 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isDisconnecting ? (
+                            <Loader className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Unlink className="w-4 h-4" />
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleConnect(provider.id)}
+                        disabled={isConnecting}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isConnecting ? (
+                          <>
+                            <Loader className="w-4 h-4 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <LinkIcon className="w-4 h-4" />
+                            Connect
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Help Text */}
+                  {!isConnected && (
+                    <p className="mt-2 text-xs text-slate-500 text-center">
+                      OAuth authorization required
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {/* Coming Soon */}
-          <div className="pt-4 border-t border-slate-200">
-            <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wide mb-3">Coming Soon</h4>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { name: 'QuickBooks', color: 'bg-green-600' },
-                { name: 'FreeAgent', color: 'bg-purple-600' },
-                { name: 'Sage', color: 'bg-teal-600' }
-              ].map(platform => (
-                <div
-                  key={platform.name}
-                  className="border border-slate-200 rounded-lg p-4 text-center opacity-60 cursor-not-allowed"
-                >
-                  <div className={`w-10 h-10 ${platform.color} rounded-lg mx-auto mb-2 flex items-center justify-center text-white font-bold`}>
-                    {platform.name[0]}
-                  </div>
-                  <p className="text-xs font-medium text-slate-600">{platform.name}</p>
-                </div>
-              ))}
-            </div>
+          {/* Setup Instructions */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="text-sm font-bold text-blue-900 mb-2">⚙️ Setup Requirements</h4>
+            <ul className="space-y-1 text-xs text-blue-800">
+              <li>• Nango account required (free at <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a>)</li>
+              <li>• Configure each provider in your Nango dashboard with integration IDs: xero, quickbooks, freeagent, sage</li>
+              <li>• Add VITE_NANGO_PUBLIC_KEY to your .env file</li>
+              <li>• QuickBooks, FreeAgent, and Sage connections are ready - invoice importers coming soon</li>
+            </ul>
           </div>
 
           {/* Security Note */}

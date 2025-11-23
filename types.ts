@@ -53,8 +53,17 @@ export interface AssessmentResult {
 }
 
 export enum DocumentType {
+  POLITE_CHASER = 'Polite Payment Reminder',
   LBA = 'Letter Before Action',
-  FORM_N1 = 'Form N1 (Claim Form)'
+  FORM_N1 = 'Form N1 (Claim Form)',
+  DEFAULT_JUDGMENT = 'Form N225 (Default Judgment)',
+  ADMISSION = 'Form N225A (Judgment - Admission)',
+  DEFENCE_RESPONSE = 'Response to Defence',
+  DIRECTIONS_QUESTIONNAIRE = 'Form N180 (Directions Questionnaire)',
+  PART_36_OFFER = 'Part 36 Settlement Offer',
+  INSTALLMENT_AGREEMENT = 'Installment Payment Agreement',
+  TRIAL_BUNDLE = 'Trial Bundle',
+  SKELETON_ARGUMENT = 'Skeleton Argument'
 }
 
 export interface GeneratedContent {
