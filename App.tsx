@@ -5,6 +5,8 @@ import { Dashboard } from './components/Dashboard';
 import { EligibilityModal } from './components/EligibilityModal';
 import { PartyForm } from './components/PartyForm';
 import { Input, TextArea } from './components/ui/Input';
+import { Tooltip } from './components/ui/Tooltip';
+import { ProgressStepsCompact } from './components/ui/ProgressSteps';
 import { DocumentPreview } from './components/DocumentPreview';
 import { XeroConnectModal } from './components/XeroConnectModal';
 import { CsvImportModal } from './components/CsvImportModal';
@@ -24,14 +26,14 @@ import { assessClaimViability, calculateCourtFee, calculateCompensation } from '
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage } from './services/storageService';
 import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS } from './constants';
-import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle } from 'lucide-react';
+import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, HelpCircle, Calendar, PoundSterling, User } from 'lucide-react';
 
 // New view state
 type ViewState = 'landing' | 'dashboard' | 'wizard';
 
 enum Step {
   SOURCE = 1,
-  DETAILS = 2,     
+  DETAILS = 2,
   ASSESSMENT = 3,
   TIMELINE = 4,    // Moved before Questions so AI has context
   QUESTIONS = 5,   // Chat / Consultation
@@ -39,6 +41,18 @@ enum Step {
   DRAFT = 7,
   PREVIEW = 8
 }
+
+// Wizard step definitions for progress indicator
+const WIZARD_STEPS = [
+  { number: Step.SOURCE, label: 'Data Source', description: 'Import or enter' },
+  { number: Step.DETAILS, label: 'Claim Details', description: 'Parties & amounts' },
+  { number: Step.ASSESSMENT, label: 'Assessment', description: 'Legal check' },
+  { number: Step.TIMELINE, label: 'Timeline', description: 'Event history' },
+  { number: Step.QUESTIONS, label: 'Consultation', description: 'AI guidance' },
+  { number: Step.FINAL, label: 'Strategy', description: 'Document type' },
+  { number: Step.DRAFT, label: 'Draft', description: 'Edit content' },
+  { number: Step.PREVIEW, label: 'Review', description: 'Final check' }
+];
 
 const App: React.FC = () => {
   // High Level State
@@ -621,20 +635,55 @@ const App: React.FC = () => {
                         <PartyForm title="Defendant (Debtor)" party={claimData.defendant} onChange={updateDefendant} />
                     </div>
                     <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-                        <h2 className="text-xl font-bold text-slate-800 mb-6 pb-2 border-b border-slate-100 font-serif">Claim Financials</h2>
+                        <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100">
+                            <h2 className="text-xl font-bold text-slate-800 font-serif">Claim Financials</h2>
+                            <Tooltip content="Enter the invoice amount and dates to calculate statutory interest and court fees automatically">
+                              <div className="cursor-help">
+                                <HelpCircle className="w-4 h-4 text-slate-400 hover:text-blue-600" />
+                              </div>
+                            </Tooltip>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <Input label="Principal (£)" type="number" value={claimData.invoice.totalAmount} onChange={(e) => updateInvoice('totalAmount', parseFloat(e.target.value))} />
-                            <Input label="Invoice Ref" type="text" value={claimData.invoice.invoiceNumber} onChange={(e) => updateInvoice('invoiceNumber', e.target.value)} />
+                            <Input
+                              label="Principal Amount (£)"
+                              type="number"
+                              icon={<PoundSterling className="w-4 h-4" />}
+                              value={claimData.invoice.totalAmount}
+                              onChange={(e) => updateInvoice('totalAmount', parseFloat(e.target.value))}
+                              required
+                              helpText="The original unpaid invoice amount"
+                              placeholder="e.g. 5000.00"
+                            />
+                            <Input
+                              label="Invoice Reference"
+                              type="text"
+                              icon={<FileText className="w-4 h-4" />}
+                              value={claimData.invoice.invoiceNumber}
+                              onChange={(e) => updateInvoice('invoiceNumber', e.target.value)}
+                              required
+                              helpText="Your invoice number for reference"
+                              placeholder="e.g. INV-2024-001"
+                            />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <Input label="Invoice Date" type="date" value={claimData.invoice.dateIssued} onChange={(e) => updateInvoice('dateIssued', e.target.value)} />
-                            <Input label="Payment Due Date" type="date" value={claimData.invoice.dueDate} onChange={(e) => updateInvoice('dueDate', e.target.value)} />
+                            <Input
+                              label="Invoice Date"
+                              type="date"
+                              icon={<Calendar className="w-4 h-4" />}
+                              value={claimData.invoice.dateIssued}
+                              onChange={(e) => updateInvoice('dateIssued', e.target.value)}
+                              required
+                              helpText="When you issued the invoice"
+                            />
+                            <Input
+                              label="Payment Due Date"
+                              type="date"
+                              icon={<Calendar className="w-4 h-4" />}
+                              value={claimData.invoice.dueDate}
+                              onChange={(e) => updateInvoice('dueDate', e.target.value)}
+                              helpText={`Leave blank to use ${DEFAULT_PAYMENT_TERMS_DAYS}-day payment terms`}
+                            />
                         </div>
-                        {!claimData.invoice.dueDate && claimData.invoice.dateIssued && (
-                            <p className="text-xs text-slate-500 mt-2">
-                                💡 Due date not set - using {DEFAULT_PAYMENT_TERMS_DAYS} day payment terms by default
-                            </p>
-                        )}
                     </div>
                     <div className="flex justify-end pt-4">
                         <button onClick={runAssessment} disabled={!claimData.invoice.totalAmount || !claimData.claimant.name} className="bg-slate-900 text-white px-12 py-4 rounded-xl shadow-lg font-bold text-lg flex items-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
@@ -932,7 +981,24 @@ const App: React.FC = () => {
               accountingConnection={accountingConnection}
               onConnectAccounting={handleOpenAccountingModal}
             />}
-            {view === 'wizard' && renderWizardStep()}
+            {view === 'wizard' && (
+              <div>
+                {/* Progress Indicator - Mobile & Desktop */}
+                <div className="max-w-5xl mx-auto px-4 md:px-0 mb-6">
+                  <div className="hidden md:block">
+                    {/* Desktop - Hidden on mobile as sidebar shows progress */}
+                  </div>
+                  <div className="block md:hidden">
+                    {/* Mobile - Compact progress bar */}
+                    <ProgressStepsCompact
+                      steps={WIZARD_STEPS}
+                      currentStep={step}
+                    />
+                  </div>
+                </div>
+                {renderWizardStep()}
+              </div>
+            )}
          </div>
       </main>
       <DisclaimerModal isOpen={showDisclaimer} onAccept={handleDisclaimerAccepted} onDecline={handleDisclaimerDeclined} />

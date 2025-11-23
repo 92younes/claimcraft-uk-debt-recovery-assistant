@@ -68,15 +68,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             <button
               onClick={onImportCsv}
-              className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all"
+              aria-label="Import claims from CSV file"
+              className="flex-1 md:flex-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-medium shadow-sm flex items-center justify-center gap-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              <Upload className="w-4 h-4" /> Import CSV
+              <Upload className="w-4 h-4" aria-hidden="true" /> Import CSV
             </button>
             <button
               onClick={onCreateNew}
-              className="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:-translate-y-1"
+              aria-label="Create new claim case"
+              className="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-slate-700 focus:ring-offset-2"
             >
-              <Plus className="w-4 h-4" /> New Case File
+              <Plus className="w-4 h-4" aria-hidden="true" /> New Case File
             </button>
         </div>
       </div>
@@ -241,9 +243,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     e.stopPropagation();
                     if(confirm("Archive this case file?")) onDelete(claim.id);
                   }}
-                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                  aria-label={`Delete claim for ${claim.defendant.name || 'Unknown'}`}
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
                >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
                </button>
             </div>
             );
