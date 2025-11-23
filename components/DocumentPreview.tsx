@@ -89,29 +89,44 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
 
   // Generate PDF preview for N1 forms
   React.useEffect(() => {
+    let isMounted = true;
+    let objectUrl: string | null = null;
+
     if (data.selectedDocType === DocumentType.FORM_N1 && !pdfPreviewUrl) {
       setIsLoadingPreview(true);
       generateN1PDF(data)
         .then(pdfBytes => {
-          const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-          const url = URL.createObjectURL(blob);
-          setPdfPreviewUrl(url);
+          if (isMounted) {
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            objectUrl = URL.createObjectURL(blob);
+            setPdfPreviewUrl(objectUrl);
+          }
         })
         .catch(error => {
-          console.error('Failed to generate PDF preview:', error);
+          if (isMounted) {
+            console.error('Failed to generate PDF preview:', error);
+          }
         })
         .finally(() => {
-          setIsLoadingPreview(false);
+          if (isMounted) {
+            setIsLoadingPreview(false);
+          }
         });
     }
 
-    // Cleanup: revoke object URL when component unmounts
+    // Cleanup: revoke object URL only when component unmounts or doc type changes
     return () => {
-      if (pdfPreviewUrl) {
+      isMounted = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      // Also revoke existing URL if switching away from N1
+      if (pdfPreviewUrl && data.selectedDocType !== DocumentType.FORM_N1) {
         URL.revokeObjectURL(pdfPreviewUrl);
+        setPdfPreviewUrl(null);
       }
     };
-  }, [data.selectedDocType]);
+  }, [data, pdfPreviewUrl]); // ✅ All dependencies included
 
   if (sendSuccess) {
      return (
