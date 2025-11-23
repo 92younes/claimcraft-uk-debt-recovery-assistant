@@ -111,20 +111,6 @@ export enum ClaimStage {
   ABANDONED = 'Abandoned'
 }
 
-export interface WorkflowState {
-  currentStage: ClaimStage;
-  nextAction: string;
-  nextActionDue: string | null; // ISO date when next action should be taken
-  daysUntilEscalation: number | null; // Days before auto-escalation
-  autoEscalate: boolean; // Whether to show escalation warning
-  escalationWarning: string | null;
-  stageHistory: {
-    stage: ClaimStage;
-    enteredAt: string; // ISO date
-    notes?: string;
-  }[];
-}
-
 export interface ClaimState {
   id: string;
   status: ClaimStatus;
@@ -144,7 +130,6 @@ export interface ClaimState {
   selectedDocType: DocumentType;
   generated: GeneratedContent | null;
   signature: string | null; // Base64 signature image
-  workflow?: WorkflowState; // Workflow tracking
   importSource?: {
     provider: 'xero' | 'quickbooks';
     invoiceId: string;

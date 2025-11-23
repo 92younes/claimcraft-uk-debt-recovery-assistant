@@ -8,7 +8,6 @@ import { Input, TextArea } from './components/ui/Input';
 import { Tooltip } from './components/ui/Tooltip';
 import { ProgressStepsCompact } from './components/ui/ProgressSteps';
 import { DocumentPreview } from './components/DocumentPreview';
-import { XeroConnectModal } from './components/XeroConnectModal';
 import { CsvImportModal } from './components/CsvImportModal';
 import { AssessmentReport } from './components/AssessmentReport';
 import { TimelineBuilder } from './components/TimelineBuilder';
@@ -22,7 +21,6 @@ import { TermsOfService } from './pages/TermsOfService';
 import { analyzeEvidence, startClarificationChat, sendChatMessage, getClaimStrengthAssessment } from './services/geminiService';
 import { DocumentBuilder } from './services/documentBuilder';
 import { NangoClient } from './services/nangoClient';
-import { getStoredAuth } from './services/xeroService';
 import { searchCompaniesHouse } from './services/companiesHouse';
 import { assessClaimViability, calculateCourtFee, calculateCompensation } from './services/legalRules';
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData } from './services/storageService';
@@ -75,9 +73,6 @@ const App: React.FC = () => {
   // Refine State (Step 7)
   const [showRefineInput, setShowRefineInput] = useState(false);
   const [refineInstruction, setRefineInstruction] = useState('');
-  
-  const [showXeroModal, setShowXeroModal] = useState(false);
-  const [isXeroConnected, setIsXeroConnected] = useState(false);
 
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false); // For AI flow in Step 2
@@ -104,9 +99,6 @@ const App: React.FC = () => {
 
   // Load data on mount
   useEffect(() => {
-    const auth = getStoredAuth();
-    if (auth) setIsXeroConnected(true);
-
     // Load local claims async
     const loadClaims = async () => {
         const storedClaims = await getStoredClaims();
@@ -478,7 +470,6 @@ const App: React.FC = () => {
        setIsProcessing(false);
     }
     setClaimData(newState as ClaimState);
-    setIsXeroConnected(true);
     setStep(Step.DETAILS);
     setIsEditingAnalysis(false);
   };
@@ -744,16 +735,16 @@ const App: React.FC = () => {
                 <p className="text-slate-600 text-lg">Import your claim data or enter manually.</p>
              </div>
              <div className="grid md:grid-cols-3 gap-6 mb-12">
-                <button onClick={() => setShowXeroModal(true)} className={`p-6 border-2 rounded-2xl transition-all flex flex-col items-center gap-4 shadow-sm hover:shadow-xl hover:-translate-y-1 ${isXeroConnected ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' : 'bg-white border-slate-100 hover:border-blue-200'}`}>
+                <button onClick={handleOpenAccountingModal} className={`p-6 border-2 rounded-2xl transition-all flex flex-col items-center gap-4 shadow-sm hover:shadow-xl hover:-translate-y-1 ${accountingConnection ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' : 'bg-white border-slate-100 hover:border-blue-200'}`}>
                     <div className="w-14 h-14 bg-[#13b5ea]/10 rounded-full flex items-center justify-center">
                         <FileText className="w-6 h-6 text-[#13b5ea]"/>
                     </div>
                     <div className="text-center">
-                       <span className="block font-bold text-slate-900 text-lg">{isXeroConnected ? "Connected" : "Connect Xero"}</span>
-                       <span className="text-xs text-slate-500 mt-1 block">Import unpaid invoices</span>
+                       <span className="block font-bold text-slate-900 text-lg">{accountingConnection ? "Import from " + accountingConnection.provider : "Connect Accounting"}</span>
+                       <span className="text-xs text-slate-500 mt-1 block">{accountingConnection ? `${accountingConnection.organizationName}` : "Xero, QuickBooks & more"}</span>
                     </div>
                 </button>
-                
+
                 <button onClick={handleManualEntry} className="p-6 border-2 border-slate-100 hover:border-slate-300 bg-white rounded-2xl transition-all flex flex-col items-center gap-4 shadow-sm hover:shadow-xl hover:-translate-y-1">
                     <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center">
                         <Keyboard className="w-6 h-6 text-slate-600"/>
@@ -901,12 +892,26 @@ const App: React.FC = () => {
 
       case Step.QUESTIONS:
         return (
-             <ChatInterface 
+          <div className="relative">
+            {/* Skip Consultation Button */}
+            <div className="absolute top-4 right-4 z-10">
+              <button
+                onClick={() => setStep(Step.FINAL)}
+                className="bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium shadow-sm flex items-center gap-2 transition-all hover:shadow-md"
+                title="Skip AI consultation and proceed to document selection"
+              >
+                <ArrowRight className="w-4 h-4" />
+                Skip Consultation
+              </button>
+            </div>
+
+            <ChatInterface
                 messages={claimData.chatHistory}
                 onSendMessage={handleSendMessage}
                 onComplete={() => setStep(Step.FINAL)}
                 isThinking={isProcessing}
              />
+          </div>
         );
       
       case Step.FINAL:
@@ -983,23 +988,6 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-            {/* Read Only Review Data */}
-            <div className="border-t border-slate-200 pt-8 mt-8">
-                <div className="flex items-center gap-2 mb-6">
-                    <div className="bg-slate-100 p-2 rounded-full"><FileText className="w-5 h-5 text-slate-600" /></div>
-                    <h3 className="text-lg font-bold text-slate-700">Case File Summary</h3>
-                </div>
-                <div className="opacity-80 hover:opacity-100 transition-opacity pointer-events-none">
-                    <div className="grid xl:grid-cols-2 gap-8 mb-8">
-                        <PartyForm title="Claimant" party={claimData.claimant} onChange={() => {}} readOnly={true} />
-                        <PartyForm title="Defendant" party={claimData.defendant} onChange={() => {}} readOnly={true} />
-                    </div>
-                </div>
-                <div className="text-center mt-4 text-xs text-slate-400">
-                    Need to change details? <button onClick={() => setStep(Step.DETAILS)} className="text-blue-600 underline hover:text-blue-800">Go back to Step 2</button>
-                </div>
-            </div>
-            
             <div className="flex justify-end pt-4 border-t border-slate-100">
                 <button onClick={handleDraftClaim} disabled={isProcessing} className="bg-slate-900 hover:bg-slate-800 text-white px-12 py-4 rounded-xl shadow-lg hover:shadow-2xl font-bold text-lg flex items-center gap-3 transition-all transform hover:-translate-y-1">
                     {isProcessing ? <Loader2 className="animate-spin"/> : <><Wand2 className="w-5 h-5" /> Generate Document</>}
@@ -1582,7 +1570,6 @@ const App: React.FC = () => {
          </div>
       </main>
       <DisclaimerModal isOpen={showDisclaimer} onAccept={handleDisclaimerAccepted} onDecline={handleDisclaimerDeclined} />
-      <XeroConnectModal isOpen={showXeroModal} onClose={() => setShowXeroModal(false)} onImport={handleLegacyXeroImport} />
       <CsvImportModal isOpen={showCsvModal} onClose={() => setShowCsvModal(false)} onImport={handleBulkImport} />
       <EligibilityModal isOpen={showEligibility} onClose={() => setShowEligibility(false)} onEligible={handleEligibilityPassed} />
       <AccountingIntegration

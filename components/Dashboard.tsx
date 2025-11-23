@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { ClaimState, DocumentType, AccountingConnection } from '../types';
 import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight, Bell, Zap, Link as LinkIcon, Download, XCircle } from 'lucide-react';
-import { WorkflowEngine } from '../services/workflowEngine';
 
 interface DashboardProps {
   claims: ClaimState[];
@@ -29,21 +28,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest + curr.compensation, 0);
   const activeClaims = claims.filter(c => c.status !== 'paid').length;
 
-  // Calculate workflow states for all claims (memoized for performance)
-  const claimsWithWorkflow = useMemo(() => {
-    return claims.map(claim => ({
-      claim,
-      workflow: WorkflowEngine.calculateWorkflowState(claim)
-    }));
+  // Count urgent actions (claims needing attention)
+  const urgentActions = useMemo(() => {
+    return claims.filter(c =>
+      c.status === 'overdue' || c.status === 'pre-action'
+    ).length;
   }, [claims]);
 
-  // Count urgent actions
-  const urgentActions = useMemo(() => {
-    return claimsWithWorkflow.filter(({ workflow }) =>
-      WorkflowEngine.getUrgencyLevel(workflow) === 'critical' ||
-      WorkflowEngine.getUrgencyLevel(workflow) === 'high'
-    ).length;
-  }, [claimsWithWorkflow]);
+  // Simple status badge color helper
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'draft': return 'bg-slate-100 text-slate-700 border-slate-300';
+      case 'overdue': return 'bg-red-100 text-red-700 border-red-300';
+      case 'pre-action': return 'bg-orange-100 text-orange-700 border-orange-300';
+      case 'court': return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'judgment': return 'bg-purple-100 text-purple-700 border-purple-300';
+      case 'paid': return 'bg-green-100 text-green-700 border-green-300';
+      default: return 'bg-slate-100 text-slate-700 border-slate-300';
+    }
+  };
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto animate-fade-in pt-20 md:pt-10">
@@ -141,22 +144,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
              <span>Case Details</span>
              <span className="hidden md:block mr-24">Workflow Stage</span>
           </div>
-          {claimsWithWorkflow.map(({ claim, workflow }) => {
-            const urgency = WorkflowEngine.getUrgencyLevel(workflow);
-            const stageBadgeColor = WorkflowEngine.getStageBadgeColor(workflow.currentStage);
+          {claims.map((claim) => {
+            const isUrgent = claim.status === 'overdue' || claim.status === 'pre-action';
+            const stageBadgeColor = getStatusBadgeColor(claim.status);
 
             return (
             <div
               key={claim.id}
               onClick={() => onResume(claim)}
               className={`group bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all cursor-pointer relative ${
-                urgency === 'critical' ? 'border-red-300 hover:border-red-500' :
-                urgency === 'high' ? 'border-orange-300 hover:border-orange-500' :
-                'border-slate-200 hover:border-blue-500'
+                isUrgent ? 'border-red-300 hover:border-red-500' : 'border-slate-200 hover:border-blue-500'
               }`}
             >
                {/* Urgency indicator */}
-               {workflow.autoEscalate && (
+               {isUrgent && (
                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-lg animate-pulse z-10">
                    <Zap className="w-4 h-4 text-white" />
                  </div>
@@ -191,53 +192,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
                      {/* Right: Stage Badge */}
                      <div className="flex items-center justify-between md:justify-end gap-4 min-w-[200px]">
                          <span className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wide border ${stageBadgeColor}`}>
-                             {workflow.currentStage}
+                             {claim.status}
                          </span>
                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
                      </div>
                   </div>
 
-                  {/* Bottom Row: Next Action & Due Date */}
+                  {/* Bottom Row: Claim Info */}
                   <div className={`px-4 py-3 rounded-lg border-l-4 ${
-                    urgency === 'critical' ? 'bg-red-50 border-red-500' :
-                    urgency === 'high' ? 'bg-orange-50 border-orange-500' :
-                    urgency === 'medium' ? 'bg-blue-50 border-blue-500' :
-                    'bg-slate-50 border-slate-300'
+                    isUrgent ? 'bg-red-50 border-red-500' : 'bg-slate-50 border-slate-300'
                   }`}>
                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                           <Clock className="w-4 h-4 text-slate-500" />
-                           <span className="text-sm font-medium text-slate-700">Next: {workflow.nextAction}</span>
+                           <FileText className="w-4 h-4 text-slate-500" />
+                           <span className="text-sm font-medium text-slate-700">
+                             {claim.selectedDocType === 'lba' ? 'Letter Before Action' :
+                              claim.selectedDocType === 'n1' ? 'Form N1 Claim' :
+                              'Document pending'}
+                           </span>
                         </div>
-                        {workflow.nextActionDue && (
+                        {claim.interest.daysOverdue > 0 && (
                           <div className="flex items-center gap-2 text-sm">
-                             <span className={`font-bold ${
-                               urgency === 'critical' ? 'text-red-600' :
-                               urgency === 'high' ? 'text-orange-600' :
-                               'text-slate-600'
-                             }`}>
-                               Due: {new Date(workflow.nextActionDue).toLocaleDateString('en-GB')}
+                             <span className="font-bold text-red-600">
+                               {claim.interest.daysOverdue} days overdue
                              </span>
-                             {workflow.daysUntilEscalation !== null && workflow.daysUntilEscalation <= 3 && (
-                               <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                                 workflow.daysUntilEscalation < 0 ? 'bg-red-600 text-white' :
-                                 workflow.daysUntilEscalation === 0 ? 'bg-red-500 text-white' :
-                                 'bg-orange-500 text-white'
-                               }`}>
-                                 {workflow.daysUntilEscalation < 0 ? `${Math.abs(workflow.daysUntilEscalation)}d overdue` :
-                                  workflow.daysUntilEscalation === 0 ? 'TODAY' :
-                                  `${workflow.daysUntilEscalation}d`}
-                               </span>
-                             )}
                           </div>
                         )}
                      </div>
-                     {workflow.escalationWarning && (
-                       <div className="mt-2 text-xs font-medium text-red-600 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          {workflow.escalationWarning}
-                       </div>
-                     )}
                   </div>
                </div>
 
