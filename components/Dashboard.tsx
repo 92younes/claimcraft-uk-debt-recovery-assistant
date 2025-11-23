@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ClaimState, DocumentType, AccountingConnection } from '../types';
-import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight, Bell, Zap, Link as LinkIcon } from 'lucide-react';
+import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight, Bell, Zap, Link as LinkIcon, Download, XCircle } from 'lucide-react';
 import { WorkflowEngine } from '../services/workflowEngine';
 
 interface DashboardProps {
@@ -11,6 +11,8 @@ interface DashboardProps {
   onImportCsv: () => void;
   accountingConnection?: AccountingConnection | null;
   onConnectAccounting?: () => void;
+  onExportAllData?: () => void;
+  onDeleteAllData?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -20,7 +22,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onDelete,
   onImportCsv,
   accountingConnection,
-  onConnectAccounting
+  onConnectAccounting,
+  onExportAllData,
+  onDeleteAllData
 }) => {
   const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest + curr.compensation, 0);
   const activeClaims = claims.filter(c => c.status !== 'paid').length;
@@ -251,6 +255,44 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Data Management Section (GDPR Compliance) */}
+      {(onExportAllData || onDeleteAllData) && claims.length > 0 && (
+        <div className="mt-12 pt-8 border-t border-slate-200">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 mb-1">Data Management</h2>
+              <p className="text-sm text-slate-500">Export or delete your claim data (GDPR rights)</p>
+            </div>
+            <div className="flex flex-wrap gap-3 w-full md:w-auto">
+              {onExportAllData && (
+                <button
+                  onClick={onExportAllData}
+                  className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold shadow-sm flex items-center justify-center gap-2 transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  Export All Data
+                </button>
+              )}
+              {onDeleteAllData && (
+                <button
+                  onClick={onDeleteAllData}
+                  className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold shadow-sm flex items-center justify-center gap-2 transition-all"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Delete All Data
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm text-blue-800">
+              <strong>Your GDPR Rights:</strong> You can export all your claim data as JSON (Article 20 - Data Portability)
+              or permanently delete all data (Article 17 - Right to Erasure). These actions cannot be undone.
+            </p>
+          </div>
         </div>
       )}
     </div>

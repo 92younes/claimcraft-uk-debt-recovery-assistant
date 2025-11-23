@@ -17,19 +17,21 @@ import { ChatInterface } from './components/ChatInterface';
 import { DisclaimerModal } from './components/DisclaimerModal';
 import { AccountingIntegration } from './components/AccountingIntegration';
 import { XeroInvoiceImporter } from './components/XeroInvoiceImporter';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { TermsOfService } from './pages/TermsOfService';
 import { analyzeEvidence, startClarificationChat, sendChatMessage, getClaimStrengthAssessment } from './services/geminiService';
 import { DocumentBuilder } from './services/documentBuilder';
 import { NangoClient } from './services/nangoClient';
 import { getStoredAuth } from './services/xeroService';
 import { searchCompaniesHouse } from './services/companiesHouse';
 import { assessClaimViability, calculateCourtFee, calculateCompensation } from './services/legalRules';
-import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage } from './services/storageService';
+import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData } from './services/storageService';
 import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS } from './constants';
 import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, HelpCircle, Calendar, PoundSterling, User } from 'lucide-react';
 
 // New view state
-type ViewState = 'landing' | 'dashboard' | 'wizard';
+type ViewState = 'landing' | 'dashboard' | 'wizard' | 'privacy' | 'terms';
 
 enum Step {
   SOURCE = 1,
@@ -159,6 +161,20 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Listen for navigation events from CookieConsent and other components
+  useEffect(() => {
+    const handleNavigatePrivacy = () => setView('privacy');
+    const handleNavigateTerms = () => setView('terms');
+
+    window.addEventListener('navigate-privacy', handleNavigatePrivacy);
+    window.addEventListener('navigate-terms', handleNavigateTerms);
+
+    return () => {
+      window.removeEventListener('navigate-privacy', handleNavigatePrivacy);
+      window.removeEventListener('navigate-terms', handleNavigateTerms);
+    };
+  }, []);
+
   // Auto-save effect: Persist data whenever claimData changes while in wizard
   useEffect(() => {
     if (claimData.id && view === 'wizard') {
@@ -215,6 +231,53 @@ const App: React.FC = () => {
   const handleDeleteClaim = async (id: string) => {
     await deleteClaimFromStorage(id);
     setDashboardClaims(prev => prev.filter(c => c.id !== id));
+  };
+
+  // GDPR Data Management Handlers
+  const handleExportAllData = async () => {
+    try {
+      const blob = await exportAllUserData();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `claimcraft-backup-${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      console.log('✅ Data exported successfully');
+    } catch (error) {
+      console.error('Failed to export data:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
+  const handleDeleteAllData = async () => {
+    const confirmed = confirm(
+      '⚠️ WARNING: This will PERMANENTLY delete all your claims, settings, and connections.\n\n' +
+      'This action CANNOT be undone.\n\n' +
+      'Are you absolutely sure you want to delete all your data?'
+    );
+
+    if (!confirmed) return;
+
+    // Double confirmation for safety
+    const doubleConfirm = confirm(
+      '🔴 FINAL CONFIRMATION\n\n' +
+      'This is your last chance. All your claim data will be lost forever.\n\n' +
+      'Click OK to permanently delete everything, or Cancel to go back.'
+    );
+
+    if (!doubleConfirm) return;
+
+    try {
+      await deleteAllUserData();
+      setDashboardClaims([]);
+      setAccountingConnection(null);
+      setView('landing');
+      alert('✅ All data has been permanently deleted. You will be redirected to the landing page.');
+    } catch (error) {
+      console.error('Failed to delete all data:', error);
+      alert('Failed to delete data. Please try clearing your browser data manually.');
+    }
   };
 
   // Xero Import Handlers
@@ -931,22 +994,294 @@ const App: React.FC = () => {
   };
 
   // RENDER VIEW SWITCHER
+  if (view === 'privacy') {
+    return <PrivacyPolicy onBack={() => setView('landing')} />;
+  }
+
+  if (view === 'terms') {
+    return <TermsOfService onBack={() => setView('landing')} />;
+  }
+
   if (view === 'landing') {
     return (
       <div className="min-h-screen bg-slate-950 text-white overflow-x-hidden selection:bg-amber-400 selection:text-amber-900">
          <Header />
-         <div className="relative pt-40 pb-32 overflow-hidden">
+
+         {/* Hero Section */}
+         <div className="relative pt-32 md:pt-40 pb-20 md:pb-32 overflow-hidden">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-blue-600/20 blur-[120px] rounded-full pointer-events-none"></div>
             <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-indigo-600/10 blur-[100px] rounded-full pointer-events-none"></div>
             <div className="container mx-auto px-4 relative z-10 flex flex-col items-center text-center">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-amber-300 text-xs font-bold uppercase tracking-widest mb-10 hover:bg-white/10 transition-all cursor-default shadow-[0_0_20px_rgba(251,191,36,0.2)]"><Sparkles className="w-3 h-3" /> AI-Powered Legal Intelligence</div>
-                <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tighter mb-8 font-serif leading-[0.95]">Justice. <br/><span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400">Simplified.</span></h1>
-                <p className="text-xl md:text-2xl text-slate-400 max-w-3xl mb-14 font-light leading-relaxed">Draft court-perfect <strong>Small Claims</strong> filings in minutes. Our AI Legal Assistant verifies facts, eliminates hallucinations, and formats your <strong>Form N1</strong> instantly.</p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-5 w-full max-w-md z-20">
-                   <button onClick={handleEnterApp} className="w-full bg-white text-slate-950 h-16 rounded-2xl font-bold text-xl hover:bg-blue-50 transition-all transform hover:-translate-y-1 shadow-[0_0_40px_rgba(255,255,255,0.2)] flex items-center justify-center gap-3 group">Get Started <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" /></button>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-amber-300 text-xs font-bold uppercase tracking-widest mb-10 hover:bg-white/10 transition-all cursor-default shadow-[0_0_20px_rgba(251,191,36,0.2)]">
+                  <Sparkles className="w-3 h-3" /> AI-Powered Legal Intelligence
+                </div>
+                <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-6 font-serif leading-[0.95]">
+                  Recover Your Unpaid Debts.<br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400">Fast. Professional. AI-Assisted.</span>
+                </h1>
+                <p className="text-lg md:text-xl text-slate-300 max-w-3xl mb-8 font-light leading-relaxed">
+                  Generate court-ready <strong>Letters Before Action</strong> and <strong>Form N1</strong> claim forms in minutes.
+                  Our AI assistant handles the legal complexity while you focus on getting paid.
+                </p>
+
+                {/* Key Stats */}
+                <div className="flex flex-wrap items-center justify-center gap-8 mb-12 text-sm">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-slate-300">UK Pre-Action Protocol Compliant</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-slate-300">Auto-Calculate Interest & Fees</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-slate-300">No Legal Experience Required</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-5 w-full max-w-xl z-20">
+                   <button
+                      onClick={handleEnterApp}
+                      className="w-full sm:w-auto bg-white text-slate-950 px-10 py-4 rounded-2xl font-bold text-lg hover:bg-blue-50 transition-all transform hover:-translate-y-1 shadow-[0_0_40px_rgba(255,255,255,0.2)] flex items-center justify-center gap-3 group"
+                   >
+                      Start Your Claim Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                   </button>
+                   <button
+                      onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+                      className="w-full sm:w-auto border-2 border-white/20 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-white/10 transition-all"
+                   >
+                      See How It Works
+                   </button>
                 </div>
             </div>
          </div>
+
+         {/* Features Section */}
+         <div className="relative py-20 bg-gradient-to-b from-slate-950 to-slate-900 border-t border-white/5">
+            <div className="container mx-auto px-4">
+               <div className="text-center mb-16">
+                  <h2 className="text-4xl md:text-5xl font-bold mb-4 font-serif">Everything You Need to Recover Debts</h2>
+                  <p className="text-slate-400 text-lg max-w-2xl mx-auto">Professional legal documents, automated calculations, and expert guidance—all in one place.</p>
+               </div>
+
+               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                  {/* Feature 1 */}
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
+                     <div className="bg-blue-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                        <Wand2 className="w-7 h-7 text-blue-400" />
+                     </div>
+                     <h3 className="text-xl font-bold mb-3">AI Legal Drafting</h3>
+                     <p className="text-slate-400 leading-relaxed">
+                        Claude AI generates professional Letters Before Action and Form N1 claims tailored to your case, following UK legal standards.
+                     </p>
+                  </div>
+
+                  {/* Feature 2 */}
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
+                     <div className="bg-green-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                        <PoundSterling className="w-7 h-7 text-green-400" />
+                     </div>
+                     <h3 className="text-xl font-bold mb-3">Automatic Calculations</h3>
+                     <p className="text-slate-400 leading-relaxed">
+                        Instantly calculate statutory interest (Late Payment Act 1998), court fees, and compensation. No spreadsheets needed.
+                     </p>
+                  </div>
+
+                  {/* Feature 3 */}
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
+                     <div className="bg-purple-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                        <ShieldCheck className="w-7 h-7 text-purple-400" />
+                     </div>
+                     <h3 className="text-xl font-bold mb-3">Compliance Checker</h3>
+                     <p className="text-slate-400 leading-relaxed">
+                        Built-in Pre-Action Protocol compliance. We'll warn you if you're missing steps that could harm your claim.
+                     </p>
+                  </div>
+
+                  {/* Feature 4 */}
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
+                     <div className="bg-amber-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                        <Zap className="w-7 h-7 text-amber-400" />
+                     </div>
+                     <h3 className="text-xl font-bold mb-3">Xero Integration</h3>
+                     <p className="text-slate-400 leading-relaxed">
+                        Import invoices directly from Xero. Auto-populate debtor details, amounts, and dates with one click.
+                     </p>
+                  </div>
+
+                  {/* Feature 5 */}
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
+                     <div className="bg-red-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                        <Calendar className="w-7 h-7 text-red-400" />
+                     </div>
+                     <h3 className="text-xl font-bold mb-3">Timeline Builder</h3>
+                     <p className="text-slate-400 leading-relaxed">
+                        Document every interaction with the debtor. Our timeline ensures you have a complete audit trail for court.
+                     </p>
+                  </div>
+
+                  {/* Feature 6 */}
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
+                     <div className="bg-cyan-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                        <MessageSquareText className="w-7 h-7 text-cyan-400" />
+                     </div>
+                     <h3 className="text-xl font-bold mb-3">AI Legal Consultation</h3>
+                     <p className="text-slate-400 leading-relaxed">
+                        Ask questions about your case. Get instant answers on strategy, next steps, and legal requirements.
+                     </p>
+                  </div>
+               </div>
+            </div>
+         </div>
+
+         {/* How It Works Section */}
+         <div id="how-it-works" className="relative py-20 bg-slate-900">
+            <div className="container mx-auto px-4">
+               <div className="text-center mb-16">
+                  <h2 className="text-4xl md:text-5xl font-bold mb-4 font-serif">From Unpaid Invoice to Legal Action in 4 Steps</h2>
+                  <p className="text-slate-400 text-lg max-w-2xl mx-auto">No legal degree required. Just follow our guided wizard.</p>
+               </div>
+
+               <div className="max-w-4xl mx-auto space-y-8">
+                  {/* Step 1 */}
+                  <div className="flex gap-6 items-start">
+                     <div className="bg-blue-500 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0">1</div>
+                     <div className="flex-1">
+                        <h3 className="text-2xl font-bold mb-2">Import Your Data</h3>
+                        <p className="text-slate-400 leading-relaxed">
+                           Connect Xero, upload a CSV, or manually enter debtor details. We'll import invoice amounts, dates, and customer information automatically.
+                        </p>
+                     </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="flex gap-6 items-start">
+                     <div className="bg-green-500 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0">2</div>
+                     <div className="flex-1">
+                        <h3 className="text-2xl font-bold mb-2">Build Your Timeline</h3>
+                        <p className="text-slate-400 leading-relaxed">
+                           Document when you invoiced, chased, and attempted to resolve the debt. Our AI analyzes your timeline for legal compliance.
+                        </p>
+                     </div>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="flex gap-6 items-start">
+                     <div className="bg-purple-500 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0">3</div>
+                     <div className="flex-1">
+                        <h3 className="text-2xl font-bold mb-2">AI Generates Your Documents</h3>
+                        <p className="text-slate-400 leading-relaxed">
+                           Choose Letter Before Action or Form N1. Our AI drafts a professional, court-ready document with calculated interest, fees, and deadlines.
+                        </p>
+                     </div>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="flex gap-6 items-start">
+                     <div className="bg-amber-500 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0">4</div>
+                     <div className="flex-1">
+                        <h3 className="text-2xl font-bold mb-2">Download & Send</h3>
+                        <p className="text-slate-400 leading-relaxed">
+                           Review, edit if needed, and download as PDF. Send to the debtor or file with the court. Your claim is ready.
+                        </p>
+                     </div>
+                  </div>
+               </div>
+
+               <div className="text-center mt-12">
+                  <button
+                     onClick={handleEnterApp}
+                     className="bg-white text-slate-950 px-10 py-4 rounded-2xl font-bold text-lg hover:bg-blue-50 transition-all transform hover:-translate-y-1 shadow-[0_0_40px_rgba(255,255,255,0.2)] inline-flex items-center gap-3"
+                  >
+                     Try It Now—It's Free <Play className="w-5 h-5" />
+                  </button>
+               </div>
+            </div>
+         </div>
+
+         {/* Trust Section */}
+         <div className="relative py-20 bg-gradient-to-b from-slate-900 to-slate-950 border-t border-white/5">
+            <div className="container mx-auto px-4">
+               <div className="max-w-4xl mx-auto">
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-10 md:p-12">
+                     <div className="flex items-start gap-4 mb-6">
+                        <AlertTriangle className="w-8 h-8 text-amber-400 shrink-0" />
+                        <div>
+                           <h3 className="text-2xl font-bold mb-3">Important Legal Notice</h3>
+                           <p className="text-slate-300 leading-relaxed mb-4">
+                              <strong>ClaimCraft UK is not a law firm.</strong> We provide AI-powered document generation software, not legal advice.
+                              While our AI follows UK legal standards and regulations, we strongly recommend having a solicitor review your documents before filing.
+                           </p>
+                           <p className="text-slate-400 text-sm">
+                              By using this service, you accept full responsibility for reviewing all generated content.
+                              See our <button onClick={() => setView('terms')} className="text-blue-400 underline">Terms of Service</button> for details.
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-3 gap-6 mt-12">
+                     <div className="text-center">
+                        <Lock className="w-10 h-10 text-blue-400 mx-auto mb-3" />
+                        <h4 className="font-bold mb-2">Privacy First</h4>
+                        <p className="text-slate-400 text-sm">Your data stays in your browser. No cloud storage of sensitive case information.</p>
+                     </div>
+                     <div className="text-center">
+                        <Shield className="w-10 h-10 text-green-400 mx-auto mb-3" />
+                        <h4 className="font-bold mb-2">UK GDPR Compliant</h4>
+                        <p className="text-slate-400 text-sm">Full compliance with UK data protection laws. Export or delete your data anytime.</p>
+                     </div>
+                     <div className="text-center">
+                        <FileText className="w-10 h-10 text-purple-400 mx-auto mb-3" />
+                        <h4 className="font-bold mb-2">Court-Ready Formats</h4>
+                        <p className="text-slate-400 text-sm">Documents formatted to HMCTS standards. Ready to file immediately.</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+
+         {/* Final CTA */}
+         <div className="relative py-20 bg-slate-950">
+            <div className="container mx-auto px-4 text-center">
+               <h2 className="text-4xl md:text-5xl font-bold mb-6 font-serif">Ready to Recover What You're Owed?</h2>
+               <p className="text-slate-400 text-lg mb-10 max-w-2xl mx-auto">
+                  Join businesses across the UK using AI to streamline their debt recovery process. No credit card required.
+               </p>
+               <button
+                  onClick={handleEnterApp}
+                  className="bg-white text-slate-950 px-12 py-5 rounded-2xl font-bold text-xl hover:bg-blue-50 transition-all transform hover:-translate-y-1 shadow-[0_0_50px_rgba(255,255,255,0.3)] inline-flex items-center gap-3"
+               >
+                  Start Your First Claim <ArrowRight className="w-6 h-6" />
+               </button>
+            </div>
+         </div>
+
+         {/* Footer with legal links */}
+         <footer className="border-t border-white/10 py-8 bg-slate-950/50 backdrop-blur-sm">
+            <div className="container mx-auto px-4">
+               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <p className="text-slate-400 text-sm">
+                     © 2025 ClaimCraft UK. All rights reserved.
+                  </p>
+                  <div className="flex items-center gap-6">
+                     <button
+                        onClick={() => setView('privacy')}
+                        className="text-slate-400 hover:text-white text-sm transition-colors underline"
+                     >
+                        Privacy Policy
+                     </button>
+                     <button
+                        onClick={() => setView('terms')}
+                        className="text-slate-400 hover:text-white text-sm transition-colors underline"
+                     >
+                        Terms of Service
+                     </button>
+                  </div>
+               </div>
+            </div>
+         </footer>
       </div>
     );
   }
@@ -980,6 +1315,8 @@ const App: React.FC = () => {
               onImportCsv={() => setShowCsvModal(true)}
               accountingConnection={accountingConnection}
               onConnectAccounting={handleOpenAccountingModal}
+              onExportAllData={handleExportAllData}
+              onDeleteAllData={handleDeleteAllData}
             />}
             {view === 'wizard' && (
               <div>
