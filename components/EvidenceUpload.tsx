@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Upload, X, FileText, Image as ImageIcon, Loader2, Tag, AlertCircle } from 'lucide-react';
 import { EvidenceFile } from '../types';
 import { validateFileType, getFileTypeError } from '../utils/validation';
@@ -16,12 +16,25 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
   files, onAddFiles, onRemoveFile, onAnalyze, isProcessing
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [fileTypeError, setFileTypeError] = useState<string | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      // Clear any previous errors
+      // Clear any previous errors and timeout
       setFileTypeError(null);
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
 
       const fileList = Array.from(e.target.files);
 
@@ -46,7 +59,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
         setFileTypeError(errorMsg);
 
         // Auto-clear error after 8 seconds
-        setTimeout(() => setFileTypeError(null), 8000);
+        errorTimeoutRef.current = setTimeout(() => setFileTypeError(null), 8000);
       }
 
       // Process valid files even if some were invalid
@@ -97,7 +110,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
               type="file"
               multiple
               className="hidden"
-              accept="image/*,application/pdf,.doc,.docx"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               onChange={handleFileChange}
               disabled={isProcessing}
               ref={fileInputRef}

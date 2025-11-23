@@ -103,10 +103,15 @@ const App: React.FC = () => {
 
     // Check if Xero is connected
     const checkXeroConnection = async () => {
-      const connected = await NangoClient.isXeroConnected();
-      if (connected) {
-        const connection = NangoClient.getXeroConnection();
-        setAccountingConnection(connection);
+      try {
+        const connected = await NangoClient.isXeroConnected();
+        if (connected) {
+          const connection = NangoClient.getXeroConnection();
+          setAccountingConnection(connection);
+        }
+      } catch (error) {
+        console.warn('Failed to check Xero connection status:', error);
+        // Connection check failed, user can reconnect via UI if needed
       }
     };
     checkXeroConnection();
@@ -1742,7 +1747,7 @@ const App: React.FC = () => {
                      <div className="text-center group">
                         <Lock className="w-10 h-10 text-blue-400 mx-auto mb-3 group-hover:scale-110 transition-transform duration-200" />
                         <h4 className="font-bold mb-2">Privacy First</h4>
-                        <p className="text-slate-400 text-sm">Your data stays in your browser. No cloud storage of sensitive case information.</p>
+                        <p className="text-slate-400 text-sm">Local browser storage only. AI features use Claude/Gemini APIs (see Terms for data handling).</p>
                      </div>
                      <div className="text-center group">
                         <ShieldCheck className="w-10 h-10 text-green-400 mx-auto mb-3 group-hover:scale-110 transition-transform duration-200" />

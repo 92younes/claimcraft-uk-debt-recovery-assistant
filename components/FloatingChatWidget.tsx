@@ -28,6 +28,22 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
     scrollToBottom();
   }, [messages, isThinking]);
 
+  // Escape key handler for accessibility
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onToggle();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, onToggle]);
+
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || isThinking) return;
@@ -53,7 +69,12 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
 
       {/* Chat Widget Panel */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-96 h-[600px] bg-white rounded-2xl shadow-2xl border-2 border-slate-200 flex flex-col animate-fade-in">
+        <div
+          className="fixed bottom-6 right-6 z-50 w-96 h-[600px] bg-white rounded-2xl shadow-2xl border-2 border-slate-200 flex flex-col animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="chat-widget-title"
+        >
           {/* Header */}
           <div className="bg-slate-900 text-white px-4 py-3 rounded-t-xl flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -61,7 +82,7 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
                 <Briefcase className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="font-bold text-sm">AI Legal Assistant</h3>
+                <h3 id="chat-widget-title" className="font-bold text-sm">AI Legal Assistant</h3>
                 <p className="text-[10px] text-slate-300 flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
                   Powered by Gemini AI
@@ -122,13 +143,18 @@ export const FloatingChatWidget: React.FC<FloatingChatWidgetProps> = ({
           {/* Input Area */}
           <div className="p-3 border-t border-slate-200 bg-white rounded-b-xl flex-shrink-0">
             <form onSubmit={handleSend} className="flex gap-2">
+              <label htmlFor="chat-input" className="sr-only">
+                Type your question for the AI legal assistant
+              </label>
               <input
+                id="chat-input"
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Type your question..."
                 className="flex-grow px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 focus:outline-none transition-all"
                 disabled={isThinking}
+                aria-label="Chat message input"
               />
               <button
                 type="submit"
