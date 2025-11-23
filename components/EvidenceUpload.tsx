@@ -25,36 +25,41 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
 
       const fileList = Array.from(e.target.files);
 
-      // Validate all files before processing any
+      // Separate valid and invalid files
+      const validFiles: File[] = [];
       const invalidFiles: File[] = [];
+
       fileList.forEach((file) => {
-        if (!validateFileType(file)) {
+        if (validateFileType(file)) {
+          validFiles.push(file);
+        } else {
           invalidFiles.push(file);
         }
       });
 
-      // If any invalid files, show error and stop processing
+      // Show error for invalid files (but don't block valid ones)
       if (invalidFiles.length > 0) {
         const errorMsg = invalidFiles.length === 1
           ? getFileTypeError(invalidFiles[0])
-          : `${invalidFiles.length} files are not allowed. Please upload PDF, JPG, PNG, or Word documents only.`;
+          : `${invalidFiles.length} file(s) rejected: ${invalidFiles.map(f => f.name).join(', ')}. Only PDF, JPG, PNG, and Word documents are accepted.`;
 
         setFileTypeError(errorMsg);
 
-        // Reset input
+        // Auto-clear error after 8 seconds
+        setTimeout(() => setFileTypeError(null), 8000);
+      }
+
+      // Process valid files even if some were invalid
+      if (validFiles.length === 0) {
+        // Reset input only if ALL files were invalid
         if (fileInputRef.current) fileInputRef.current.value = '';
-
-        // Auto-clear error after 5 seconds
-        setTimeout(() => setFileTypeError(null), 5000);
-
         return;
       }
 
-      // All files valid - proceed with processing
       const newFiles: EvidenceFile[] = [];
       let processedCount = 0;
 
-      fileList.forEach((item) => {
+      validFiles.forEach((item) => {
         const file = item as File;
         const reader = new FileReader();
         reader.onloadend = () => {

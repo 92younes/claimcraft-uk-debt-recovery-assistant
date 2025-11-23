@@ -14,32 +14,29 @@ interface PartyFormProps {
 export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, readOnly = false }) => {
   const [postcodeError, setPostcodeError] = useState<string | null>(null);
 
-  // Validate postcode whenever it changes
-  useEffect(() => {
+  const handleChange = (field: keyof Party, value: string) => {
+    if (readOnly) return;
+
+    // Clear error when user edits postcode (don't validate while typing)
+    if (field === 'postcode') {
+      setPostcodeError(null);
+    }
+
+    onChange({ ...party, [field]: value });
+  };
+
+  const handlePostcodeBlur = () => {
     if (party.postcode && party.postcode.trim()) {
       const isValid = validateUKPostcode(party.postcode);
       if (!isValid) {
         setPostcodeError('Invalid UK postcode format (e.g., SW1A 1AA)');
       } else {
         setPostcodeError(null);
-      }
-    } else {
-      setPostcodeError(null);
-    }
-  }, [party.postcode]);
-
-  const handleChange = (field: keyof Party, value: string) => {
-    if (readOnly) return;
-
-    // Auto-format postcode on blur (handled separately)
-    onChange({ ...party, [field]: value });
-  };
-
-  const handlePostcodeBlur = () => {
-    if (party.postcode && party.postcode.trim()) {
-      const formatted = formatUKPostcode(party.postcode);
-      if (formatted !== party.postcode) {
-        onChange({ ...party, postcode: formatted });
+        // Auto-format valid postcodes
+        const formatted = formatUKPostcode(party.postcode);
+        if (formatted !== party.postcode) {
+          onChange({ ...party, postcode: formatted });
+        }
       }
     }
   };
