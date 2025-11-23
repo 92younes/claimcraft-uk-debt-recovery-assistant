@@ -226,7 +226,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if(confirm("Archive this case file?")) onDelete(claim.id);
+                    if(confirm("Permanently delete this claim? This cannot be undone.")) onDelete(claim.id);
                   }}
                   aria-label={`Delete claim for ${claim.defendant.name || 'Unknown'}`}
                   className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500"

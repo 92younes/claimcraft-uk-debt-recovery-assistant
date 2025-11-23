@@ -182,7 +182,11 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
     const result = JSON.parse(cleanJson(response.text || '{}'));
     // Use nullish coalescing to handle legitimate 0 scores
     const rawScore = Number(result.score);
-    const score = Number.isFinite(rawScore) ? rawScore : 50;
+    // Clamp score to [0, 100] range to guard against model drift or out-of-range values
+    const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 50;
+
+    console.log(`[getClaimStrengthAssessment] Raw score: ${rawScore}, Clamped score: ${score}`);
+
     return {
       score,
       strength: scoreToStrength(score),
@@ -190,6 +194,7 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
       weaknesses: result.weaknesses || []
     };
   } catch (e) {
+    console.error('[getClaimStrengthAssessment] JSON parse error:', e);
     return {
       score: 50,
       strength: ClaimStrength.MEDIUM,
@@ -461,9 +466,9 @@ export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; 
         properties: {
           isPass: { type: Type.BOOLEAN },
           critique: { type: Type.STRING },
-          improvements: { 
-            type: Type.ARRAY, 
-            items: { type: Type.STRING } 
+          improvements: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
           },
           correctedContent: { type: Type.STRING }
         }
@@ -471,5 +476,16 @@ export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; 
     }
   });
 
-  return JSON.parse(cleanJson(response.text || '{"isPass": false, "critique": "Error analyzing", "improvements": []}'));
+  try {
+    return JSON.parse(cleanJson(response.text || '{"isPass": false, "critique": "Error analyzing", "improvements": []}'));
+  } catch (error) {
+    console.error('[reviewDraft] JSON parse error:', error);
+    // Return safe default on parse failure
+    return {
+      isPass: false,
+      critique: 'Unable to parse review response from AI. Please try again.',
+      improvements: ['AI response was malformed - manual review recommended'],
+      correctedContent: data.generated?.content || ''
+    };
+  }
 };

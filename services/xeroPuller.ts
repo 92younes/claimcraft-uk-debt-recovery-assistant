@@ -178,12 +178,17 @@ export class XeroPuller {
     contact: XeroContact,
     claimant: Party
   ): ClaimState {
-    const interest = this.calculateInterest(invoice.Total, invoice.DueDate);
+    // Use AmountDue (outstanding balance) for interest calculation, not Total
+    // Under Late Payment of Commercial Debts (Interest) Act 1998, interest accrues
+    // on the unpaid amount, not the original invoice total
+    const principal = invoice.AmountDue > 0 ? invoice.AmountDue : invoice.Total;
+
+    const interest = this.calculateInterest(principal, invoice.DueDate);
     const defendant = this.transformContactToParty(contact);
 
-    // Calculate compensation (requires party types for B2B check)
-    const compensation = calculateCompensation(invoice.Total, claimant.type, defendant.type);
-    const totalClaim = invoice.Total + interest.totalInterest + compensation;
+    // Calculate compensation on the outstanding principal (B2B only)
+    const compensation = calculateCompensation(principal, claimant.type, defendant.type);
+    const totalClaim = principal + interest.totalInterest + compensation;
     const courtFee = calculateCourtFee(totalClaim);
 
     // Build timeline
@@ -214,7 +219,7 @@ export class XeroPuller {
         invoiceNumber: invoice.InvoiceNumber,
         dateIssued: invoice.Date,
         dueDate: invoice.DueDate,
-        totalAmount: invoice.Total,
+        totalAmount: principal, // Use outstanding balance (AmountDue), not original total
         currency: invoice.CurrencyCode,
         description: invoice.Reference || `Imported from Xero: Invoice ${invoice.InvoiceNumber}`
       },
@@ -307,7 +312,9 @@ export class XeroPuller {
     let totalInterest = 0;
 
     overdueInvoices.forEach(invoice => {
-      const interest = this.calculateInterest(invoice.Total, invoice.DueDate);
+      // Calculate interest on outstanding balance (AmountDue), not original total
+      const principal = invoice.AmountDue > 0 ? invoice.AmountDue : invoice.Total;
+      const interest = this.calculateInterest(principal, invoice.DueDate);
       if (interest.daysOverdue > oldestDaysOverdue) {
         oldestDaysOverdue = interest.daysOverdue;
       }
