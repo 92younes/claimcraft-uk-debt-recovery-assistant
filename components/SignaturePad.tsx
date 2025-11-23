@@ -78,7 +78,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full max-w-md">
+    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full max-w-lg">
        <h3 className="text-sm font-bold text-slate-500 uppercase mb-2">Sign Here</h3>
        <div className="relative border border-slate-300 rounded-lg bg-slate-50 touch-none overflow-hidden">
           <canvas
@@ -110,7 +110,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
           <button 
             onClick={handleSave}
             disabled={!hasContent}
-            className="bg-slate-900 text-white hover:bg-slate-800 px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1 disabled:opacity-50 transition-colors"
+            className="bg-slate-900 text-white hover:bg-slate-800 px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1 disabled:opacity-50 transition-colors duration-200"
           >
              <Check className="w-4 h-4" /> Apply Signature
           </button>

@@ -42,7 +42,7 @@ export const EligibilityModal: React.FC<EligibilityModalProps> = ({ isOpen, onCl
 
   return (
     <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden relative">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden relative">
         
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900">
           <X className="w-5 h-5" />
@@ -64,7 +64,7 @@ export const EligibilityModal: React.FC<EligibilityModalProps> = ({ isOpen, onCl
                   <p className="font-bold text-red-900 mb-1">Not Recommended</p>
                   <p className="text-red-700 text-sm leading-relaxed">{disqualifiedReason}</p>
                 </div>
-                <button onClick={onClose} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors">
+                <button onClick={onClose} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors duration-200">
                   Close Check
                 </button>
              </div>
@@ -74,7 +74,7 @@ export const EligibilityModal: React.FC<EligibilityModalProps> = ({ isOpen, onCl
                   <span>Question {step + 1} of 3</span>
                   <div className="flex gap-1">
                     {[0,1,2].map(i => (
-                      <div key={i} className={`w-2 h-2 rounded-full ${i === step ? 'bg-blue-600' : i < step ? 'bg-green-400' : 'bg-slate-200'}`}></div>
+                      <div key={i} className={`w-3 h-3 rounded-full ${i === step ? 'bg-blue-600' : i < step ? 'bg-green-400' : 'bg-slate-200'}`}></div>
                     ))}
                   </div>
                 </div>
@@ -85,13 +85,13 @@ export const EligibilityModal: React.FC<EligibilityModalProps> = ({ isOpen, onCl
                 <div className="grid grid-cols-2 gap-4">
                    <button 
                      onClick={currentQ.no}
-                     className="py-4 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-red-400 hover:bg-red-50 hover:text-red-700 transition-all"
+                     className="py-4 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-red-400 hover:bg-red-50 hover:text-red-700 transition-all duration-200"
                    >
                      No
                    </button>
                    <button 
                      onClick={currentQ.yes}
-                     className="py-4 rounded-xl bg-slate-900 text-white font-bold shadow-lg hover:bg-blue-600 hover:shadow-blue-200/50 transition-all"
+                     className="py-4 rounded-xl bg-slate-900 text-white font-bold shadow-lg hover:bg-blue-600 hover:shadow-blue-200/50 transition-all duration-200"
                    >
                      Yes
                    </button>

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { ClaimState, DocumentType } from '../types';
 import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown } from 'lucide-react';
 import { SignaturePad } from './SignaturePad';
-import { generateN1PDF } from '../services/pdfGenerator';
+import { FinalReviewModal } from './FinalReviewModal';
+import { generateN1PDF, generateN225PDF, generateN225APDF, generateN180PDF } from '../services/pdfGenerator';
 
 interface DocumentPreviewProps {
   data: ClaimState;
@@ -17,7 +18,7 @@ const Page = ({ children, className = "", watermark = false }: { children?: Reac
   <div className={`bg-white shadow-xl w-[210mm] min-h-[297mm] mx-auto p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-hidden flex-shrink-0 ${className}`}>
     {watermark && (
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50 opacity-15 select-none overflow-hidden">
-        <div className="transform -rotate-45 text-6xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-[10px] border-slate-900 p-10 rounded-3xl mix-blend-multiply">
+        <div className="transform -rotate-45 text-6xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-[10px] border-slate-900 p-10 rounded-2xl mix-blend-multiply">
            DRAFT - REVIEW PENDING
         </div>
       </div>
@@ -32,6 +33,9 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [showFinalReview, setShowFinalReview] = useState(false);
   const review = data.generated?.review;
 
   const handlePrint = () => {
@@ -39,26 +43,70 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   };
 
   const handleDownloadPDF = async () => {
+    // Show Final Review Modal for Form N1 before download
     if (data.selectedDocType === DocumentType.FORM_N1) {
+      setShowFinalReview(true);
+      return;
+    }
+
+    // For other documents, proceed directly
+    await performDownload();
+  };
+
+  const performDownload = async () => {
+    // Check if this document type has an official PDF form
+    const pdfFormTypes = [
+      DocumentType.FORM_N1,
+      DocumentType.DEFAULT_JUDGMENT,
+      DocumentType.ADMISSION,
+      DocumentType.DIRECTIONS_QUESTIONNAIRE
+    ];
+
+    if (pdfFormTypes.includes(data.selectedDocType)) {
       setIsGeneratingPdf(true);
       try {
-        const pdfBytes = await generateN1PDF(data);
+        let pdfBytes: Uint8Array;
+        let filename: string;
+
+        switch (data.selectedDocType) {
+          case DocumentType.FORM_N1:
+            pdfBytes = await generateN1PDF(data);
+            filename = `N1_Claim_Form_${data.invoice.invoiceNumber}.pdf`;
+            break;
+          case DocumentType.DEFAULT_JUDGMENT:
+            pdfBytes = await generateN225PDF(data);
+            filename = `N225_Default_Judgment_${data.invoice.invoiceNumber}.pdf`;
+            break;
+          case DocumentType.ADMISSION:
+            pdfBytes = await generateN225APDF(data);
+            filename = `N225A_Admission_${data.invoice.invoiceNumber}.pdf`;
+            break;
+          case DocumentType.DIRECTIONS_QUESTIONNAIRE:
+            pdfBytes = await generateN180PDF(data);
+            filename = `N180_Directions_Questionnaire_${data.invoice.invoiceNumber}.pdf`;
+            break;
+          default:
+            throw new Error('Unsupported PDF form type');
+        }
+
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `N1_Claim_Form_${data.invoice.invoiceNumber}.pdf`;
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       } catch (error) {
         console.error("Failed to generate PDF", error);
-        alert("Unable to generate the official PDF file. Ensure 'N1.pdf' is in the public folder, or use the 'Print' button to save as PDF.");
+        alert(`Unable to generate the official PDF file. Ensure the template PDF is in the public folder, or use the 'Print' button to save as PDF.\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
         setIsGeneratingPdf(false);
       }
     } else {
-      window.print(); // Fallback for letters
+      // For non-PDF forms (letters, etc.), use print dialog
+      window.print();
     }
   };
 
@@ -85,6 +133,57 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
      if(!isLetter) setViewMode('n1-form');
   }, [isLetter]);
 
+  // Generate PDF preview for N1 forms (regenerates when data changes)
+  React.useEffect(() => {
+    if (data.selectedDocType !== DocumentType.FORM_N1) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingPreview(true);
+
+    generateN1PDF(data)
+      .then(pdfBytes => {
+        if (cancelled) return;
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        setPdfPreviewUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+      })
+      .catch(error => {
+        if (!cancelled) {
+          console.error('Failed to generate PDF preview:', error);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingPreview(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
+
+  // Cleanup: revoke URL when it changes or component unmounts
+  React.useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [pdfPreviewUrl]);
+
+  // Reset preview URL when switching away from N1
+  React.useEffect(() => {
+    if (data.selectedDocType !== DocumentType.FORM_N1 && pdfPreviewUrl) {
+      setPdfPreviewUrl(null);
+    }
+  }, [data.selectedDocType, pdfPreviewUrl]);
+
   if (sendSuccess) {
      return (
        <div className="max-w-lg mx-auto mt-20 text-center animate-fade-in">
@@ -104,8 +203,33 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   }
 
   return (
-    <div className="max-w-6xl mx-auto pb-20">
+    <div className="max-w-7xl mx-auto pb-20">
       
+      {/* Validation Warnings Panel */}
+      {data.generated?.validation?.warnings && data.generated.validation.warnings.length > 0 && (
+        <div className="mb-6 bg-amber-50 border-2 border-amber-200 rounded-xl overflow-hidden animate-fade-in no-print mx-4 md:mx-0 shadow-lg">
+          <div className="p-4 bg-amber-100 border-b border-amber-200 flex items-center gap-3">
+            <div className="p-2 rounded-full bg-amber-200">
+              <AlertTriangle className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <h3 className="font-bold text-amber-900">Quality Recommendations</h3>
+              <p className="text-sm text-amber-700">These suggestions may strengthen your claim, but are not required.</p>
+            </div>
+          </div>
+          <div className="p-5">
+            <ul className="space-y-2">
+              {data.generated.validation.warnings.map((warning, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-amber-900 bg-white p-3 rounded-lg border border-amber-200">
+                  <span className="text-amber-600 font-bold">•</span>
+                  <span>{warning}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* AI Review Panel - Always shows until approved */}
       {!isFinalized && review && (
         <div className="mb-8 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden animate-fade-in no-print ring-4 ring-slate-50 mx-4 md:mx-0">
@@ -130,7 +254,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                     <p className="text-slate-700 italic text-lg font-serif leading-relaxed">"{review.critique}"</p>
                  </div>
               </div>
-              
+
               {review.improvements && review.improvements.length > 0 && (
                  <div className="mb-8 pl-5">
                     <p className="text-xs font-bold text-slate-500 uppercase mb-3">Required Corrections</p>
@@ -146,12 +270,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
               )}
 
               <div className="flex flex-col md:flex-row justify-end gap-4 pt-6 border-t border-slate-100">
-                 <button onClick={onBack} className="px-5 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg font-medium transition-colors border border-slate-200 hover:border-slate-300 text-center">
+                 <button onClick={onBack} className="px-5 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg font-medium transition-colors duration-200 border border-slate-200 hover:border-slate-300 text-center">
                     Back & Edit Data
                  </button>
-                 <button 
+                 <button
                     onClick={onConfirm}
-                    className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 ${review.isPass ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+                    className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all duration-200 transform hover:-translate-y-0.5 ${review.isPass ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
                  >
                     <CheckCircle className="w-4 h-4" /> {review.isPass ? "Approve & Finalize" : "Override & Approve"}
                  </button>
@@ -164,7 +288,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 mt-8 no-print gap-4 px-4 md:px-0">
         <button 
           onClick={onBack}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 transition-colors w-full md:w-auto justify-center"
+          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 transition-colors duration-200 w-full md:w-auto justify-center"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Editor
         </button>
@@ -173,19 +297,19 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
              <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm overflow-x-auto max-w-full">
                 <button 
                   onClick={() => setViewMode('letter')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${viewMode === 'letter' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'letter' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Letter
                 </button>
                 <button 
                   onClick={() => setViewMode('info-sheet')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Info Sheet
                 </button>
                 <button 
                   onClick={() => setViewMode('reply-form')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Reply Form
                 </button>
@@ -198,7 +322,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                     <button 
                         onClick={handleDownloadPDF}
                         disabled={isGeneratingPdf}
-                        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors shadow-sm border border-slate-200 font-bold"
+                        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors duration-200 shadow-sm border border-slate-200 font-bold"
                     >
                         {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
                         <span className="hidden md:inline">Download PDF</span>
@@ -207,7 +331,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                 )}
                 <button 
                   onClick={handlePrint}
-                  className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors shadow-sm border border-slate-200 font-bold"
+                  className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors duration-200 shadow-sm border border-slate-200 font-bold"
                 >
                   <Printer className="w-4 h-4" /> 
                   <span className="hidden md:inline">Print</span>
@@ -215,7 +339,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                 <button 
                   onClick={handleSend}
                   disabled={isSending}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg transition-colors shadow-lg font-bold animate-fade-in"
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg transition-colors duration-200 shadow-lg font-bold animate-fade-in"
                 >
                   {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send (£2.50)</>}
                 </button>
@@ -288,7 +412,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                           ) : (
                             <button 
                                onClick={() => setIsSigning(true)} 
-                               className="h-full w-64 border-2 border-dashed border-slate-300 rounded bg-slate-50 flex items-center justify-center text-slate-400 gap-2 hover:bg-slate-100 hover:border-slate-400 transition-all no-print group"
+                               className="h-full w-64 border-2 border-dashed border-slate-300 rounded bg-slate-50 flex items-center justify-center text-slate-400 gap-2 hover:bg-slate-100 hover:border-slate-400 transition-all duration-200 no-print group"
                             >
                                <PenTool className="w-4 h-4 group-hover:text-blue-500" /> 
                                <span className="group-hover:text-blue-600 font-medium">Click to Sign Document</span>
@@ -440,10 +564,48 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                )}
             </>
           ) : (
-            /* N1 FORM - SIGNATURE ADDITION */
+            /* N1 FORM - ACTUAL PDF PREVIEW */
             <>
-               {/* Page 1: The Form */}
-               <Page watermark={!isFinalized} className="!p-[10mm] !shadow-none !m-0 !mb-0 border-b border-slate-200">
+               {/* Show actual PDF instead of HTML recreation */}
+               {isLoadingPreview ? (
+                  <div className="w-full min-h-[800px] flex flex-col items-center justify-center bg-slate-100 rounded-lg p-8">
+                    <Loader2 className="w-12 h-12 animate-spin text-slate-400 mb-4" />
+                    <p className="text-slate-600 font-medium">Generating official N1 form preview...</p>
+                    <p className="text-slate-400 text-sm mt-2">Using HMCTS template (N1_1224, Dec 2024)</p>
+                  </div>
+               ) : pdfPreviewUrl ? (
+                  <div className="w-full px-4">
+                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded">
+                      <div className="flex items-start gap-3">
+                        <ShieldCheck className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-bold text-blue-900 text-sm">Official HMCTS Form N1 Preview</p>
+                          <p className="text-blue-700 text-xs mt-1">
+                            This is the actual court form (N1_1224, Dec 2024) with your data filled in.
+                            What you see here is exactly what you'll download and submit to court.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <iframe
+                      src={pdfPreviewUrl}
+                      className="w-full h-[1200px] border-2 border-slate-300 rounded-lg shadow-xl bg-white"
+                      title="N1 Claim Form Preview"
+                    />
+                  </div>
+               ) : (
+                  <div className="w-full min-h-[800px] flex flex-col items-center justify-center bg-red-50 rounded-lg border-2 border-red-200 p-8">
+                    <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+                    <p className="text-red-700 font-bold mb-2">Failed to generate PDF preview</p>
+                    <p className="text-red-600 text-sm mb-4">Please ensure N1.pdf template is in the public/ directory</p>
+                    <p className="text-red-500 text-xs max-w-lg text-center">
+                      You can still download the form using the "Download PDF" button above.
+                    </p>
+                  </div>
+               )}
+               {/* REMOVED: HTML recreation of N1 form - now showing actual PDF */}
+               <div className="hidden">
+               <Page watermark={false} className="!p-[10mm] !shadow-none !m-0 !mb-0 border-b border-slate-200">
                   <div className="flex flex-col h-full text-xs leading-tight font-sans">
                      {/* Header Area */}
                      <div className="flex justify-between items-start mb-2">
@@ -560,10 +722,30 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                       </div>
                   </div>
                </Page>
+               </div>{/* End hidden HTML N1 recreation */}
             </>
           )}
         </div>
       </div>
+
+      {/* Final Review Modal for N1 */}
+      <FinalReviewModal
+        isOpen={showFinalReview}
+        onClose={() => setShowFinalReview(false)}
+        onConfirm={async () => {
+          setShowFinalReview(false);
+          await performDownload();
+        }}
+        claimData={{
+          claimantName: data.claimant.name,
+          debtorName: data.defendant.name,
+          invoiceNumber: data.invoice.invoiceNumber,
+          invoiceAmount: data.invoice.totalAmount,
+          interest: data.interest.totalInterest,
+          courtFee: data.courtFee,
+          totalClaim: data.invoice.totalAmount + data.interest.totalInterest + data.compensation + data.courtFee
+        }}
+      />
     </div>
   );
 }

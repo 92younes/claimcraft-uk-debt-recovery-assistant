@@ -80,19 +80,19 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
             <div className="flex flex-wrap gap-3">
                 <button 
                   onClick={() => addQuickEvent(30, 'payment_due', 'Payment Due Date (30 Days)')}
-                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-600 hover:shadow-md transition-all flex items-center gap-2"
+                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-600 hover:shadow-md transition-all duration-200 flex items-center gap-2"
                 >
                    <Clock className="w-3 h-3" /> +30 Days (Due)
                 </button>
                 <button 
                   onClick={() => addQuickEvent(37, 'chaser', 'First Overdue Chaser sent via Email')}
-                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-amber-400 hover:text-amber-600 hover:shadow-md transition-all flex items-center gap-2"
+                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-amber-400 hover:text-amber-600 hover:shadow-md transition-all duration-200 flex items-center gap-2"
                 >
                    <Mail className="w-3 h-3" /> +7 Days Overdue
                 </button>
                 <button 
                   onClick={() => addQuickEvent(44, 'chaser', 'Final Demand sent via Email')}
-                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-red-400 hover:text-red-600 hover:shadow-md transition-all flex items-center gap-2"
+                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-red-400 hover:text-red-600 hover:shadow-md transition-all duration-200 flex items-center gap-2"
                 >
                    <AlertCircle className="w-3 h-3" /> +14 Days Overdue
                 </button>
@@ -143,7 +143,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
           <button 
             onClick={addEvent}
             disabled={!newEvent.date || !newEvent.description}
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white p-2.5 rounded-lg flex items-center justify-center transition-all disabled:opacity-50 shadow-md"
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white p-2.5 rounded-lg flex items-center justify-center transition-all duration-200 disabled:opacity-50 shadow-md"
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -160,18 +160,18 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
         
         {events.map((ev, idx) => (
           <div key={idx} className="relative pl-8 group animate-fade-in" style={{ animationDelay: `${idx * 50}ms` }}>
-            <div className="absolute -left-[9px] top-4 w-4 h-4 bg-white border-2 border-slate-300 rounded-full group-hover:border-blue-500 group-hover:scale-110 transition-all z-10"></div>
-            <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all flex justify-between items-start">
+            <div className="absolute -left-[9px] top-4 w-4 h-4 bg-white border-2 border-slate-300 rounded-full group-hover:border-blue-500 group-hover:scale-110 transition-all duration-200 z-10"></div>
+            <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all duration-200 flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1 bg-slate-100 rounded-md">
+                  <div className="p-1 bg-slate-100 rounded-lg">
                     {getIcon(ev.type)}
                   </div>
                   <span className="text-xs font-bold uppercase text-slate-500 tracking-wide">{new Date(ev.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </div>
                 <p className="text-slate-800 font-medium text-sm mt-1">{ev.description}</p>
               </div>
-              <button onClick={() => removeEvent(idx)} className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors">
+              <button onClick={() => removeEvent(idx)} className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors duration-200">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>

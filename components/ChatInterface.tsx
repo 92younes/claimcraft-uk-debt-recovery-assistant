@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
-import { Send, User, Scale, ArrowRight, Loader2, CheckCircle2, Briefcase, Gavel } from 'lucide-react';
+import { Send, User, Scale, ArrowRight, Loader2, CheckCircle2, Briefcase, Gavel, Sparkles } from 'lucide-react';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -29,19 +29,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
   };
 
   return (
-    <div className="max-w-3xl mx-auto animate-fade-in flex flex-col h-[calc(100vh-180px)]">
+    <div className="max-w-2xl mx-auto animate-fade-in flex flex-col h-[calc(100vh-180px)]">
       <div className="text-center mb-6 flex-shrink-0">
         <div className="bg-slate-900 text-white w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-slate-300">
           <Gavel className="w-6 h-6" />
         </div>
         <h2 className="text-2xl font-bold text-slate-900 font-serif">Case Consultation</h2>
         <p className="text-slate-500 text-xs uppercase tracking-widest font-bold mt-1">Confidential • Procedural Guidance</p>
+        <div className="flex items-center justify-center gap-2 mt-2 text-xs text-slate-500">
+          <Sparkles className="w-3 h-3" />
+          <span>Powered by Google Gemini AI</span>
+        </div>
       </div>
 
       {/* Chat Area */}
       <div className="flex-grow overflow-y-auto px-6 py-6 bg-white rounded-t-2xl border border-slate-200 shadow-xl space-y-6 scrollbar-thin scrollbar-thumb-slate-200">
         {messages.length === 0 && !isThinking && (
-             <div className="text-center text-slate-400 italic mt-10 text-sm">
+             <div className="text-center text-slate-500 italic mt-10 text-sm">
                Establishing secure link to AI legal assistant...
              </div>
         )}
@@ -52,7 +56,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
                {msg.role === 'user' ? <User className="w-5 h-5" /> : <Briefcase className="w-5 h-5" />}
             </div>
             <div className="flex flex-col max-w-[80%]">
-                <span className={`text-[10px] font-bold uppercase mb-1 ${msg.role === 'user' ? 'text-right text-slate-400' : 'text-left text-slate-500'}`}>
+                <span className={`text-[10px] font-bold uppercase mb-1 ${msg.role === 'user' ? 'text-right text-slate-500' : 'text-left text-slate-500'}`}>
                     {msg.role === 'user' ? 'Client' : 'Legal Assistant'}
                 </span>
                 <div className={`px-5 py-4 rounded-2xl text-sm leading-relaxed shadow-sm ${
@@ -90,14 +94,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
              value={input}
              onChange={(e) => setInput(e.target.value)}
              placeholder="Answer clearly..."
-             className="flex-grow px-4 py-4 pr-14 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-slate-900 focus:outline-none transition-all text-sm shadow-inner"
+             className="flex-grow px-4 py-4 pr-14 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-slate-900 focus:outline-none transition-all duration-200 text-sm shadow-inner"
              disabled={isThinking}
              autoFocus
            />
            <button 
              type="submit" 
              disabled={!input.trim() || isThinking}
-             className="absolute right-2 top-2 bottom-2 bg-slate-900 text-white px-4 rounded-lg hover:bg-slate-800 disabled:bg-slate-300 transition-all shadow-md flex items-center justify-center"
+             className="absolute right-2 top-2 bottom-2 bg-slate-900 text-white px-4 rounded-lg hover:bg-slate-800 disabled:bg-slate-300 transition-all duration-200 shadow-md flex items-center justify-center"
            >
              <Send className="w-4 h-4" />
            </button>
@@ -106,7 +110,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Press Enter to send</span>
            <button 
              onClick={onComplete}
-             className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-white px-3 py-2 rounded-lg transition-colors uppercase tracking-wide border border-transparent hover:border-slate-200"
+             className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-white px-3 py-2 rounded-lg transition-colors duration-200 uppercase tracking-wide border border-transparent hover:border-slate-200"
            >
              Skip to Drafting <ArrowRight className="w-3 h-3" />
            </button>

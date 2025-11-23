@@ -72,11 +72,85 @@ export const deleteClaimFromStorage = async (id: string): Promise<void> => {
           const transaction = db.transaction(STORE_NAME, 'readwrite');
           const store = transaction.objectStore(STORE_NAME);
           const request = store.delete(id);
-    
+
           request.onsuccess = () => resolve();
           request.onerror = () => reject(request.error);
         });
     } catch (e) {
         console.error("Failed to delete claim from DB", e);
+        throw e; // Re-throw to allow caller to handle the error
     }
 }
+
+/**
+ * Export all user data as JSON (GDPR Article 20 - Data Portability)
+ * Includes claims, settings, and connection metadata (not sensitive tokens)
+ */
+export const exportAllUserData = async (): Promise<Blob> => {
+    try {
+        const allClaims = await getStoredClaims();
+
+        // Get application settings from localStorage
+        const settings = localStorage.getItem('appSettings');
+        const xeroConnection = localStorage.getItem('xeroAuth');
+        const nangoConnection = localStorage.getItem('nangoConnection');
+
+        // Build export object
+        const exportData = {
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            application: 'ClaimCraft UK',
+            claims: allClaims,
+            settings: settings ? JSON.parse(settings) : null,
+            connections: {
+                xero: xeroConnection ? { connected: true, note: 'OAuth tokens excluded for security' } : null,
+                nango: nangoConnection ? JSON.parse(nangoConnection) : null
+            },
+            disclaimer: 'This export contains your ClaimCraft UK data. OAuth tokens are excluded for security. You may need to reconnect integrations after importing.'
+        };
+
+        const jsonString = JSON.stringify(exportData, null, 2);
+        return new Blob([jsonString], { type: 'application/json' });
+    } catch (e) {
+        console.error("Failed to export user data", e);
+        throw e;
+    }
+};
+
+/**
+ * Delete all user data from browser storage (GDPR Article 17 - Right to Erasure)
+ * This includes claims, settings, OAuth tokens, and connections
+ */
+export const deleteAllUserData = async (): Promise<void> => {
+    try {
+        // 1. Delete all claims from IndexedDB (batch operation)
+        const db = await openDB();
+        await new Promise<void>((resolve, reject) => {
+            const transaction = db.transaction(STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.clear(); // Clears all records at once
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+
+        // 2. Delete OAuth tokens
+        localStorage.removeItem('xeroAuth');
+        localStorage.removeItem('nangoConnection');
+
+        // 3. Delete application settings
+        localStorage.removeItem('appSettings');
+        localStorage.removeItem('disclaimerAccepted');
+
+        // 4. Delete compliance logs (after a brief delay to allow logging the erasure event)
+        setTimeout(() => {
+            localStorage.removeItem('complianceLogs');
+            localStorage.removeItem('lastLogCleanup');
+        }, 5000); // 5-second delay
+
+        console.log('✅ All user data has been permanently deleted');
+    } catch (e) {
+        console.error("Failed to delete all user data", e);
+        throw e;
+    }
+};

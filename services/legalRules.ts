@@ -6,6 +6,7 @@ const LIMITATION_PERIOD_YEARS = 6;
 
 /**
  * UK Civil Proceedings Fees Order 2021 (Money Claims Online Fees)
+ * Court fees are capped at £10,000 for claims over £200,000
  */
 export const calculateCourtFee = (amount: number): number => {
   if (amount <= 300) return 35;
@@ -15,7 +16,8 @@ export const calculateCourtFee = (amount: number): number => {
   if (amount <= 3000) return 115;
   if (amount <= 5000) return 205;
   if (amount <= 10000) return 455;
-  return amount * 0.05; // Over 10k is usually 5%
+  if (amount <= 200000) return Math.min(amount * 0.05, 10000); // 5% capped at £10k
+  return 10000; // Maximum court fee for claims over £200k
 };
 
 /**
@@ -65,12 +67,12 @@ export const assessClaimViability = (state: ClaimState): AssessmentResult => {
   if (state.defendant.type === PartyType.BUSINESS && state.defendant.solvencyStatus === 'Insolvent') {
     solvencyCheck = {
       passed: false,
-      message: "Warning: Defendant is marked as Insolvent/Dissolved. Recovering money is highly unlikely."
+      message: "⚠️ Warning: Defendant company is Insolvent. Recovery is highly unlikely even if you win judgment."
     };
   } else if (state.defendant.type === PartyType.BUSINESS && state.defendant.solvencyStatus === 'Dissolved') {
     solvencyCheck = {
       passed: false,
-      message: "Defendant company is Dissolved. You cannot sue a company that does not exist."
+      message: "❌ Defendant company is Dissolved. You cannot pursue legal action against a non-existent entity."
     };
   }
 

@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { AssessmentResult } from '../types';
-import { CheckCircle, XCircle, AlertTriangle, Scale, Clock, Building2, MessageSquareText, Brain } from 'lucide-react';
+import { AssessmentResult, ClaimStrength } from '../types';
+import { CheckCircle, XCircle, AlertTriangle, Scale, Clock, Building2, MessageSquareText, Brain, TrendingUp, Minus, TrendingDown } from 'lucide-react';
 
 interface AssessmentReportProps {
   assessment: AssessmentResult;
@@ -16,38 +16,66 @@ export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, 
            {assessment.isViable ? <Scale className="w-10 h-10 text-green-600" /> : <AlertTriangle className="w-10 h-10 text-amber-600" />}
         </div>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">Legal Assessment</h2>
-        <p className="text-slate-600 max-w-md mx-auto">{assessment.recommendation}</p>
+        <p className="text-slate-600 max-w-lg mx-auto">{assessment.recommendation}</p>
       </div>
 
-      {/* AI Strength Score Banner */}
-      {assessment.strengthScore !== undefined && (
-         <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg mb-8 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/20 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-            <div className="flex items-center gap-4 relative z-10">
+      {/* AI Claim Strength Assessment */}
+      {assessment.strength && (
+         <div className={`p-6 rounded-xl shadow-lg mb-8 relative overflow-hidden ${
+            assessment.strength === ClaimStrength.HIGH ? 'bg-green-50 border-2 border-green-200' :
+            assessment.strength === ClaimStrength.MEDIUM ? 'bg-amber-50 border-2 border-amber-200' :
+            'bg-red-50 border-2 border-red-200'
+         }`}>
+            <div className="flex items-start gap-4 relative z-10">
                <div className="flex-shrink-0">
-                  <div className="relative w-20 h-20 flex items-center justify-center">
-                     <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-700" />
-                        <circle 
-                           cx="40" cy="40" r="36" 
-                           stroke="currentColor" 
-                           strokeWidth="8" 
-                           fill="transparent" 
-                           className={`${assessment.strengthScore > 70 ? 'text-green-400' : assessment.strengthScore > 40 ? 'text-amber-400' : 'text-red-400'}`}
-                           strokeDasharray={`${assessment.strengthScore * 2.26}, 226`}
-                        />
-                     </svg>
-                     <span className="absolute text-xl font-bold">{assessment.strengthScore}%</span>
+                  <div className={`w-16 h-16 rounded-xl flex items-center justify-center shadow-md ${
+                     assessment.strength === ClaimStrength.HIGH ? 'bg-green-500' :
+                     assessment.strength === ClaimStrength.MEDIUM ? 'bg-amber-500' :
+                     'bg-red-500'
+                  }`}>
+                     {assessment.strength === ClaimStrength.HIGH && <TrendingUp className="w-8 h-8 text-white" />}
+                     {assessment.strength === ClaimStrength.MEDIUM && <Minus className="w-8 h-8 text-white" />}
+                     {assessment.strength === ClaimStrength.LOW && <TrendingDown className="w-8 h-8 text-white" />}
                   </div>
                </div>
                <div className="flex-grow">
-                  <h3 className="text-lg font-bold mb-1 flex items-center gap-2"><Brain className="w-4 h-4 text-blue-400" /> AI Win Probability</h3>
-                  <p className="text-slate-300 text-sm leading-relaxed mb-2">{assessment.strengthAnalysis || "Analysis pending..."}</p>
+                  <div className="flex items-center gap-3 mb-2">
+                     <h3 className={`text-lg font-bold flex items-center gap-2 ${
+                        assessment.strength === ClaimStrength.HIGH ? 'text-green-900' :
+                        assessment.strength === ClaimStrength.MEDIUM ? 'text-amber-900' :
+                        'text-red-900'
+                     }`}>
+                        <Brain className="w-5 h-5" /> AI Case Strength Assessment
+                     </h3>
+                     <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                        assessment.strength === ClaimStrength.HIGH ? 'bg-green-200 text-green-900' :
+                        assessment.strength === ClaimStrength.MEDIUM ? 'bg-amber-200 text-amber-900' :
+                        'bg-red-200 text-red-900'
+                     }`}>
+                        {assessment.strength === ClaimStrength.HIGH ? 'STRONG CASE' :
+                         assessment.strength === ClaimStrength.MEDIUM ? 'MODERATE RISK' :
+                         'HIGH RISK'}
+                     </span>
+                  </div>
+                  <p className={`text-sm leading-relaxed mb-3 ${
+                     assessment.strength === ClaimStrength.HIGH ? 'text-green-800' :
+                     assessment.strength === ClaimStrength.MEDIUM ? 'text-amber-800' :
+                     'text-red-800'
+                  }`}>
+                     {assessment.strengthAnalysis || "Analysis pending..."}
+                  </p>
                   {assessment.weaknesses && assessment.weaknesses.length > 0 && (
-                     <div className="flex flex-wrap gap-2">
-                        {assessment.weaknesses.map((w, i) => (
-                           <span key={i} className="text-[10px] bg-red-500/20 text-red-200 px-2 py-1 rounded border border-red-500/30">{w}</span>
-                        ))}
+                     <div>
+                        <p className="text-xs font-semibold text-slate-600 mb-2">Evidence Gaps:</p>
+                        <div className="flex flex-wrap gap-2">
+                           {assessment.weaknesses.map((w, i) => (
+                              <span key={i} className={`text-xs px-2 py-1 rounded border ${
+                                 assessment.strength === ClaimStrength.HIGH ? 'bg-green-100 border-green-300 text-green-800' :
+                                 assessment.strength === ClaimStrength.MEDIUM ? 'bg-amber-100 border-amber-300 text-amber-800' :
+                                 'bg-red-100 border-red-300 text-red-800'
+                              }`}>{w}</span>
+                           ))}
+                        </div>
                      </div>
                   )}
                </div>
@@ -112,7 +140,7 @@ export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, 
       <div className="flex justify-center">
         <button 
           onClick={onContinue}
-          className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-lg shadow-lg font-medium transition-all flex items-center gap-2"
+          className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-lg shadow-lg font-medium transition-all duration-200 flex items-center gap-2"
         >
           Start Clarification Chat <MessageSquareText className="w-4 h-4" />
         </button>

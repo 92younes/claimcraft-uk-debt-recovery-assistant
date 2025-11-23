@@ -1,7 +1,8 @@
 
-import React, { useRef } from 'react';
-import { Upload, X, FileText, Image as ImageIcon, Loader2, Tag } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Upload, X, FileText, Image as ImageIcon, Loader2, Tag, AlertCircle } from 'lucide-react';
 import { EvidenceFile } from '../types';
+import { validateFileType, getFileTypeError } from '../utils/validation';
 
 interface EvidenceUploadProps {
   files: EvidenceFile[];
@@ -11,19 +12,67 @@ interface EvidenceUploadProps {
   isProcessing: boolean;
 }
 
-export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({ 
-  files, onAddFiles, onRemoveFile, onAnalyze, isProcessing 
+export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
+  files, onAddFiles, onRemoveFile, onAnalyze, isProcessing
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [fileTypeError, setFileTypeError] = useState<string | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles: EvidenceFile[] = [];
+      // Clear any previous errors and timeout
+      setFileTypeError(null);
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+
       const fileList = Array.from(e.target.files);
-      
+
+      // Separate valid and invalid files
+      const validFiles: File[] = [];
+      const invalidFiles: File[] = [];
+
+      fileList.forEach((file: File) => {
+        if (validateFileType(file)) {
+          validFiles.push(file);
+        } else {
+          invalidFiles.push(file);
+        }
+      });
+
+      // Show error for invalid files (but don't block valid ones)
+      if (invalidFiles.length > 0) {
+        const errorMsg = invalidFiles.length === 1
+          ? getFileTypeError(invalidFiles[0])
+          : `${invalidFiles.length} file(s) rejected: ${invalidFiles.map(f => f.name).join(', ')}. Only PDF, JPG, PNG, and Word documents are accepted.`;
+
+        setFileTypeError(errorMsg);
+
+        // Auto-clear error after 8 seconds
+        errorTimeoutRef.current = setTimeout(() => setFileTypeError(null), 8000);
+      }
+
+      // Process valid files even if some were invalid
+      if (validFiles.length === 0) {
+        // Reset input only if ALL files were invalid
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
+      const newFiles: EvidenceFile[] = [];
       let processedCount = 0;
 
-      fileList.forEach((item) => {
+      validFiles.forEach((item) => {
         const file = item as File;
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -57,24 +106,38 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <div className="grid grid-cols-1 gap-4 mb-6">
           <label className="relative block cursor-pointer group">
-            <input 
-              type="file" 
-              multiple 
-              className="hidden" 
-              accept="image/*,application/pdf" 
-              onChange={handleFileChange} 
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleFileChange}
               disabled={isProcessing}
               ref={fileInputRef}
             />
-            <div className="h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all flex flex-col items-center justify-center text-center">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <div className="h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 flex flex-col items-center justify-center text-center">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200">
                 <Upload className="w-5 h-5 text-blue-600" />
               </div>
               <p className="font-medium text-slate-700">Click to upload Documents</p>
-              <p className="text-xs text-slate-400">PDF, PNG, JPG supported</p>
+              <p className="text-xs text-slate-400">PDF, PNG, JPG, Word supported</p>
             </div>
           </label>
         </div>
+
+        {/* File Type Error Message */}
+        {fileTypeError && (
+          <div className="mb-6 bg-red-50 border-2 border-red-200 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-red-900">Invalid File Type</p>
+              <p className="text-sm text-red-700 mt-1">{fileTypeError}</p>
+              <p className="text-xs text-red-600 mt-2">
+                For security and court submission, only PDF, JPG, PNG, and Word documents are accepted.
+              </p>
+            </div>
+          </div>
+        )}
 
         {files.length > 0 && (
           <div className="space-y-3 mb-6">
@@ -113,7 +176,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
         <button
           onClick={onAnalyze}
           disabled={files.length === 0 || isProcessing}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white py-3 rounded-lg font-medium shadow-md flex items-center justify-center gap-2 transition-all"
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white py-3 rounded-lg font-medium shadow-md flex items-center justify-center gap-2 transition-all duration-200"
         >
           {isProcessing ? (
             <>

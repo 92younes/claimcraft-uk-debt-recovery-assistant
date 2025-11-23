@@ -33,6 +33,12 @@ export interface InterestData {
   totalInterest: number;
 }
 
+export enum ClaimStrength {
+  HIGH = 'high',
+  MEDIUM = 'medium',
+  LOW = 'low'
+}
+
 export interface AssessmentResult {
   isViable: boolean;
   limitationCheck: { passed: boolean; message: string }; // Limitation Act 1980
@@ -40,14 +46,24 @@ export interface AssessmentResult {
   solvencyCheck: { passed: boolean; message: string }; // Companies House status
   recommendation: string;
   // New AI Fields
-  strengthScore?: number; // 0-100
+  strength?: ClaimStrength; // HIGH/MEDIUM/LOW based on score
+  strengthScore?: number; // 0-100 (internal use)
   strengthAnalysis?: string;
   weaknesses?: string[];
 }
 
 export enum DocumentType {
+  POLITE_CHASER = 'Polite Payment Reminder',
   LBA = 'Letter Before Action',
-  FORM_N1 = 'Form N1 (Claim Form)'
+  FORM_N1 = 'Form N1 (Claim Form)',
+  DEFAULT_JUDGMENT = 'Form N225 (Default Judgment)',
+  ADMISSION = 'Form N225A (Judgment - Admission)',
+  DEFENCE_RESPONSE = 'Response to Defence',
+  DIRECTIONS_QUESTIONNAIRE = 'Form N180 (Directions Questionnaire)',
+  PART_36_OFFER = 'Part 36 Settlement Offer',
+  INSTALLMENT_AGREEMENT = 'Installment Payment Agreement',
+  TRIAL_BUNDLE = 'Trial Bundle',
+  SKELETON_ARGUMENT = 'Skeleton Argument'
 }
 
 export interface GeneratedContent {
@@ -56,6 +72,11 @@ export interface GeneratedContent {
   briefDetails?: string; // For N1 Box
   legalBasis: string;
   nextSteps: string[];
+  validation?: {
+    isValid: boolean;
+    warnings: string[];
+    generatedAt: string;
+  };
   review?: {
     isPass: boolean;
     critique: string;
@@ -86,6 +107,19 @@ export interface ChatMessage {
 
 export type ClaimStatus = 'draft' | 'review' | 'sent' | 'paid';
 
+export enum ClaimStage {
+  DRAFT = 'Draft',
+  OVERDUE = 'Overdue',
+  REMINDER_SENT = 'Reminder Sent',
+  FINAL_DEMAND = 'Final Demand',
+  LBA_SENT = 'LBA Sent',
+  COURT_CLAIM = 'Court Claim',
+  JUDGMENT = 'Judgment Obtained',
+  ENFORCEMENT = 'Enforcement',
+  SETTLED = 'Settled',
+  ABANDONED = 'Abandoned'
+}
+
 export interface ClaimState {
   id: string;
   status: ClaimStatus;
@@ -96,15 +130,70 @@ export interface ClaimState {
   invoice: InvoiceData;
   interest: InterestData;
   compensation: number; // Late Payment of Commercial Debts Act 1998
-  courtFee: number; 
+  courtFee: number;
   timeline: TimelineEvent[];
   evidence: EvidenceFile[]; // Store multiple files
-  userNotes: string; 
+  userNotes: string;
   chatHistory: ChatMessage[];
   assessment: AssessmentResult | null;
   selectedDocType: DocumentType;
   generated: GeneratedContent | null;
   signature: string | null; // Base64 signature image
+  importSource?: {
+    provider: 'xero' | 'quickbooks';
+    invoiceId: string;
+    importedAt: string;
+  };
+}
+
+// Accounting Integration Types
+
+export interface AccountingConnection {
+  provider: 'xero' | 'quickbooks' | 'freeagent' | 'sage';
+  connectionId: string; // Nango connection ID
+  organizationName: string;
+  connectedAt: string; // ISO timestamp
+  lastSyncAt: string | null;
+}
+
+export interface XeroInvoice {
+  InvoiceID: string;
+  InvoiceNumber: string;
+  Type: 'ACCREC'; // Accounts Receivable
+  Contact: {
+    ContactID: string;
+    Name: string;
+  };
+  Date: string; // ISO date
+  DueDate: string;
+  Status: 'DRAFT' | 'SUBMITTED' | 'AUTHORISED' | 'PAID' | 'VOIDED';
+  LineAmountTypes: 'Exclusive' | 'Inclusive' | 'NoTax';
+  SubTotal: number;
+  TotalTax: number;
+  Total: number;
+  AmountDue: number;
+  AmountPaid: number;
+  CurrencyCode: string;
+  Reference?: string;
+}
+
+export interface XeroContact {
+  ContactID: string;
+  Name: string;
+  EmailAddress?: string;
+  Addresses?: {
+    AddressType: 'POBOX' | 'STREET';
+    AddressLine1?: string;
+    AddressLine2?: string;
+    City?: string;
+    Region?: string;
+    PostalCode?: string;
+    Country?: string;
+  }[];
+  Phones?: {
+    PhoneType: 'DEFAULT' | 'MOBILE' | 'FAX';
+    PhoneNumber?: string;
+  }[];
 }
 
 export const INITIAL_PARTY: Party = {

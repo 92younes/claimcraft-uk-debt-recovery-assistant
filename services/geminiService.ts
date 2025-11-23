@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType } from "../types";
+import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType, ClaimStrength } from "../types";
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = import.meta.env.VITE_API_KEY;
   if (!apiKey) {
-    throw new Error("API_KEY is not defined");
+    throw new Error("API_KEY (Gemini) is not defined. Please set VITE_API_KEY in your .env file.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -13,6 +13,13 @@ const getClient = () => {
 const formatCurrency = (val: number | undefined) => {
   if (val === undefined || val === null || isNaN(val)) return '0.00';
   return val.toFixed(2);
+};
+
+// Helper to convert numeric score to strength tier
+const scoreToStrength = (score: number): ClaimStrength => {
+  if (score >= 75) return ClaimStrength.HIGH;
+  if (score >= 50) return ClaimStrength.MEDIUM;
+  return ClaimStrength.LOW;
 };
 
 // Helper to clean AI response text (strip markdown) before JSON parsing
@@ -122,17 +129,17 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
   }
 };
 
-export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ score: number, analysis: string, weaknesses: string[] }> => {
+export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ score: number, strength: ClaimStrength, analysis: string, weaknesses: string[] }> => {
   const ai = getClient();
-  
+
   const prompt = `
     Act as an Expert Legal Assistant for UK Small Claims.
     Assess the "Winnability" (Probability of Success) of this claim based on the available evidence, timeline, and clarifications.
-    
+
     CLAIMANT: ${data.claimant.name}
     DEFENDANT: ${data.defendant.name}
     AMOUNT: £${data.invoice.totalAmount}
-    
+
     TIMELINE OF EVENTS:
     ${JSON.stringify(data.timeline)}
 
@@ -144,13 +151,13 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
 
     JUDGMENT CRITERIA:
     1. **Contract**: Is there a signed contract or clear written agreement? (High impact)
-    2. **Proof**: Is there proof of delivery/service performance? 
+    2. **Proof**: Is there proof of delivery/service performance?
     3. **Admissions**: Did the defendant admit the debt in emails/chats?
     4. **Procedure**: Did the claimant send chasers/warnings?
     5. **Disputes**: Is there a valid counterclaim or dispute mentioned in the chat?
 
     Return JSON:
-    - score: number (0-100)
+    - score: number (0-100, where 75+ = strong case, 50-74 = moderate, <50 = weak)
     - analysis: string (Concise summary of the case strength)
     - weaknesses: string[] (List specific gaps, e.g., "Missing signed contract", "No proof of delivery", "Debt relies on verbal agreement")
   `;
@@ -172,9 +179,28 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
   });
 
   try {
-    return JSON.parse(cleanJson(response.text || '{}'));
+    const result = JSON.parse(cleanJson(response.text || '{}'));
+    // Use nullish coalescing to handle legitimate 0 scores
+    const rawScore = Number(result.score);
+    // Clamp score to [0, 100] range to guard against model drift or out-of-range values
+    const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 50;
+
+    console.log(`[getClaimStrengthAssessment] Raw score: ${rawScore}, Clamped score: ${score}`);
+
+    return {
+      score,
+      strength: scoreToStrength(score),
+      analysis: result.analysis || "Could not assess strength automatically.",
+      weaknesses: result.weaknesses || []
+    };
   } catch (e) {
-    return { score: 50, analysis: "Could not assess strength automatically.", weaknesses: [] };
+    console.error('[getClaimStrengthAssessment] JSON parse error:', e);
+    return {
+      score: 50,
+      strength: ClaimStrength.MEDIUM,
+      analysis: "Could not assess strength automatically.",
+      weaknesses: []
+    };
   }
 };
 
@@ -188,28 +214,30 @@ export const startClarificationChat = async (data: ClaimState): Promise<string> 
   const totalDebt = (principal + interest + comp).toFixed(2);
 
   const prompt = `
-    Act as an Expert Legal Assistant (UK Law). 
+    You are an AI Legal Assistant for UK Small Claims.
+
     Review the claim data:
-    
     - Claimant: ${data.claimant.name}
     - Defendant: ${data.defendant.name}
     - Total Value: £${totalDebt}
     - Timeline: ${JSON.stringify(data.timeline)}
 
-    Your goal is to find the weakest link in the case immediately to help the user prepare.
-    
-    Generate the FIRST message to the user.
-    1. Be extremely succinct. No fluff.
-    2. Do not greet.
-    3. Ask the single most critical question to determine if the claim is valid (e.g., "Do you have a signed contract?").
+    Generate a friendly but professional opening message (2-3 sentences):
+    1. Greet the user briefly (e.g., "Hello, I'm your AI legal assistant")
+    2. Acknowledge their claim (mention the amount and defendant name)
+    3. Ask ONE critical question to identify the biggest evidence gap (e.g., contract, proof of delivery, written agreement)
+
+    Example: "Hello, I'm your AI legal assistant. I've reviewed your £5,000 claim against XYZ Ltd for unpaid invoices. To assess your case strength, do you have a signed contract or written agreement with the defendant?"
+
+    Keep it conversational and helpful, not robotic or interrogating.
   `;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt
   });
-  
-  return response.text || "Do you have a written contract signed by the defendant?";
+
+  return response.text || "Hello, I'm your AI legal assistant. To assess your case strength, do you have a written contract signed by the defendant?";
 };
 
 export const sendChatMessage = async (history: ChatMessage[], userMessage: string, data: ClaimState): Promise<string> => {
@@ -225,24 +253,25 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
   const grandTotal = (principal + interest + comp + fee).toFixed(2);
 
   const systemInstruction = `
-    You are an AI Legal Assistant for UK Small Claims. 
+    You are an AI Legal Assistant for UK Small Claims.
     You are NOT a solicitor and cannot provide legal advice. You provide "Legal Information" and procedural guidance based on the Civil Procedure Rules (CPR).
-    
+
     CASE METRICS:
     - Value: £${totalDebt} (Total with Fee: £${grandTotal})
     - Claimant: ${data.claimant.name}
     - Defendant: ${data.defendant.name}
-    
+
     TIMELINE:
     ${JSON.stringify(data.timeline)}
-    
-    COMMUNICATION PROTOCOL (STRICT):
-    1. **EXTREME BREVITY.** Max 2 sentences.
-    2. **DIRECTNESS.** No "I understand", "Hello", or "Thank you".
-    3. **INTERROGATE.** Ask one specific question to identify evidence gaps.
-    4. **ADVISE.** If facts are clear, state the legal position under UK CPR (Civil Procedure Rules).
-    5. **CLOSE.** If you have enough facts (Contract, Invoice, Proof of Delivery), state exactly: "I have sufficient facts. Click 'Final Review' to draft the papers."
-    6. **DISCLAIMER.** If asked for specific advice, state "I am a legal assistant, not a solicitor. This is procedural guidance."
+
+    COMMUNICATION PROTOCOL:
+    1. **BREVITY:** Keep responses to 2-4 sentences maximum.
+    2. **ACKNOWLEDGMENT:** Briefly acknowledge the user's answer before asking the next question (e.g., "Good, that strengthens your claim.").
+    3. **INTERROGATE:** Ask focused questions to identify evidence gaps (contract, proof of delivery, payment history, etc.).
+    4. **ADVISE:** If facts are clear, state the legal position under UK CPR (Civil Procedure Rules).
+    5. **CLOSE:** When you have sufficient facts (Contract, Invoice, Proof of Delivery, Timeline), state: "I have enough information to proceed. Click 'Choose Document Type' to continue."
+    6. **DISCLAIMER:** If asked for specific legal advice, state: "I'm a legal assistant, not a solicitor. This is procedural guidance, not legal advice."
+    7. **TONE:** Professional but friendly. You're helping the user prepare their case, not interrogating them.
   `;
 
   const sdkHistory = history.slice(0, -1).map(msg => ({
@@ -437,9 +466,9 @@ export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; 
         properties: {
           isPass: { type: Type.BOOLEAN },
           critique: { type: Type.STRING },
-          improvements: { 
-            type: Type.ARRAY, 
-            items: { type: Type.STRING } 
+          improvements: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
           },
           correctedContent: { type: Type.STRING }
         }
@@ -447,5 +476,16 @@ export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; 
     }
   });
 
-  return JSON.parse(cleanJson(response.text || '{"isPass": false, "critique": "Error analyzing", "improvements": []}'));
+  try {
+    return JSON.parse(cleanJson(response.text || '{"isPass": false, "critique": "Error analyzing", "improvements": []}'));
+  } catch (error) {
+    console.error('[reviewDraft] JSON parse error:', error);
+    // Return safe default on parse failure
+    return {
+      isPass: false,
+      critique: 'Unable to parse review response from AI. Please try again.',
+      improvements: ['AI response was malformed - manual review recommended'],
+      correctedContent: data.generated?.content || ''
+    };
+  }
 };
