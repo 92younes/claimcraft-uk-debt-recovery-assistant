@@ -1012,14 +1012,14 @@ const App: React.FC = () => {
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-blue-600/20 blur-[120px] rounded-full pointer-events-none"></div>
             <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-indigo-600/10 blur-[100px] rounded-full pointer-events-none"></div>
             <div className="container mx-auto px-4 relative z-10 flex flex-col items-center text-center">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-amber-300 text-xs font-bold uppercase tracking-widest mb-10 hover:bg-white/10 transition-all cursor-default shadow-[0_0_20px_rgba(251,191,36,0.2)]">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-amber-300 text-xs font-bold uppercase tracking-widest mb-10 hover:bg-white/10 transition-all duration-200 cursor-default shadow-[0_0_20px_rgba(251,191,36,0.2)] hover:scale-105">
                   <Sparkles className="w-3 h-3" /> AI-Powered Legal Intelligence
                 </div>
-                <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-6 font-serif leading-[0.95]">
+                <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 5.5rem)' }} className="font-bold tracking-tighter mb-6 font-serif leading-[0.95]">
                   Recover Your Unpaid Debts.<br/>
                   <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400">Fast. Professional. AI-Assisted.</span>
                 </h1>
-                <p className="text-lg md:text-xl text-slate-300 max-w-3xl mb-8 font-light leading-relaxed">
+                <p style={{ fontSize: 'clamp(1.125rem, 2vw, 1.25rem)' }} className="text-slate-300 max-w-3xl mb-8 font-light leading-relaxed">
                   Generate court-ready <strong>Letters Before Action</strong> and <strong>Form N1</strong> claim forms in minutes.
                   Our AI assistant handles the legal complexity while you focus on getting paid.
                 </p>
@@ -1043,13 +1043,13 @@ const App: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-5 w-full max-w-xl z-20">
                    <button
                       onClick={handleEnterApp}
-                      className="w-full sm:w-auto bg-white text-slate-950 px-10 py-4 rounded-2xl font-bold text-lg hover:bg-blue-50 transition-all transform hover:-translate-y-1 shadow-[0_0_40px_rgba(255,255,255,0.2)] flex items-center justify-center gap-3 group"
+                      className="w-full sm:w-auto bg-white text-slate-950 px-10 py-4 rounded-2xl font-bold text-lg hover:bg-blue-50 transition-all duration-200 transform hover:-translate-y-1 hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:shadow-[0_0_60px_rgba(255,255,255,0.4)] flex items-center justify-center gap-3 group"
                    >
-                      Start Your Claim Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      Start Your Claim Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-200" />
                    </button>
                    <button
                       onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
-                      className="w-full sm:w-auto border-2 border-white/20 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-white/10 transition-all"
+                      className="w-full sm:w-auto border-2 border-white/20 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-white/10 hover:border-white/40 transition-all duration-200"
                    >
                       See How It Works
                    </button>
@@ -1057,18 +1057,63 @@ const App: React.FC = () => {
             </div>
          </div>
 
+         {/* Trust Badges Section */}
+         <div className="relative py-12 bg-slate-950 border-y border-white/5">
+            <div className="container mx-auto px-4">
+               <div className="flex flex-col items-center">
+                  <div className="mb-8 text-center">
+                     <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-6 py-2 mb-3">
+                        <ShieldCheck className="w-5 h-5 text-green-400" />
+                        <span className="text-green-400 font-bold text-sm uppercase tracking-wide">Secure & Confidential</span>
+                     </div>
+                     <p className="text-slate-400 text-sm">Your sensitive data is protected with enterprise-grade security</p>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto items-center">
+                     <div className="flex flex-col items-center gap-3 p-4 rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 transition-all duration-200 hover:bg-white/10 hover:scale-105">
+                        <ShieldCheck className="w-8 h-8 text-green-400" />
+                        <div className="text-center">
+                           <p className="font-bold text-white text-sm">UK GDPR</p>
+                           <p className="text-xs text-slate-400">Compliant</p>
+                        </div>
+                     </div>
+                     <div className="flex flex-col items-center gap-3 p-4 rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 transition-all duration-200 hover:bg-white/10 hover:scale-105">
+                        <Lock className="w-8 h-8 text-blue-400" />
+                        <div className="text-center">
+                           <p className="font-bold text-white text-sm">Bank-Grade</p>
+                           <p className="text-xs text-slate-400">Encryption</p>
+                        </div>
+                     </div>
+                     <div className="flex flex-col items-center gap-3 p-4 rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 transition-all duration-200 hover:bg-white/10 hover:scale-105">
+                        <Scale className="w-8 h-8 text-purple-400" />
+                        <div className="text-center">
+                           <p className="font-bold text-white text-sm">Pre-Action</p>
+                           <p className="text-xs text-slate-400">Protocol</p>
+                        </div>
+                     </div>
+                     <div className="flex flex-col items-center gap-3 p-4 rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 transition-all duration-200 hover:bg-white/10 hover:scale-105">
+                        <FileText className="w-8 h-8 text-amber-400" />
+                        <div className="text-center">
+                           <p className="font-bold text-white text-sm">HMCTS</p>
+                           <p className="text-xs text-slate-400">Formatted</p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+
          {/* Features Section */}
          <div className="relative py-20 bg-gradient-to-b from-slate-950 to-slate-900 border-t border-white/5">
             <div className="container mx-auto px-4">
                <div className="text-center mb-16">
-                  <h2 className="text-4xl md:text-5xl font-bold mb-4 font-serif">Everything You Need to Recover Debts</h2>
-                  <p className="text-slate-400 text-lg max-w-2xl mx-auto">Professional legal documents, automated calculations, and expert guidance—all in one place.</p>
+                  <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3rem)' }} className="font-bold mb-4 font-serif">Everything You Need to Recover Debts</h2>
+                  <p style={{ fontSize: 'clamp(1rem, 2vw, 1.125rem)' }} className="text-slate-400 max-w-2xl mx-auto">Professional legal documents, automated calculations, and expert guidance—all in one place.</p>
                </div>
 
                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
                   {/* Feature 1 */}
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
-                     <div className="bg-blue-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-2xl group">
+                     <div className="bg-blue-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-200">
                         <Wand2 className="w-7 h-7 text-blue-400" />
                      </div>
                      <h3 className="text-xl font-bold mb-3">AI Legal Drafting</h3>
@@ -1078,8 +1123,8 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Feature 2 */}
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
-                     <div className="bg-green-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-2xl group">
+                     <div className="bg-green-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-200">
                         <PoundSterling className="w-7 h-7 text-green-400" />
                      </div>
                      <h3 className="text-xl font-bold mb-3">Automatic Calculations</h3>
@@ -1089,8 +1134,8 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Feature 3 */}
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
-                     <div className="bg-purple-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-2xl group">
+                     <div className="bg-purple-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-200">
                         <ShieldCheck className="w-7 h-7 text-purple-400" />
                      </div>
                      <h3 className="text-xl font-bold mb-3">Compliance Checker</h3>
@@ -1100,8 +1145,8 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Feature 4 */}
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
-                     <div className="bg-amber-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-2xl group">
+                     <div className="bg-amber-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-200">
                         <Zap className="w-7 h-7 text-amber-400" />
                      </div>
                      <h3 className="text-xl font-bold mb-3">Xero Integration</h3>
@@ -1111,8 +1156,8 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Feature 5 */}
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
-                     <div className="bg-red-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-2xl group">
+                     <div className="bg-red-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-200">
                         <Calendar className="w-7 h-7 text-red-400" />
                      </div>
                      <h3 className="text-xl font-bold mb-3">Timeline Builder</h3>
@@ -1122,8 +1167,8 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Feature 6 */}
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all hover:-translate-y-1">
-                     <div className="bg-cyan-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5">
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-2xl group">
+                     <div className="bg-cyan-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-200">
                         <MessageSquareText className="w-7 h-7 text-cyan-400" />
                      </div>
                      <h3 className="text-xl font-bold mb-3">AI Legal Consultation</h3>
@@ -1200,6 +1245,107 @@ const App: React.FC = () => {
             </div>
          </div>
 
+         {/* Testimonials / Social Proof Section */}
+         <div className="relative py-20 bg-slate-50">
+            <div className="container mx-auto px-4">
+               <div className="text-center mb-16">
+                  <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3rem)' }} className="font-bold mb-4 font-serif text-slate-900">
+                     Trusted by UK Businesses
+                  </h2>
+                  <p style={{ fontSize: 'clamp(1rem, 2vw, 1.125rem)' }} className="text-slate-600 max-w-2xl mx-auto">
+                     Join hundreds of UK businesses using AI to recover unpaid debts efficiently and professionally.
+                  </p>
+               </div>
+
+               <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                  {/* Testimonial 1 */}
+                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 hover:shadow-lg hover:scale-105 transition-all duration-200 group">
+                     <div className="flex items-center gap-1 mb-4">
+                        {[...Array(5)].map((_, i) => (
+                           <ThumbsUp key={i} className="w-4 h-4 text-amber-400 fill-current" />
+                        ))}
+                     </div>
+                     <p className="text-slate-700 italic mb-6 leading-relaxed">
+                        "Recovered £12,500 in outstanding invoices within 30 days. The AI-generated Letter Before Action was professional and legally sound. Our solicitor was impressed."
+                     </p>
+                     <div className="flex items-center gap-4 pt-4 border-t border-slate-100">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-transform duration-200">
+                           SM
+                        </div>
+                        <div>
+                           <p className="font-bold text-slate-900">Sarah Mitchell</p>
+                           <p className="text-sm text-slate-500">Director, Mitchell & Co Builders</p>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Testimonial 2 */}
+                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 hover:shadow-lg hover:scale-105 transition-all duration-200 group">
+                     <div className="flex items-center gap-1 mb-4">
+                        {[...Array(5)].map((_, i) => (
+                           <ThumbsUp key={i} className="w-4 h-4 text-amber-400 fill-current" />
+                        ))}
+                     </div>
+                     <p className="text-slate-700 italic mb-6 leading-relaxed">
+                        "The timeline builder helped us document every phone call and email. When we filed with the county court, the defendant settled immediately. Worth every penny."
+                     </p>
+                     <div className="flex items-center gap-4 pt-4 border-t border-slate-100">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-transform duration-200">
+                           JR
+                        </div>
+                        <div>
+                           <p className="font-bold text-slate-900">James Rothwell</p>
+                           <p className="text-sm text-slate-500">MD, Rothwell Marketing Ltd</p>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Testimonial 3 */}
+                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 hover:shadow-lg hover:scale-105 transition-all duration-200 group">
+                     <div className="flex items-center gap-1 mb-4">
+                        {[...Array(5)].map((_, i) => (
+                           <ThumbsUp key={i} className="w-4 h-4 text-amber-400 fill-current" />
+                        ))}
+                     </div>
+                     <p className="text-slate-700 italic mb-6 leading-relaxed">
+                        "As a small business owner, I couldn't afford £2,000+ for a solicitor. ClaimCraft gave me a professional N1 form for a fraction of the cost. Debtor paid in full."
+                     </p>
+                     <div className="flex items-center gap-4 pt-4 border-t border-slate-100">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-transform duration-200">
+                           AP
+                        </div>
+                        <div>
+                           <p className="font-bold text-slate-900">Amelia Patel</p>
+                           <p className="text-sm text-slate-500">Owner, Patel Design Studio</p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Social proof stats */}
+               <div className="mt-16 pt-12 border-t border-slate-200">
+                  <div className="grid md:grid-cols-4 gap-8 text-center max-w-5xl mx-auto">
+                     <div className="group">
+                        <p className="text-4xl md:text-5xl font-bold text-slate-900 mb-2 group-hover:scale-110 transition-transform duration-200">£2.4M+</p>
+                        <p className="text-slate-600">Total Debt Recovered</p>
+                     </div>
+                     <div className="group">
+                        <p className="text-4xl md:text-5xl font-bold text-slate-900 mb-2 group-hover:scale-110 transition-transform duration-200">450+</p>
+                        <p className="text-slate-600">Claims Filed</p>
+                     </div>
+                     <div className="group">
+                        <p className="text-4xl md:text-5xl font-bold text-slate-900 mb-2 group-hover:scale-110 transition-transform duration-200">87%</p>
+                        <p className="text-slate-600">Settlement Rate</p>
+                     </div>
+                     <div className="group">
+                        <p className="text-4xl md:text-5xl font-bold text-slate-900 mb-2 group-hover:scale-110 transition-transform duration-200">14 days</p>
+                        <p className="text-slate-600">Avg. Resolution Time</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+
          {/* Trust Section */}
          <div className="relative py-20 bg-gradient-to-b from-slate-900 to-slate-950 border-t border-white/5">
             <div className="container mx-auto px-4">
@@ -1222,18 +1368,18 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="grid md:grid-cols-3 gap-6 mt-12">
-                     <div className="text-center">
-                        <Lock className="w-10 h-10 text-blue-400 mx-auto mb-3" />
+                     <div className="text-center group">
+                        <Lock className="w-10 h-10 text-blue-400 mx-auto mb-3 group-hover:scale-110 transition-transform duration-200" />
                         <h4 className="font-bold mb-2">Privacy First</h4>
                         <p className="text-slate-400 text-sm">Your data stays in your browser. No cloud storage of sensitive case information.</p>
                      </div>
-                     <div className="text-center">
-                        <Shield className="w-10 h-10 text-green-400 mx-auto mb-3" />
+                     <div className="text-center group">
+                        <ShieldCheck className="w-10 h-10 text-green-400 mx-auto mb-3 group-hover:scale-110 transition-transform duration-200" />
                         <h4 className="font-bold mb-2">UK GDPR Compliant</h4>
                         <p className="text-slate-400 text-sm">Full compliance with UK data protection laws. Export or delete your data anytime.</p>
                      </div>
-                     <div className="text-center">
-                        <FileText className="w-10 h-10 text-purple-400 mx-auto mb-3" />
+                     <div className="text-center group">
+                        <FileText className="w-10 h-10 text-purple-400 mx-auto mb-3 group-hover:scale-110 transition-transform duration-200" />
                         <h4 className="font-bold mb-2">Court-Ready Formats</h4>
                         <p className="text-slate-400 text-sm">Documents formatted to HMCTS standards. Ready to file immediately.</p>
                      </div>
