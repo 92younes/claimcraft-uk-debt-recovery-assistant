@@ -126,17 +126,15 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
   const handleConfirm = () => {
     if (canProceed) {
       onConfirm();
-      // Reset for next time
+      // Only reset after successful confirmation
       setCheckedItems(new Set());
       setAcknowledgesConsequences(false);
     }
   };
 
   const handleClose = () => {
+    // Don't reset state on close - preserve user progress
     onClose();
-    // Reset
-    setCheckedItems(new Set());
-    setAcknowledgesConsequences(false);
   };
 
   if (!isOpen) return null;

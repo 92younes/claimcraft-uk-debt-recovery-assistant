@@ -14,11 +14,12 @@ interface DocumentPreviewProps {
 }
 
 // A4 Page Wrapper with optional Watermark and Overflow Handling
+// Mobile responsive: full width on small screens, A4 width on larger screens
 const Page = ({ children, className = "", watermark = false }: { children?: React.ReactNode; className?: string; watermark?: boolean }) => (
-  <div className={`bg-white shadow-xl w-[210mm] min-h-[297mm] mx-auto p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-hidden flex-shrink-0 ${className}`}>
+  <div className={`bg-white shadow-xl w-full md:w-[210mm] min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-hidden flex-shrink-0 ${className}`}>
     {watermark && (
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50 opacity-15 select-none overflow-hidden">
-        <div className="transform -rotate-45 text-6xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-[10px] border-slate-900 p-10 rounded-2xl mix-blend-multiply">
+        <div className="transform -rotate-45 text-3xl sm:text-5xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-4 md:border-[10px] border-slate-900 p-4 md:p-10 rounded-2xl mix-blend-multiply">
            DRAFT - REVIEW PENDING
         </div>
       </div>
@@ -368,9 +369,9 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
         </div>
       )}
 
-      {/* Document Container - Responsive Scroll */}
-      <div className="print-container font-sans text-black overflow-x-auto bg-slate-100/50 p-4 md:p-8 rounded-2xl border border-slate-200/50 mx-4 md:mx-0">
-        <div className="min-w-[210mm] mx-auto bg-white shadow-xl md:shadow-2xl">
+      {/* Document Container - Mobile Responsive */}
+      <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 mx-2 md:mx-0">
+        <div className="w-full md:min-w-[210mm] mx-auto bg-white shadow-xl md:shadow-2xl">
           {isLetter ? (
             <>
                {viewMode === 'letter' && (

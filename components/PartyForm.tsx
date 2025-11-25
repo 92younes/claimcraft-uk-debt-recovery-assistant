@@ -2,41 +2,122 @@ import React, { useState, useEffect } from 'react';
 import { Party, PartyType } from '../types';
 import { Input, Select } from './ui/Input';
 import { UK_COUNTIES } from '../constants';
-import { validateUKPostcode, formatUKPostcode } from '../utils/validation';
+import { validateUKPostcode, formatUKPostcode, validateEmail, validateUKPhone } from '../utils/validation';
 
 interface PartyFormProps {
   title: string;
   party: Party;
   onChange: (updatedParty: Party) => void;
   readOnly?: boolean;
+  onValidationChange?: (isValid: boolean) => void;
 }
 
-export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, readOnly = false }) => {
-  const [postcodeError, setPostcodeError] = useState<string | null>(null);
+interface ValidationErrors {
+  name?: string;
+  address?: string;
+  city?: string;
+  postcode?: string;
+  county?: string;
+  companyNumber?: string;
+  email?: string;
+  phone?: string;
+}
+
+export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, readOnly = false, onValidationChange }) => {
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const [touched, setTouched] = useState<Set<string>>(new Set());
+
+  // Validation logic
+  const validateField = (field: keyof Party, value: string): string | undefined => {
+    // Required fields
+    if (field === 'name' && !value.trim()) {
+      return 'Name is required';
+    }
+    if (field === 'address' && !value.trim()) {
+      return 'Address is required';
+    }
+    if (field === 'city' && !value.trim()) {
+      return 'Town/City is required';
+    }
+    if (field === 'postcode') {
+      if (!value.trim()) {
+        return 'Postcode is required';
+      }
+      if (!validateUKPostcode(value)) {
+        return 'Invalid UK postcode format (e.g., SW1A 1AA)';
+      }
+    }
+    if (field === 'county' && !value.trim()) {
+      return 'County is required';
+    }
+
+    // Company number required for businesses
+    if (field === 'companyNumber' && party.type === PartyType.BUSINESS && !value.trim()) {
+      return 'Company number is required for limited companies';
+    }
+
+    // Optional field validation (only if provided)
+    if (field === 'email' && value.trim() && !validateEmail(value)) {
+      return 'Invalid email format';
+    }
+    if (field === 'phone' && value.trim() && !validateUKPhone(value)) {
+      return 'Invalid UK phone number';
+    }
+
+    return undefined;
+  };
+
+  const validateAll = (): ValidationErrors => {
+    const newErrors: ValidationErrors = {};
+
+    newErrors.name = validateField('name', party.name);
+    newErrors.address = validateField('address', party.address);
+    newErrors.city = validateField('city', party.city);
+    newErrors.postcode = validateField('postcode', party.postcode);
+    newErrors.county = validateField('county', party.county);
+
+    if (party.type === PartyType.BUSINESS) {
+      newErrors.companyNumber = validateField('companyNumber', party.companyNumber || '');
+    }
+
+    if (party.email) {
+      newErrors.email = validateField('email', party.email);
+    }
+    if (party.phone) {
+      newErrors.phone = validateField('phone', party.phone);
+    }
+
+    return newErrors;
+  };
+
+  // Update validation state when party changes
+  useEffect(() => {
+    const newErrors = validateAll();
+    setErrors(newErrors);
+
+    // Notify parent if validation callback provided
+    const hasErrors = Object.values(newErrors).some(err => err !== undefined);
+    if (onValidationChange) {
+      onValidationChange(!hasErrors);
+    }
+  }, [party, onValidationChange]);
 
   const handleChange = (field: keyof Party, value: string) => {
     if (readOnly) return;
-
-    // Clear error when user edits postcode (don't validate while typing)
-    if (field === 'postcode') {
-      setPostcodeError(null);
-    }
-
     onChange({ ...party, [field]: value });
   };
 
+  const handleBlur = (field: keyof Party) => {
+    setTouched(prev => new Set(prev).add(field));
+  };
+
   const handlePostcodeBlur = () => {
-    if (party.postcode && party.postcode.trim()) {
-      const isValid = validateUKPostcode(party.postcode);
-      if (!isValid) {
-        setPostcodeError('Invalid UK postcode format (e.g., SW1A 1AA)');
-      } else {
-        setPostcodeError(null);
-        // Auto-format valid postcodes
-        const formatted = formatUKPostcode(party.postcode);
-        if (formatted !== party.postcode) {
-          onChange({ ...party, postcode: formatted });
-        }
+    handleBlur('postcode');
+    // Auto-format valid postcodes
+    if (party.postcode && party.postcode.trim() && validateUKPostcode(party.postcode)) {
+      const formatted = formatUKPostcode(party.postcode);
+      if (formatted !== party.postcode) {
+        onChange({ ...party, postcode: formatted });
       }
     }
   };
@@ -92,14 +173,35 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
         placeholder={party.type === PartyType.BUSINESS ? "e.g. Acme Services Ltd" : "e.g. John Smith"}
         value={party.name}
         onChange={(e) => handleChange('name', e.target.value)}
+        onBlur={() => handleBlur('name')}
+        error={touched.has('name') ? errors.name : undefined}
+        required
         readOnly={readOnly}
       />
+
+      {party.type === PartyType.BUSINESS && (
+        <Input
+          label="Company Number"
+          placeholder="e.g. 12345678"
+          value={party.companyNumber || ''}
+          onChange={(e) => handleChange('companyNumber', e.target.value)}
+          onBlur={() => handleBlur('companyNumber')}
+          error={touched.has('companyNumber') ? errors.companyNumber : undefined}
+          helpText="Companies House registration number (8 digits)"
+          maxLength={8}
+          required
+          readOnly={readOnly}
+        />
+      )}
 
       <Input
         label="Address Line 1"
         placeholder="e.g. 10 Downing Street"
         value={party.address}
         onChange={(e) => handleChange('address', e.target.value)}
+        onBlur={() => handleBlur('address')}
+        error={touched.has('address') ? errors.address : undefined}
+        required
         readOnly={readOnly}
       />
 
@@ -109,26 +211,23 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
             label="Town/City"
             value={party.city}
             onChange={(e) => handleChange('city', e.target.value)}
+            onBlur={() => handleBlur('city')}
+            error={touched.has('city') ? errors.city : undefined}
+            required
             readOnly={readOnly}
           />
         </div>
         <div className="md:col-span-1">
-          <div className="relative">
-            <Input
-              label="Postcode"
-              value={party.postcode}
-              onChange={(e) => handleChange('postcode', e.target.value)}
-              onBlur={handlePostcodeBlur}
-              readOnly={readOnly}
-              className={postcodeError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}
-            />
-            {postcodeError && (
-              <p className="mt-1 text-xs text-red-600 flex items-start gap-1">
-                <span className="shrink-0">⚠️</span>
-                <span>{postcodeError}</span>
-              </p>
-            )}
-          </div>
+          <Input
+            label="Postcode"
+            placeholder="e.g. SW1A 1AA"
+            value={party.postcode}
+            onChange={(e) => handleChange('postcode', e.target.value)}
+            onBlur={handlePostcodeBlur}
+            error={touched.has('postcode') ? errors.postcode : undefined}
+            required
+            readOnly={readOnly}
+          />
         </div>
         <div className="md:col-span-2">
           <Select
@@ -136,6 +235,9 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
             options={UK_COUNTIES.map(s => ({ value: s, label: s }))}
             value={party.county}
             onChange={(e) => handleChange('county', e.target.value)}
+            onBlur={() => handleBlur('county')}
+            error={touched.has('county') ? errors.county : undefined}
+            required
             disabled={readOnly}
           />
         </div>
@@ -145,15 +247,22 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
         <Input
           label="Phone (Optional)"
           type="tel"
+          placeholder="e.g. 020 7946 0958"
           value={party.phone || ''}
           onChange={(e) => handleChange('phone', e.target.value)}
+          onBlur={() => handleBlur('phone')}
+          error={touched.has('phone') ? errors.phone : undefined}
+          helpText="UK format: 01234 567890 or 07123 456789"
           readOnly={readOnly}
         />
         <Input
           label="Email (Optional)"
           type="email"
+          placeholder="e.g. name@example.com"
           value={party.email || ''}
           onChange={(e) => handleChange('email', e.target.value)}
+          onBlur={() => handleBlur('email')}
+          error={touched.has('email') ? errors.email : undefined}
           readOnly={readOnly}
         />
       </div>

@@ -45,7 +45,8 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
   const rateIsCorrect = Math.abs(interestRate - expectedRate) < 0.01;
 
   const handleConfirm = () => {
-    if (hasVerified) {
+    // Only allow confirmation if rate is correct AND verified
+    if (hasVerified && rateIsCorrect) {
       onConfirm();
       setHasVerified(false);
     }
@@ -55,6 +56,8 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
     onClose();
     setHasVerified(false);
   };
+
+  const canProceed = hasVerified && rateIsCorrect;
 
   if (!isOpen) return null;
 
@@ -250,14 +253,14 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
             onClick={handleClose}
             className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
           >
-            Cancel - Review Party Types
+            {!rateIsCorrect ? 'Back - Fix Party Types' : 'Cancel - Review Party Types'}
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!hasVerified}
+            disabled={!canProceed}
             className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 shadow-md disabled:shadow-none"
           >
-            {hasVerified ? 'Confirm & Proceed' : 'Complete Verification Above'}
+            {!rateIsCorrect ? 'Cannot Proceed - Rate Incorrect' : hasVerified ? 'Confirm & Proceed' : 'Complete Verification Above'}
           </button>
         </div>
       </div>

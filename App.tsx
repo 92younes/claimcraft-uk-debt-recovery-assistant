@@ -31,7 +31,7 @@ import { assessClaimViability, calculateCourtFee, calculateCompensation } from '
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData } from './services/storageService';
 import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS } from './constants';
-import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent } from 'lucide-react';
+import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, ChevronUp, ChevronDown, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent } from 'lucide-react';
 
 // New view state
 type ViewState = 'landing' | 'dashboard' | 'wizard' | 'privacy' | 'terms';
@@ -92,6 +92,7 @@ const App: React.FC = () => {
   const [showSoTModal, setShowSoTModal] = useState(false);
   const [showInterestModal, setShowInterestModal] = useState(false);
   const [showLiPModal, setShowLiPModal] = useState(false);
+  const [showAdvancedDocs, setShowAdvancedDocs] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // Phase 2: Inline interest verification (replaces InterestRateConfirmModal)
@@ -1135,11 +1136,11 @@ const App: React.FC = () => {
         return (
           <div className="space-y-8 animate-fade-in py-10 max-w-6xl mx-auto">
             <button
-              onClick={() => setStep(Step.QUESTIONS)}
+              onClick={() => setStep(Step.TIMELINE)}
               className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Consultation
+              Back to Timeline
             </button>
 
             <div className="text-center mb-8">
@@ -1149,7 +1150,14 @@ const App: React.FC = () => {
 
             {/* Document Selection by Stage */}
             <div className="space-y-8">
-              {documentConfigs.map((stageGroup) => (
+              {documentConfigs.map((stageGroup) => {
+                // Progressive disclosure: only show Pre-Action and Court Filing by default
+                const isAdvanced = ['Settlement', 'Post-Filing', 'Trial Preparation'].includes(stageGroup.stage);
+                if (isAdvanced && !showAdvancedDocs) {
+                  return null;
+                }
+
+                return (
                 <div key={stageGroup.stage} className="space-y-4">
                   {/* Stage Header */}
                   <div className="flex items-center gap-3">
@@ -1204,6 +1212,26 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Toggle for Advanced Documents */}
+            <div className="flex justify-center pt-4">
+              <button
+                onClick={() => setShowAdvancedDocs(!showAdvancedDocs)}
+                className="flex items-center gap-2 px-6 py-3 bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-300 text-slate-700 rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow-md group"
+              >
+                {showAdvancedDocs ? (
+                  <>
+                    <ChevronUp className="w-5 h-5 text-slate-500 group-hover:text-slate-700 transition-colors" />
+                    Hide Advanced Documents
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-5 h-5 text-slate-500 group-hover:text-slate-700 transition-colors" />
+                    Show More Documents (Settlement, Post-Filing, Trial)
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Warning for N1 without LBA */}

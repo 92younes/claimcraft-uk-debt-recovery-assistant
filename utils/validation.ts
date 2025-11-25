@@ -27,12 +27,12 @@ export const validateUKPostcode = (postcode: string): boolean => {
   }
 
   // Remove all whitespace for consistent checking
-  const cleaned = postcode.trim().replace(/\s+/g, '');
+  const cleaned = postcode.trim().replace(/\s+/g, '').toUpperCase();
 
-  // UK postcode regex pattern
-  // Format: A(A)N(A/N) NAA
-  // Where A = Letter, N = Number
-  const ukPostcodeRegex = /^[A-Z]{1,2}\d{1,2}[A-Z]?\d[A-Z]{2}$/i;
+  // Improved UK postcode regex pattern (more strict)
+  // Formats: AA9A 9AA, A9A 9AA, A9 9AA, A99 9AA, AA9 9AA, AA99 9AA
+  // Special cases: GIR 0AA, BFPO postcodes
+  const ukPostcodeRegex = /^(GIR0AA|[A-Z]{1,2}\d{1,2}[A-Z]?\d[A-Z]{2})$/;
 
   return ukPostcodeRegex.test(cleaned);
 };
@@ -104,6 +104,49 @@ export const getFileTypeError = (file: File): string => {
 };
 
 /**
+ * Validates email format
+ *
+ * @param email - Email address to validate
+ * @returns true if valid email format, false otherwise
+ */
+export const validateEmail = (email: string): boolean => {
+  if (!email || typeof email !== 'string') {
+    return false;
+  }
+
+  // RFC 5322 simplified email regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+};
+
+/**
+ * Validates UK phone number format
+ *
+ * Accepts various formats:
+ * - 020 7946 0958 (London)
+ * - 0121 496 0000 (Birmingham)
+ * - 07700 900123 (Mobile)
+ * - +44 20 7946 0958 (International)
+ *
+ * @param phone - Phone number to validate
+ * @returns true if valid UK phone format, false otherwise
+ */
+export const validateUKPhone = (phone: string): boolean => {
+  if (!phone || typeof phone !== 'string') {
+    return false;
+  }
+
+  // Remove all spaces, hyphens, and brackets
+  const cleaned = phone.trim().replace(/[\s\-\(\)]/g, '');
+
+  // UK phone regex patterns
+  // Matches: 07xxx xxxxxx, 01xx xxx xxxx, 02x xxxx xxxx, +447xxx xxxxxx, etc.
+  const ukPhoneRegex = /^(\+44|0)[127]\d{9}$/;
+
+  return ukPhoneRegex.test(cleaned);
+};
+
+/**
  * Validates that a date is not in the future
  *
  * Timeline events (invoices sent, chasers sent, etc.) must be historical.
@@ -113,14 +156,122 @@ export const getFileTypeError = (file: File): string => {
  * @returns true if date is today or in the past, false if in future
  */
 export const validatePastDate = (dateString: string | Date): boolean => {
-  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-  const today = new Date();
+  try {
+    const date = typeof dateString === 'string' ? new Date(dateString) : new Date(dateString);
 
-  // Set to start of day for fair comparison
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
+    // Check for invalid date
+    if (isNaN(date.getTime())) {
+      return false;
+    }
 
-  return date <= today;
+    // Use UTC to avoid timezone issues
+    const dateUTC = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    const now = new Date();
+    const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+
+    return dateUTC <= todayUTC;
+  } catch (error) {
+    console.error('Error validating past date:', error);
+    return false;
+  }
+};
+
+/**
+ * Validates date relationships (e.g., invoice date before due date)
+ *
+ * @param invoiceDate - ISO date string for invoice date
+ * @param dueDate - ISO date string for due date
+ * @returns object with isValid boolean and optional error message
+ */
+export const validateDateRelationship = (
+  invoiceDate: string,
+  dueDate: string
+): { isValid: boolean; error?: string } => {
+  try {
+    if (!invoiceDate || !dueDate) {
+      return { isValid: true }; // Empty fields handled by required validation
+    }
+
+    const invoice = new Date(invoiceDate);
+    const due = new Date(dueDate);
+
+    // Check for invalid dates
+    if (isNaN(invoice.getTime()) || isNaN(due.getTime())) {
+      return { isValid: false, error: 'Invalid date format' };
+    }
+
+    // Invoice date must be before or equal to due date
+    if (invoice.getTime() > due.getTime()) {
+      return { isValid: false, error: 'Invoice date cannot be after due date' };
+    }
+
+    // Check if invoice is more than 6 years old (Limitation Act 1980)
+    const sixYearsAgo = new Date();
+    sixYearsAgo.setFullYear(sixYearsAgo.getFullYear() - 6);
+
+    if (invoice.getTime() < sixYearsAgo.getTime()) {
+      return { isValid: false, error: 'Invoice is more than 6 years old (statute-barred under Limitation Act 1980)' };
+    }
+
+    // Check if due date is in the future (unusual for debt claims)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+
+    if (due.getTime() > today.getTime()) {
+      return { isValid: false, error: 'Due date is in the future - payment is not yet overdue' };
+    }
+
+    return { isValid: true };
+  } catch (error) {
+    console.error('Error validating date relationship:', error);
+    return { isValid: false, error: 'Failed to validate dates' };
+  }
+};
+
+/**
+ * Validates interest calculation against formula
+ *
+ * Formula: (principal × rate × days) / (365 × 100)
+ * B2B: 12.75% per annum
+ * B2C: 8% per annum
+ *
+ * @param principal - Invoice amount
+ * @param rate - Interest rate percentage (e.g., 12.75 or 8)
+ * @param daysOverdue - Number of days overdue
+ * @param calculatedInterest - The interest amount to verify
+ * @returns object with isValid boolean and optional error message
+ */
+export const validateInterestCalculation = (
+  principal: number,
+  rate: number,
+  daysOverdue: number,
+  calculatedInterest: number
+): { isValid: boolean; error?: string; expectedInterest?: number } => {
+  try {
+    if (principal <= 0 || rate <= 0 || daysOverdue < 0) {
+      return { isValid: true }; // Let other validation handle negative/zero values
+    }
+
+    // Calculate expected interest: (principal × rate × days) / (365 × 100)
+    const expectedInterest = (principal * rate * daysOverdue) / (365 * 100);
+
+    // Allow small rounding differences (within 1 penny)
+    const difference = Math.abs(calculatedInterest - expectedInterest);
+
+    if (difference > 0.01) {
+      return {
+        isValid: false,
+        error: `Interest calculation incorrect. Expected £${expectedInterest.toFixed(2)} but got £${calculatedInterest.toFixed(2)}`,
+        expectedInterest: expectedInterest
+      };
+    }
+
+    return { isValid: true, expectedInterest: expectedInterest };
+  } catch (error) {
+    console.error('Error validating interest calculation:', error);
+    return { isValid: false, error: 'Failed to validate interest calculation' };
+  }
 };
 
 /**
@@ -131,27 +282,33 @@ export const validatePastDate = (dateString: string | Date): boolean => {
  * 2. Confuse court administration
  * 3. Constitute abuse of process
  *
+ * Note: This function needs to be called from a component with access to storageService
+ *
  * @param invoiceNumber - Invoice number to check
+ * @param currentClaimId - ID of current claim (to exclude from duplicate check)
+ * @param existingClaims - Array of existing claims from IndexedDB
  * @returns true if invoice is unique, false if already used
  */
-export const validateUniqueInvoice = async (invoiceNumber: string): Promise<boolean> => {
-  if (!invoiceNumber) return true;
+export const validateUniqueInvoice = (
+  invoiceNumber: string,
+  currentClaimId: string | null,
+  existingClaims: any[]
+): boolean => {
+  if (!invoiceNumber || !invoiceNumber.trim()) {
+    return true; // Empty invoice number is handled by other validation
+  }
 
   try {
-    // Check localStorage for saved claims
-    const savedClaimsStr = localStorage.getItem('claimcraft_saved_claims');
-    if (!savedClaimsStr) return true;
-
-    const savedClaims = JSON.parse(savedClaimsStr);
-
-    // Check if invoice number already exists
-    const duplicate = savedClaims.some((claim: any) =>
-      claim.invoice?.invoiceNumber === invoiceNumber
+    // Check if invoice number already exists in other claims
+    const duplicate = existingClaims.some((claim: any) =>
+      claim.id !== currentClaimId && // Exclude current claim
+      claim.invoice?.invoiceNumber?.trim().toLowerCase() === invoiceNumber.trim().toLowerCase()
     );
 
     return !duplicate;
   } catch (error) {
     console.error('Error checking invoice uniqueness:', error);
-    return true; // Allow if check fails
+    // Fail safe: return false (duplicate) to prevent potential duplicate filing
+    return false;
   }
 };

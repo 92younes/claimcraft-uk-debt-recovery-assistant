@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ClaimState, DocumentType, AccountingConnection } from '../types';
-import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight, Bell, Zap, Link as LinkIcon, Download, XCircle } from 'lucide-react';
+import { Plus, ArrowRight, FileText, Clock, CheckCircle2, TrendingUp, Trash2, Upload, AlertCircle, Briefcase, Scale, Calendar, ChevronRight, Bell, Zap, Link as LinkIcon, Download, XCircle, Search, Filter } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal';
 
 interface DashboardProps {
   claims: ClaimState[];
@@ -25,6 +26,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onExportAllData,
   onDeleteAllData
 }) => {
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [claimToDelete, setClaimToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest + curr.compensation, 0);
   const activeClaims = claims.filter(c => c.status !== 'paid').length;
 
@@ -34,6 +39,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
       c.status === 'overdue' || c.status === 'pre-action'
     ).length;
   }, [claims]);
+
+  // Filter and search claims
+  const filteredClaims = useMemo(() => {
+    let filtered = [...claims];
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(c => c.status === statusFilter);
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(c =>
+        c.defendant.name.toLowerCase().includes(query) ||
+        c.invoice.invoiceNumber.toLowerCase().includes(query) ||
+        c.claimant.name.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [claims, statusFilter, searchQuery]);
+
+  // Handle delete confirmation
+  const handleDeleteClick = (id: string, name: string) => {
+    setClaimToDelete({ id, name });
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (claimToDelete) {
+      onDelete(claimToDelete.id);
+    }
+  };
 
   // Simple status badge color helper
   const getStatusBadgeColor = (status: string) => {
@@ -126,6 +165,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
+      {/* Search and Filter Bar */}
+      {claims.length > 0 && (
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          {/* Search */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by debtor, invoice number, or claimant..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="pl-10 pr-8 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white appearance-none cursor-pointer min-w-[180px]"
+            >
+              <option value="all">All Statuses</option>
+              <option value="draft">Draft</option>
+              <option value="overdue">Overdue</option>
+              <option value="pre-action">Pre-Action</option>
+              <option value="court">Court</option>
+              <option value="judgment">Judgment</option>
+              <option value="paid">Paid</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Results Count */}
+      {claims.length > 0 && filteredClaims.length !== claims.length && (
+        <div className="mb-4 text-sm text-slate-600">
+          Showing {filteredClaims.length} of {claims.length} claims
+        </div>
+      )}
+
       {/* Claims List (Case File Style) */}
       {claims.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
@@ -144,7 +225,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
              <span>Case Details</span>
              <span className="hidden md:block mr-24">Workflow Stage</span>
           </div>
-          {claims.map((claim) => {
+          {filteredClaims.length === 0 && claims.length > 0 ? (
+            <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
+              <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-slate-900 mb-2">No matches found</h3>
+              <p className="text-slate-500 mb-4">Try adjusting your search or filter</p>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                }}
+                className="text-blue-600 font-medium hover:underline"
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : filteredClaims.map((claim) => {
             const isUrgent = claim.status === 'overdue' || claim.status === 'pre-action';
             const stageBadgeColor = getStatusBadgeColor(claim.status);
 
@@ -226,7 +322,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if(confirm("Permanently delete this claim? This cannot be undone.")) onDelete(claim.id);
+                    handleDeleteClick(claim.id, claim.defendant.name || 'Unknown');
                   }}
                   aria-label={`Delete claim for ${claim.defendant.name || 'Unknown'}`}
                   className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -276,6 +372,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Claim"
+        message={`Are you sure you want to permanently delete the claim for "${claimToDelete?.name}"? This action cannot be undone and all associated data will be lost.`}
+        confirmText="Delete Permanently"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   );
 };

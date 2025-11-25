@@ -15,11 +15,39 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
     type: 'communication'
   });
 
+  const validateEventOrder = (events: TimelineEvent[]): string | null => {
+    // Check for logical event sequence
+    const eventTypes = events.map(e => ({ type: e.type, date: new Date(e.date).getTime() }));
+
+    // Find key events
+    const contractIdx = eventTypes.findIndex(e => e.type === 'contract');
+    const invoiceIdx = eventTypes.findIndex(e => e.type === 'invoice');
+    const paymentDueIdx = eventTypes.findIndex(e => e.type === 'payment_due');
+
+    // Contract should come before invoice (if both exist)
+    if (contractIdx !== -1 && invoiceIdx !== -1 && contractIdx > invoiceIdx) {
+      return 'Warning: Contract event typically comes before Invoice';
+    }
+
+    // Invoice should come before payment due (if both exist)
+    if (invoiceIdx !== -1 && paymentDueIdx !== -1 && invoiceIdx > paymentDueIdx) {
+      return 'Warning: Invoice should be sent before Payment Due date';
+    }
+
+    return null;
+  };
+
   const addEvent = () => {
     if (!newEvent.date || !newEvent.description) return;
     const updated = [...events, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     onChange(updated);
     setNewEvent({ date: '', description: '', type: 'communication' });
+
+    // Validate after adding
+    const warning = validateEventOrder(updated);
+    if (warning) {
+      console.warn(warning);
+    }
   };
 
   const addQuickEvent = (daysOffset: number, type: TimelineEvent['type'], descTemplate: string) => {
@@ -73,34 +101,80 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
        
        {/* Quick Actions */}
        {isValidInvoiceDate ? (
-         <div className="mb-6 mt-6 bg-slate-50/50 p-4 rounded-lg border border-slate-100">
-            <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-3 flex items-center gap-1">
-                <Zap className="w-3 h-3" /> Quick Actions (Invoice: {invoiceDate})
-            </p>
+         <div className="mb-6 mt-6 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border-2 border-blue-200 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-2">
+                  <Zap className="w-4 h-4" /> Quick Add Timeline Events
+              </p>
+              <span className="text-xs text-blue-600 bg-white px-2 py-1 rounded-md border border-blue-200">
+                Invoice: {new Date(invoiceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 mb-4">Add common debt recovery events based on your invoice date:</p>
             <div className="flex flex-wrap gap-3">
-                <button 
+                <button
                   onClick={() => addQuickEvent(30, 'payment_due', 'Payment Due Date (30 Days)')}
-                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-600 hover:shadow-md transition-all duration-200 flex items-center gap-2"
+                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border-2 border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700 hover:shadow-md transition-all duration-200 flex flex-col items-start gap-1 group"
                 >
-                   <Clock className="w-3 h-3" /> +30 Days (Due)
+                   <div className="flex items-center gap-2 w-full">
+                     <Clock className="w-4 h-4 text-blue-500" />
+                     <span>Payment Due Date</span>
+                   </div>
+                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-blue-600">
+                     {(() => {
+                       const date = new Date(invoiceDate);
+                       date.setDate(date.getDate() + 30);
+                       return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                     })()}
+                     {' '}(+30 days)
+                   </span>
                 </button>
-                <button 
+                <button
                   onClick={() => addQuickEvent(37, 'chaser', 'First Overdue Chaser sent via Email')}
-                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-amber-400 hover:text-amber-600 hover:shadow-md transition-all duration-200 flex items-center gap-2"
+                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border-2 border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-amber-500 hover:bg-amber-50 hover:text-amber-700 hover:shadow-md transition-all duration-200 flex flex-col items-start gap-1 group"
                 >
-                   <Mail className="w-3 h-3" /> +7 Days Overdue
+                   <div className="flex items-center gap-2 w-full">
+                     <Mail className="w-4 h-4 text-amber-500" />
+                     <span>First Chaser Email</span>
+                   </div>
+                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-amber-600">
+                     {(() => {
+                       const date = new Date(invoiceDate);
+                       date.setDate(date.getDate() + 37);
+                       return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                     })()}
+                     {' '}(+7 days overdue)
+                   </span>
                 </button>
-                <button 
+                <button
                   onClick={() => addQuickEvent(44, 'chaser', 'Final Demand sent via Email')}
-                  className="px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-red-400 hover:text-red-600 hover:shadow-md transition-all duration-200 flex items-center gap-2"
+                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border-2 border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-red-500 hover:bg-red-50 hover:text-red-700 hover:shadow-md transition-all duration-200 flex flex-col items-start gap-1 group"
                 >
-                   <AlertCircle className="w-3 h-3" /> +14 Days Overdue
+                   <div className="flex items-center gap-2 w-full">
+                     <AlertCircle className="w-4 h-4 text-red-500" />
+                     <span>Final Demand</span>
+                   </div>
+                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-red-600">
+                     {(() => {
+                       const date = new Date(invoiceDate);
+                       date.setDate(date.getDate() + 44);
+                       return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                     })()}
+                     {' '}(+14 days overdue)
+                   </span>
                 </button>
+            </div>
+            <div className="mt-3 text-[10px] text-slate-600 bg-white/60 p-2 rounded border border-blue-100">
+              <strong>Tip:</strong> These are typical timings for UK debt recovery. You can edit event descriptions after adding them.
             </div>
          </div>
        ) : (
-          <div className="mb-6 mt-6 flex items-center gap-2 text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-100">
-             <AlertCircle className="w-4 h-4" /> Set an Invoice Date in the previous step to enable Quick Actions.
+          <div className="mb-6 mt-6 flex items-start gap-3 text-xs text-amber-700 bg-amber-50 p-4 rounded-xl border-2 border-amber-200">
+             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+             <div>
+               <p className="font-bold mb-1">Invoice Date Required</p>
+               <p className="text-amber-600">Set an Invoice Date in the previous step to enable Quick Add timeline events based on standard payment terms.</p>
+             </div>
           </div>
        )}
 
