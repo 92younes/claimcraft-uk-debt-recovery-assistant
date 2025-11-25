@@ -108,7 +108,7 @@ export const searchCompaniesHouse = async (query: string): Promise<Partial<Party
 
     const response = await fetch(searchUrl, {
       headers: {
-        'Authorization': API_KEY
+        'Authorization': `Basic ${btoa(API_KEY + ':')}`
       }
     });
 
@@ -131,7 +131,7 @@ export const searchCompaniesHouse = async (query: string): Promise<Partial<Party
       const profileUrl = `${COMPANIES_HOUSE_API}/company/${company.company_number}`;
       const profileResponse = await fetch(profileUrl, {
         headers: {
-          'Authorization': API_KEY
+          'Authorization': `Basic ${btoa(API_KEY + ':')}`
         }
       });
 
