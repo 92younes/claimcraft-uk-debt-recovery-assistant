@@ -48,11 +48,11 @@ enum Step {
 }
 
 // Wizard step definitions for progress indicator
-// Note: ASSESSMENT and QUESTIONS removed as separate steps for better UX
 const WIZARD_STEPS = [
   { number: Step.SOURCE, label: 'Data Source', description: 'Import or enter' },
   { number: Step.DETAILS, label: 'Claim Details', description: 'Parties & amounts' },
   { number: Step.TIMELINE, label: 'Timeline', description: 'Event history' },
+  { number: Step.QUESTIONS, label: 'Consultation', description: 'AI questions' },
   { number: Step.FINAL, label: 'Strategy', description: 'Document type' },
   { number: Step.DRAFT, label: 'Draft', description: 'Edit content' },
   { number: Step.PREVIEW, label: 'Review', description: 'Final check' }
@@ -980,14 +980,11 @@ const App: React.FC = () => {
                 />
                 <div className="flex justify-between items-center max-w-4xl mx-auto">
                     <button
-                        onClick={() => {
-                            setIsChatOpen(true);
-                            handleStartChat();
-                        }}
+                        onClick={() => handleStartChat()}
                         className="text-slate-600 hover:text-slate-900 border-2 border-slate-200 hover:border-slate-300 px-6 py-3 rounded-xl transition-all flex items-center gap-2 font-medium shadow-sm"
                     >
                         <MessageSquareText className="w-4 h-4"/>
-                        Ask AI Questions (Optional)
+                        AI Case Consultation
                     </button>
                     <button
                         onClick={() => setStep(Step.FINAL)}
@@ -999,8 +996,15 @@ const App: React.FC = () => {
             </div>
         );
 
-      // Step.QUESTIONS has been eliminated - chat now available as floating widget throughout wizard
-      // This improves UX by making AI consultation optional and non-blocking
+      case Step.QUESTIONS:
+        return (
+          <ChatInterface
+            messages={claimData.chatHistory}
+            onSendMessage={handleSendMessage}
+            onComplete={() => setStep(Step.FINAL)}
+            isThinking={isProcessing}
+          />
+        );
 
       case Step.FINAL: {
         // Legal Compliance Logic: Check timeline for LBA
@@ -1203,15 +1207,15 @@ const App: React.FC = () => {
                           </p>
 
                           {/* When to use */}
-                          <div className={`text-xs font-medium ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
-                            ⏱ {doc.when}
+                          <div className={`text-xs font-medium flex items-center gap-1 ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
+                            <Calendar className="w-3 h-3" /> {doc.when}
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             {/* Toggle for Advanced Documents */}
@@ -1870,6 +1874,45 @@ const App: React.FC = () => {
             />}
             {view === 'wizard' && (
               <div>
+                {/* Error Banner */}
+                {error && (
+                  <div className="max-w-4xl mx-auto px-4 md:px-0 mb-6 animate-fade-in">
+                    <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-start gap-4">
+                      <AlertCircle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-bold text-red-900 mb-2">Missing Information</h4>
+                        <div className="text-red-800 text-sm whitespace-pre-line mb-4">{error}</div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => {
+                              setError(null);
+                              setStep(Step.DETAILS);
+                            }}
+                            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+                          >
+                            Go to Claim Details
+                          </button>
+                          <button
+                            onClick={() => {
+                              setError(null);
+                              setStep(Step.TIMELINE);
+                            }}
+                            className="bg-white text-red-700 border border-red-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors"
+                          >
+                            Go to Timeline
+                          </button>
+                          <button
+                            onClick={() => setError(null)}
+                            className="text-red-600 hover:text-red-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Progress Indicator - Mobile & Desktop */}
                 <div className="max-w-5xl mx-auto px-4 md:px-0 mb-6">
                   <div className="hidden md:block">

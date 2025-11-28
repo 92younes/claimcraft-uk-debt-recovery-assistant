@@ -34,11 +34,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
         <div className="bg-slate-900 text-white w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-slate-300">
           <Gavel className="w-6 h-6" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 font-serif">Case Consultation</h2>
-        <p className="text-slate-500 text-xs uppercase tracking-widest font-bold mt-1">Confidential • Procedural Guidance</p>
-        <div className="flex items-center justify-center gap-2 mt-2 text-xs text-slate-500">
+        <h2 className="text-2xl font-bold text-slate-900 font-serif">AI Case Consultation</h2>
+        <p className="text-slate-600 text-sm mt-2 max-w-md mx-auto">
+          Answer a few questions to strengthen your claim. The AI will identify gaps in your evidence and help ensure your case is complete.
+        </p>
+        <div className="flex items-center justify-center gap-2 mt-3 text-xs text-slate-500">
           <Sparkles className="w-3 h-3" />
-          <span>Powered by Google Gemini AI</span>
+          <span>Powered by Google Gemini AI • Confidential</span>
         </div>
       </div>
 
@@ -108,11 +110,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
         </form>
         <div className="mt-4 flex justify-between items-center px-2">
            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Press Enter to send</span>
-           <button 
+           <button
              onClick={onComplete}
-             className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-white px-3 py-2 rounded-lg transition-colors duration-200 uppercase tracking-wide border border-transparent hover:border-slate-200"
+             className="flex items-center gap-2 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-lg transition-colors duration-200 shadow-md"
            >
-             Skip to Drafting <ArrowRight className="w-3 h-3" />
+             Continue to Strategy <ArrowRight className="w-4 h-4" />
            </button>
         </div>
       </div>
