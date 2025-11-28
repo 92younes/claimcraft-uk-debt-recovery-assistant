@@ -1024,8 +1024,11 @@ const App: React.FC = () => {
       case Step.FINAL: {
         // Legal Compliance Logic: Check timeline for LBA
         const hasLBA = claimData.timeline.some(e =>
-            e.type === 'chaser' &&
-            (e.description.toLowerCase().includes('letter before action') || e.description.toLowerCase().includes('lba') || e.description.toLowerCase().includes('formal demand'))
+            e.type === 'lba_sent' ||
+            (e.type === 'chaser' &&
+              (e.description.toLowerCase().includes('letter before action') ||
+               e.description.toLowerCase().includes('lba') ||
+               e.description.toLowerCase().includes('formal demand')))
         );
 
         const recommendedDoc = hasLBA ? DocumentType.FORM_N1 : DocumentType.LBA;
