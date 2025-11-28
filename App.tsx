@@ -36,10 +36,10 @@ type ViewState = 'landing' | 'dashboard' | 'wizard' | 'privacy' | 'terms';
 enum Step {
   SOURCE = 1,
   DETAILS = 2,
-  ASSESSMENT = 3,
+  ASSESSMENT = 3,  // DEPRECATED: Not used in flow, kept for enum stability
   TIMELINE = 4,    // Moved before Questions so AI has context
   QUESTIONS = 5,   // Chat / Consultation
-  FINAL = 6,       // Final Review & Doc Selection
+  FINAL = 6,       // Strategy & Doc Selection
   DRAFT = 7,
   PREVIEW = 8
 }
