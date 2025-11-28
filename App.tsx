@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
-import { EligibilityModal } from './components/EligibilityModal';
 import { PartyForm } from './components/PartyForm';
 import { Input, TextArea } from './components/ui/Input';
 import { Tooltip } from './components/ui/Tooltip';
@@ -13,9 +12,7 @@ import { AssessmentReport } from './components/AssessmentReport';
 import { TimelineBuilder } from './components/TimelineBuilder';
 import { EvidenceUpload } from './components/EvidenceUpload';
 import { ChatInterface } from './components/ChatInterface';
-import { FloatingChatWidget } from './components/FloatingChatWidget';
 import { OnboardingModal } from './components/OnboardingModal';
-import { DisclaimerModal } from './components/DisclaimerModal';
 import { StatementOfTruthModal } from './components/StatementOfTruthModal';
 import { InterestRateConfirmModal } from './components/InterestRateConfirmModal';
 import { LitigantInPersonModal } from './components/LitigantInPersonModal';
@@ -63,8 +60,6 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('landing');
   const [dashboardClaims, setDashboardClaims] = useState<ClaimState[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false); // Combined disclaimer + eligibility
-  const [showEligibility, setShowEligibility] = useState(false); // Deprecated - kept for compatibility
-  const [showDisclaimer, setShowDisclaimer] = useState(false); // Deprecated - kept for compatibility
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Wizard State
@@ -81,7 +76,6 @@ const App: React.FC = () => {
 
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false); // For AI flow in Step 2
-  const [isChatOpen, setIsChatOpen] = useState(false); // Floating chat widget toggle
 
   // Accounting Integration State
   const [accountingConnection, setAccountingConnection] = useState<AccountingConnection | null>(null);
@@ -222,32 +216,23 @@ const App: React.FC = () => {
     // User declined, stay on landing/dashboard
   };
 
-  // Deprecated handlers (kept for backward compatibility with old modals)
-  const handleDisclaimerAccepted = () => {
-    setShowDisclaimer(false);
-    setShowEligibility(true);
-  };
-
-  const handleDisclaimerDeclined = () => {
-    setShowDisclaimer(false);
-  };
-
-  const handleEligibilityPassed = () => {
-    setShowEligibility(false);
-    setClaimData({ ...INITIAL_STATE, id: Math.random().toString(36).substr(2, 9) });
-    setStep(Step.SOURCE);
-    setIsEditingAnalysis(false);
-    setView('wizard');
-  };
-
   const handleResumeClaim = (claim: ClaimState) => {
     setClaimData(claim);
-    // Heuristic to jump to correct step
+    // Smart heuristic to jump to the correct step based on claim completeness
     if (claim.status === 'sent') {
       setStep(Step.PREVIEW);
       setIsFinalized(true);
     } else if (claim.generated) {
       setStep(Step.DRAFT);
+    } else if (!claim.claimant.name || !claim.defendant.name || !claim.invoice.totalAmount) {
+      // Missing essential party/invoice details
+      setStep(Step.DETAILS);
+    } else if (claim.timeline.length < 2) {
+      // Need at least invoice + one other event
+      setStep(Step.TIMELINE);
+    } else if (claim.chatHistory.length > 0) {
+      // Has started consultation, continue there
+      setStep(Step.QUESTIONS);
     } else {
       setStep(Step.FINAL);
     }
@@ -958,9 +943,6 @@ const App: React.FC = () => {
             );
         }
 
-      // Step.ASSESSMENT has been eliminated - assessment now shown inline in Step.DETAILS
-      // This improves UX by reducing wizard steps from 8 to 7 and eliminating a passive step
-
       case Step.TIMELINE:
         return (
             <div className="space-y-8 py-10">
@@ -978,6 +960,21 @@ const App: React.FC = () => {
                     onChange={updateTimeline}
                     invoiceDate={claimData.invoice.dateIssued}
                 />
+
+                {/* Timeline validation warning */}
+                {claimData.timeline.length < 2 && (
+                  <div className="max-w-4xl mx-auto bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-amber-900 text-sm">Timeline Incomplete</h4>
+                      <p className="text-amber-800 text-sm mt-1">
+                        A strong claim needs at least the invoice date and one follow-up action (chaser email, phone call, or formal reminder).
+                        This demonstrates you made reasonable efforts to recover the debt before legal action.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center max-w-4xl mx-auto">
                     <button
                         onClick={() => handleStartChat()}
@@ -988,7 +985,8 @@ const App: React.FC = () => {
                     </button>
                     <button
                         onClick={() => setStep(Step.FINAL)}
-                        className="bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-slate-800 transition-all flex items-center gap-2 font-medium shadow-lg"
+                        disabled={claimData.timeline.length < 2}
+                        className="bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all flex items-center gap-2 font-medium shadow-lg"
                     >
                         Continue to Strategy <ArrowRight className="w-4 h-4"/>
                     </button>
@@ -1931,17 +1929,14 @@ const App: React.FC = () => {
             )}
          </div>
       </main>
-      {/* Phase 2: Combined Onboarding Modal (Disclaimer + Eligibility) */}
+      {/* Onboarding Modal (Disclaimer + Eligibility) */}
       <OnboardingModal
         isOpen={showOnboarding}
         onComplete={handleOnboardingComplete}
         onDecline={handleOnboardingDecline}
       />
 
-      {/* Deprecated: Old separate modals kept for backward compatibility */}
-      <DisclaimerModal isOpen={showDisclaimer} onAccept={handleDisclaimerAccepted} onDecline={handleDisclaimerDeclined} />
       <CsvImportModal isOpen={showCsvModal} onClose={() => setShowCsvModal(false)} onImport={handleBulkImport} />
-      <EligibilityModal isOpen={showEligibility} onClose={() => setShowEligibility(false)} onEligible={handleEligibilityPassed} />
       <AccountingIntegration
         isOpen={showAccountingModal}
         onClose={() => setShowAccountingModal(false)}
@@ -2025,17 +2020,6 @@ const App: React.FC = () => {
           'Court Document'
         }
       />
-
-      {/* Floating Chat Widget - Available throughout wizard */}
-      {view === 'wizard' && (
-        <FloatingChatWidget
-          messages={claimData.chatHistory}
-          onSendMessage={handleSendMessage}
-          isThinking={isProcessing}
-          isOpen={isChatOpen}
-          onToggle={() => setIsChatOpen(!isChatOpen)}
-        />
-      )}
     </div>
   );
 };
