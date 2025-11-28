@@ -671,6 +671,23 @@ const App: React.FC = () => {
       errors.push("At least one timeline event is required");
     }
 
+    // Check for LBA requirement on court documents (Pre-Action Protocol compliance)
+    const courtDocuments = [
+      DocumentType.FORM_N1,
+      DocumentType.DEFAULT_JUDGMENT,
+      DocumentType.DIRECTIONS_QUESTIONNAIRE,
+      DocumentType.DEFENCE_RESPONSE,
+      DocumentType.TRIAL_BUNDLE,
+      DocumentType.SKELETON_ARGUMENT
+    ];
+
+    if (courtDocuments.includes(data.selectedDocType)) {
+      const hasLBA = data.timeline?.some(event => event.type === 'lba_sent');
+      if (!hasLBA) {
+        errors.push("Letter Before Action (LBA) required before court proceedings - add an LBA event to your timeline or generate an LBA document first");
+      }
+    }
+
     return {
       isValid: errors.length === 0,
       errors

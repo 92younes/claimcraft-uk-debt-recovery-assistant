@@ -88,7 +88,7 @@ export interface GeneratedContent {
 export interface TimelineEvent {
   date: string;
   description: string;
-  type: 'contract' | 'invoice' | 'payment_due' | 'chaser' | 'communication';
+  type: 'contract' | 'service_delivered' | 'invoice' | 'payment_due' | 'part_payment' | 'chaser' | 'lba_sent' | 'acknowledgment' | 'communication';
 }
 
 export interface EvidenceFile {
