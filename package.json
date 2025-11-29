@@ -6,12 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server/index.js",
+    "dev:full": "concurrently \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@google/genai": "^1.30.0",
     "@nangohq/frontend": "^0.69.14",
+    "@nangohq/node": "^0.46.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
     "lucide-react": "^0.554.0",
     "pdf-lib": "^1.17.1",
     "react": "^19.2.0",
@@ -20,6 +26,7 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
