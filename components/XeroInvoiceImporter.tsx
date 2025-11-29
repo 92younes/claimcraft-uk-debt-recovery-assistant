@@ -60,7 +60,10 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
       const overdueInvoices = XeroPuller.filterOverdueInvoices(allInvoices);
 
       const rows: InvoiceRow[] = overdueInvoices.map(invoice => {
-        const interest = XeroPuller.calculateInterest(invoice.Total, invoice.DueDate);
+        // Use AmountDue (outstanding balance) for interest calculation, not Total
+        // This is consistent with xeroPuller.ts transformToClaim()
+        const principal = invoice.AmountDue > 0 ? invoice.AmountDue : invoice.Total;
+        const interest = XeroPuller.calculateInterest(principal, invoice.DueDate);
         return {
           invoice,
           daysOverdue: interest.daysOverdue,

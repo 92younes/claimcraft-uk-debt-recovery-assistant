@@ -297,9 +297,26 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
             })}
           </div>
 
+          {/* Deprecation Warning */}
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
+            <h4 className="text-sm font-bold text-amber-900 mb-2">⚠️ Migration Required by July 31, 2025</h4>
+            <p className="text-xs text-amber-800 mb-2">
+              Nango is deprecating public key authentication. The current setup will stop working on July 31, 2025.
+              A backend server will be required to generate session tokens.
+            </p>
+            <a
+              href="https://docs.nango.dev/guides/api-authorization/public-key-deprecation"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-amber-700 underline hover:text-amber-900"
+            >
+              View migration guide →
+            </a>
+          </div>
+
           {/* Setup Instructions */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="text-sm font-bold text-blue-900 mb-2">⚙️ Setup Requirements</h4>
+            <h4 className="text-sm font-bold text-blue-900 mb-2">⚙️ Current Setup (works until July 2025)</h4>
             <ul className="space-y-1 text-xs text-blue-800">
               <li>• Nango account required (free at <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a>)</li>
               <li>• Configure each provider in your Nango dashboard with integration IDs: xero, quickbooks, freeagent, sage</li>
