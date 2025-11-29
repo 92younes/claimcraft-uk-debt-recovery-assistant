@@ -4,14 +4,15 @@
  * Handles secure OAuth flows and API calls to accounting systems via Nango.
  * Supports: Xero, QuickBooks, FreeAgent, Sage
  *
- * This implementation uses session tokens from a backend server (the recommended approach).
+ * This implementation uses session tokens from a backend server.
  * The backend server runs on port 3001 and handles token generation.
+ *
+ * IMPORTANT: The backend server is REQUIRED. There is no fallback.
  *
  * Setup:
  * 1. Add NANGO_SECRET_KEY to your .env file
- * 2. Run the backend: npm run server
- * 3. Run the frontend: npm run dev
- * Or run both: npm run dev:full
+ * 2. Run both frontend and backend: npm run dev:full
+ *    (Or separately: npm run server + npm run dev)
  */
 
 import Nango from '@nangohq/frontend';
@@ -119,19 +120,19 @@ export class NangoClient {
   }
 
   private static async _doInitialize(): Promise<void> {
+    // First, check if backend is available
+    const healthCheck = await fetch(`${API_BASE_URL}/api/health`).catch(() => null);
+
+    if (!healthCheck || !healthCheck.ok) {
+      console.error('❌ Backend server not available.');
+      console.error('Please run the backend server: npm run server');
+      console.error('Or run both frontend and backend together: npm run dev:full');
+      throw new Error(
+        'Backend server not available. Please run: npm run dev:full'
+      );
+    }
+
     try {
-      // First, check if backend is available
-      const healthCheck = await fetch(`${API_BASE_URL}/api/health`).catch(() => null);
-
-      if (!healthCheck || !healthCheck.ok) {
-        console.warn('⚠️ Backend server not available. Please run: npm run server');
-        console.warn('⚠️ Falling back to deprecated publicKey method...');
-
-        // Fallback to deprecated public key method
-        this.initializeWithPublicKey();
-        return;
-      }
-
       // Fetch session token from backend
       const { token, expiresAt } = await this.fetchSessionToken();
 
@@ -143,41 +144,10 @@ export class NangoClient {
       console.log('✅ Nango client initialized with session token');
 
     } catch (error) {
-      console.error('❌ Failed to initialize Nango with session token:', error);
-
-      // Fallback to deprecated public key method
-      console.warn('⚠️ Falling back to deprecated publicKey method...');
-      this.initializeWithPublicKey();
-    }
-  }
-
-  /**
-   * Fallback initialization using public key (deprecated)
-   * @deprecated Will stop working on July 31, 2025
-   */
-  private static initializeWithPublicKey(): void {
-    const publicKey = import.meta.env.VITE_NANGO_PUBLIC_KEY;
-
-    if (!publicKey) {
-      console.error('❌ Neither backend nor VITE_NANGO_PUBLIC_KEY available.');
-      console.error('Please either:');
-      console.error('  1. Run the backend server: npm run server');
-      console.error('  2. Or add VITE_NANGO_PUBLIC_KEY to .env (deprecated)');
-      throw new Error('Nango initialization failed. No authentication method available.');
-    }
-
-    console.warn(
-      '⚠️ DEPRECATION WARNING: Using publicKey authentication.\n' +
-      'This will stop working on July 31, 2025.\n' +
-      'Please run the backend server instead: npm run server'
-    );
-
-    try {
-      this.nango = new Nango({ publicKey });
-      console.log('✅ Nango client initialized with publicKey (deprecated)');
-    } catch (error) {
-      console.error('❌ Failed to initialize Nango with publicKey:', error);
-      throw new Error('Nango initialization failed.');
+      console.error('❌ Failed to initialize Nango:', error);
+      throw new Error(
+        `Failed to initialize Nango: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
