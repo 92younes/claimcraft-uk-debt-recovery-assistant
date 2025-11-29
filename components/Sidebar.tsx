@@ -1,16 +1,17 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Upload, 
-  SearchCheck, 
-  Scale, 
-  CalendarClock, 
-  MessageSquareText, 
-  FileSignature, 
+import {
+  LayoutDashboard,
+  Upload,
+  SearchCheck,
+  Scale,
+  CalendarClock,
+  MessageSquareText,
+  FileSignature,
   CheckCircle2,
   ShieldAlert,
   FolderOpen,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -22,7 +23,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboardClick, onCloseMobile, onStepSelect }) => {
-  
+
   // Step IDs must match App.tsx Step enum values (ASSESSMENT=3 is skipped in flow)
   const steps = [
     { id: 1, label: 'Evidence Source', icon: Upload },            // Step.SOURCE
@@ -35,20 +36,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
   ];
 
   return (
-    <aside className="w-full h-full bg-slate-900 text-white flex flex-col border-r border-slate-800 shadow-2xl no-print">
+    <aside className="w-full h-full bg-dark-900 text-white flex flex-col border-r border-dark-700/50 shadow-dark-xl no-print">
       {/* Logo Area */}
-      <div className="h-20 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950/50 flex-shrink-0">
+      <div className="h-20 flex items-center justify-between px-6 border-b border-dark-700/50 bg-dark-900/80 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg shadow-[0_0_15px_rgba(37,99,235,0.5)]">
+          <div className="bg-gradient-to-br from-violet-500 to-violet-600 p-2.5 rounded-xl shadow-glow">
              <Scale className="w-5 h-5 text-white" />
           </div>
           <div>
-             <h1 className="text-lg font-bold font-serif tracking-wide">ClaimCraft</h1>
-             <span className="text-[10px] text-slate-400 uppercase tracking-widest">Legal OS</span>
+             <h1 className="text-lg font-bold font-serif tracking-wide text-white">ClaimCraft</h1>
+             <span className="text-[10px] text-slate-500 uppercase tracking-widest">Legal Assistant</span>
           </div>
         </div>
         {onCloseMobile && (
-          <button onClick={onCloseMobile} className="md:hidden text-slate-400 hover:text-white transition-colors duration-200 p-2">
+          <button onClick={onCloseMobile} className="md:hidden text-slate-400 hover:text-white transition-colors duration-200 p-2 hover:bg-dark-700 rounded-lg">
             <X className="w-6 h-6" />
           </button>
         )}
@@ -56,14 +57,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
 
       {/* User Profile Snippet */}
       <div className="px-6 py-6 flex-shrink-0">
-         <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-600 to-slate-500 flex items-center justify-center text-white font-bold text-xs shadow-lg">
+         <div className="flex items-center gap-3 p-3 rounded-xl bg-dark-800 border border-dark-600/50 hover:border-violet-500/30 transition-colors duration-300">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm shadow-glow-sm">
                G
             </div>
-            <div className="overflow-hidden">
-               <p className="text-sm font-bold truncate">Guest User</p>
-               <p className="text-xs text-slate-400 truncate">Local Session</p>
+            <div className="overflow-hidden flex-1">
+               <p className="text-sm font-semibold truncate text-slate-100">Guest User</p>
+               <p className="text-xs text-slate-500 truncate">Local Session</p>
             </div>
+            <Sparkles className="w-4 h-4 text-violet-400" />
          </div>
       </div>
 
@@ -71,36 +73,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
       <nav className="flex-1 px-4 py-2 overflow-y-auto space-y-1">
          {view === 'dashboard' ? (
              <>
-                <p className="px-4 text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Main Menu</p>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-600 text-white shadow-lg shadow-blue-900/20 cursor-pointer">
+                <p className="px-4 text-xs font-semibold text-slate-500 uppercase mb-3 tracking-wider">Main Menu</p>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-glow cursor-pointer">
                     <LayoutDashboard className="w-4 h-4 text-white" />
                     <span className="text-sm font-bold">Dashboard</span>
                 </div>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800/50 cursor-pointer transition-colors duration-200">
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-dark-700 hover:text-white cursor-pointer transition-all duration-200">
                     <FolderOpen className="w-4 h-4" />
                     <span className="text-sm font-medium">Archived Claims</span>
                 </div>
              </>
          ) : (
              <>
-               <div 
+               <div
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer transition-colors duration-200 mb-6 border border-dashed border-slate-700"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-dark-700 cursor-pointer transition-all duration-200 mb-6 border border-dashed border-dark-600 hover:border-violet-500/50"
                >
                    <LayoutDashboard className="w-4 h-4" />
                    <span className="text-sm font-medium">Back to Dashboard</span>
                </div>
-               
-               <p className="px-4 text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Current Workflow</p>
+
+               <p className="px-4 text-xs font-semibold text-slate-500 uppercase mb-3 tracking-wider">Current Workflow</p>
                {steps.map((step) => {
                   const Icon = step.icon;
                   const isActive = currentStep === step.id;
                   const isCompleted = currentStep > step.id;
                   // Allow navigation to previous steps or current step
                   const canClick = isCompleted || isActive || (onStepSelect && step.id < currentStep);
-                  
+
                   return (
-                     <div 
+                     <div
                        key={step.id}
                        onClick={() => {
                            if (canClick && onStepSelect) {
@@ -108,17 +110,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
                                onCloseMobile?.();
                            }
                        }}
-                       className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 ${
-                          isActive 
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20 translate-x-1' 
+                       className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
+                          isActive
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-glow translate-x-1'
                             : canClick
-                              ? 'text-slate-300 hover:bg-slate-800/50 cursor-pointer hover:text-white'
-                              : 'text-slate-600 opacity-50 cursor-not-allowed'
+                              ? 'text-slate-300 hover:bg-dark-700 cursor-pointer hover:text-white'
+                              : 'text-slate-600 opacity-40 cursor-not-allowed'
                        }`}
                      >
                         <Icon className={`w-4 h-4 ${isActive ? 'text-white' : isCompleted ? 'text-green-400' : 'text-slate-600'}`} />
                         <span className={`text-sm font-medium ${isActive ? 'font-bold' : ''}`}>{step.label}</span>
-                        {isCompleted && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]"></div>}
+                        {isCompleted && <div className="ml-auto w-2 h-2 rounded-full bg-green-400 shadow-glow-success"></div>}
                      </div>
                   );
                })}
@@ -127,8 +129,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboard
       </nav>
 
       {/* Bottom Actions */}
-      <div className="p-4 border-t border-slate-800 bg-slate-950/30 flex-shrink-0">
-         <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors duration-200">
+      <div className="p-4 border-t border-dark-700/50 bg-dark-900/50 flex-shrink-0">
+         <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-500 hover:text-slate-300 hover:bg-dark-700 rounded-xl transition-all duration-200">
             <ShieldAlert className="w-4 h-4" />
             <span>Legal Disclaimer</span>
          </button>

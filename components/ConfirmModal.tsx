@@ -27,18 +27,18 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   const variantStyles = {
     danger: {
       header: 'bg-gradient-to-r from-red-600 to-red-700',
-      icon: 'bg-red-100 text-red-600',
-      button: 'bg-red-600 hover:bg-red-700'
+      icon: 'bg-red-500/20 text-red-400',
+      button: 'bg-red-600 hover:bg-red-500'
     },
     warning: {
       header: 'bg-gradient-to-r from-amber-600 to-amber-700',
-      icon: 'bg-amber-100 text-amber-600',
-      button: 'bg-amber-600 hover:bg-amber-700'
+      icon: 'bg-amber-500/20 text-amber-400',
+      button: 'bg-amber-600 hover:bg-amber-500'
     },
     info: {
-      header: 'bg-gradient-to-r from-blue-600 to-blue-700',
-      icon: 'bg-blue-100 text-blue-600',
-      button: 'bg-blue-600 hover:bg-blue-700'
+      header: 'bg-gradient-to-r from-violet-600 to-violet-700',
+      icon: 'bg-violet-500/20 text-violet-400',
+      button: 'bg-violet-600 hover:bg-violet-500'
     }
   };
 
@@ -50,8 +50,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-dark-700 rounded-2xl shadow-dark-xl max-w-md w-full overflow-hidden animate-scale-in border border-dark-600">
         {/* Header */}
         <div className={`${styles.header} text-white p-6 flex items-center justify-between`}>
           <div className="flex items-center gap-3">
@@ -71,20 +71,20 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
         {/* Content */}
         <div className="p-6">
-          <p className="text-slate-700 leading-relaxed">{message}</p>
+          <p className="text-slate-300 leading-relaxed">{message}</p>
         </div>
 
         {/* Footer */}
-        <div className="bg-slate-50 border-t border-slate-200 p-6 flex gap-3">
+        <div className="bg-dark-800 border-t border-dark-600 p-6 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
+            className="flex-1 px-6 py-3 bg-dark-600 border border-dark-500 hover:bg-dark-500 text-slate-300 rounded-xl font-medium transition-colors duration-200"
           >
             {cancelText}
           </button>
           <button
             onClick={handleConfirm}
-            className={`flex-1 px-6 py-3 ${styles.button} text-white rounded-lg font-bold transition-colors duration-200 shadow-md`}
+            className={`flex-1 px-6 py-3 ${styles.button} text-white rounded-xl font-bold transition-colors duration-200 shadow-md`}
           >
             {confirmText}
           </button>

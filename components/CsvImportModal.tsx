@@ -217,85 +217,85 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        
-        <div className="bg-slate-900 p-5 flex justify-between items-center text-white">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-dark-700 rounded-2xl shadow-dark-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-dark-600">
+
+        <div className="bg-gradient-to-r from-green-600 to-green-700 p-5 flex justify-between items-center text-white">
             <div className="flex items-center gap-3">
-                <div className="bg-slate-800 p-2 rounded-lg">
-                    <FileSpreadsheet className="w-6 h-6 text-green-400" />
+                <div className="bg-white/20 p-2 rounded-lg">
+                    <FileSpreadsheet className="w-6 h-6 text-white" />
                 </div>
                 <div>
                     <h2 className="font-bold text-xl">Import Claims (CSV)</h2>
-                    <p className="text-xs text-slate-400">Bulk create drafts from spreadsheet</p>
+                    <p className="text-xs text-green-100">Bulk create drafts from spreadsheet</p>
                 </div>
             </div>
-            <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-6 h-6" /></button>
+            <button onClick={onClose} className="text-white/70 hover:text-white"><X className="w-6 h-6" /></button>
         </div>
 
         <div className="p-8 overflow-y-auto">
             {!parsedClaims.length ? (
                 <>
-                    <div 
-                        className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200 mb-6 ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'}`}
+                    <div
+                        className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200 mb-6 ${isDragging ? 'border-violet-500 bg-violet-500/10' : 'border-dark-500 hover:border-violet-500/50 hover:bg-dark-600'}`}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
                     >
-                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+                        <div className="w-16 h-16 bg-violet-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-violet-400">
                             {parsing ? <Loader2 className="w-8 h-8 animate-spin" /> : <Upload className="w-8 h-8" />}
                         </div>
-                        <p className="text-lg font-bold text-slate-800 mb-1">
+                        <p className="text-lg font-bold text-white mb-1">
                             {parsing ? "Parsing CSV..." : "Drag & Drop CSV file here"}
                         </p>
-                        <p className="text-sm text-slate-500 mb-6">or click to browse your computer</p>
-                        <input 
-                            type="file" 
-                            accept=".csv" 
-                            className="hidden" 
-                            ref={fileInputRef} 
-                            onChange={handleFileSelect} 
+                        <p className="text-sm text-slate-400 mb-6">or click to browse your computer</p>
+                        <input
+                            type="file"
+                            accept=".csv"
+                            className="hidden"
+                            ref={fileInputRef}
+                            onChange={handleFileSelect}
                             disabled={parsing}
                         />
-                        <button 
+                        <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={parsing}
-                            className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-800 transition-colors duration-200"
+                            className="px-6 py-2 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg font-bold text-sm hover:from-violet-500 hover:to-violet-400 transition-all duration-200 shadow-glow-sm"
                         >
                             Select File
                         </button>
                     </div>
 
                     {error && (
-                        <div className="flex items-center gap-3 bg-red-50 text-red-700 p-4 rounded-lg border border-red-100 mb-6">
+                        <div className="flex items-center gap-3 bg-red-500/10 text-red-400 p-4 rounded-lg border border-red-500/30 mb-6">
                             <AlertCircle className="w-5 h-5 flex-shrink-0" />
                             <p className="text-sm">{error}</p>
                         </div>
                     )}
 
-                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                        <h3 className="font-bold text-sm text-slate-700 mb-2 flex items-center gap-2">
-                            <Download className="w-4 h-4" /> Need a template?
+                    <div className="bg-dark-600 rounded-xl p-4 border border-dark-500">
+                        <h3 className="font-bold text-sm text-white mb-2 flex items-center gap-2">
+                            <Download className="w-4 h-4 text-violet-400" /> Need a template?
                         </h3>
-                        <p className="text-xs text-slate-500 mb-3">Download our standard CSV template to ensure your columns are mapped correctly.</p>
-                        <button onClick={downloadTemplate} className="text-blue-600 text-xs font-bold hover:underline">
+                        <p className="text-xs text-slate-400 mb-3">Download our standard CSV template to ensure your columns are mapped correctly.</p>
+                        <button onClick={downloadTemplate} className="text-violet-400 text-xs font-bold hover:text-violet-300 transition-colors">
                             Download Template.csv
                         </button>
                     </div>
                 </>
             ) : (
                 <div className="text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
+                    <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-green-400">
                         <Check className="w-8 h-8" />
                     </div>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">Ready to Import</h3>
-                    <p className="text-slate-600 mb-8">
-                        We successfully parsed <strong className="text-slate-900">{parsedClaims.length}</strong> claims from your file.
+                    <h3 className="text-2xl font-bold text-white mb-2">Ready to Import</h3>
+                    <p className="text-slate-400 mb-8">
+                        We successfully parsed <strong className="text-white">{parsedClaims.length}</strong> claims from your file.
                     </p>
-                    
-                    <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 mb-8 max-h-[200px] overflow-y-auto text-left">
-                        <table className="w-full text-xs text-slate-600">
-                            <thead className="border-b border-slate-200 font-bold text-slate-800">
+
+                    <div className="bg-dark-600 rounded-lg p-4 border border-dark-500 mb-8 max-h-[200px] overflow-y-auto text-left">
+                        <table className="w-full text-xs text-slate-300">
+                            <thead className="border-b border-dark-500 font-bold text-white">
                                 <tr>
                                     <th className="pb-2 pl-2">Invoice</th>
                                     <th className="pb-2">Debtor</th>
@@ -304,10 +304,10 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                             </thead>
                             <tbody>
                                 {parsedClaims.map((c, i) => (
-                                    <tr key={i} className="border-b border-slate-100 last:border-0">
+                                    <tr key={i} className="border-b border-dark-500 last:border-0">
                                         <td className="py-2 pl-2 font-mono">{c.invoice.invoiceNumber}</td>
                                         <td className="py-2">{c.defendant.name}</td>
-                                        <td className="py-2 text-right pr-2 font-bold">£{c.invoice.totalAmount.toFixed(2)}</td>
+                                        <td className="py-2 text-right pr-2 font-bold text-violet-400">£{c.invoice.totalAmount.toFixed(2)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -315,15 +315,15 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                     </div>
 
                     <div className="flex gap-3">
-                        <button 
+                        <button
                             onClick={() => { setParsedClaims([]); setError(null); }}
-                            className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors duration-200"
+                            className="flex-1 py-3 bg-dark-600 border border-dark-500 text-slate-300 font-bold rounded-xl hover:bg-dark-500 transition-colors duration-200"
                         >
                             Cancel
                         </button>
-                        <button 
+                        <button
                             onClick={handleFinalize}
-                            className="flex-1 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors duration-200 shadow-lg"
+                            className="flex-1 py-3 bg-gradient-to-r from-violet-600 to-violet-500 text-white font-bold rounded-xl hover:from-violet-500 hover:to-violet-400 transition-all duration-200 shadow-glow"
                         >
                             Import All
                         </button>

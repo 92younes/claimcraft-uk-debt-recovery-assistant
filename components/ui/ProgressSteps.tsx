@@ -39,10 +39,10 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
                 {/* Step Circle */}
                 <div
                   className={`
-                    relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-200
-                    ${completed ? 'bg-green-600 border-green-600' :
-                      current ? 'bg-blue-600 border-blue-600' :
-                      'bg-white border-slate-300'}
+                    relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300
+                    ${completed ? 'bg-green-500 border-green-500 shadow-glow-success' :
+                      current ? 'bg-gradient-to-br from-violet-500 to-violet-600 border-violet-500 shadow-glow' :
+                      'bg-dark-700 border-dark-600'}
                   `}
                   aria-current={current ? 'step' : undefined}
                 >
@@ -59,7 +59,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
                 <span
                   className={`
                     mt-2 text-xs font-medium text-center
-                    ${completed || current ? 'text-slate-900' : 'text-slate-500'}
+                    ${completed ? 'text-green-400' : current ? 'text-white' : 'text-slate-500'}
                   `}
                 >
                   {step.label}
@@ -67,7 +67,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
 
                 {/* Optional Description */}
                 {step.description && (
-                  <span className="mt-1 text-[10px] text-slate-400 text-center max-w-[100px]">
+                  <span className="mt-1 text-[10px] text-slate-500 text-center max-w-[100px]">
                     {step.description}
                   </span>
                 )}
@@ -78,7 +78,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
                 <div
                   className={`
                     absolute top-5 left-[calc(50%+20px)] w-[calc(100%-40px)] h-0.5 -translate-y-1/2
-                    ${completed ? 'bg-green-600' : 'bg-slate-300'}
+                    ${completed ? 'bg-green-500' : 'bg-dark-600'}
                   `}
                   aria-hidden="true"
                 />
@@ -102,7 +102,7 @@ export const ProgressStepsCompact: React.FC<ProgressStepsProps> = ({
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-slate-700">
+        <span className="text-sm font-medium text-slate-300">
           Step {currentStep} of {steps.length}
         </span>
         <span className="text-xs text-slate-500">
@@ -111,9 +111,9 @@ export const ProgressStepsCompact: React.FC<ProgressStepsProps> = ({
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+      <div className="w-full bg-dark-700 rounded-full h-2 overflow-hidden">
         <div
-          className="bg-blue-600 h-full transition-all duration-300 ease-out"
+          className="bg-gradient-to-r from-violet-600 to-violet-500 h-full transition-all duration-300 ease-out shadow-glow-sm"
           style={{ width: `${progress}%` }}
           role="progressbar"
           aria-valuenow={progress}
@@ -124,7 +124,7 @@ export const ProgressStepsCompact: React.FC<ProgressStepsProps> = ({
       </div>
 
       {currentStepData && (
-        <p className="mt-2 text-xs text-slate-600 font-medium">
+        <p className="mt-2 text-xs text-violet-400 font-medium">
           {currentStepData.label}
         </p>
       )}

@@ -6,98 +6,208 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClaimCraft - Small Claims Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              serif: ['Crimson Text', 'Georgia', 'serif'],
+              sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+              serif: ['Instrument Serif', 'Georgia', 'serif'],
             },
             colors: {
-              slate: {
-                850: '#1e293b', 
+              // Dark theme backgrounds
+              dark: {
+                900: '#0c0a1d', // Primary background (deep purple-black)
+                800: '#13102a', // Secondary/elevated surfaces
+                700: '#1e1a3a', // Tertiary (cards, inputs)
+                600: '#2a2550', // Modals, dropdowns
+                500: '#352f5e', // Hover states
+              },
+              // Accent colors
+              accent: {
+                DEFAULT: '#8b5cf6', // violet-500
+                light: '#a78bfa',   // violet-400
+                dark: '#7c3aed',    // violet-600
+                glow: 'rgba(139, 92, 246, 0.4)',
+              },
+              secondary: {
+                DEFAULT: '#06b6d4', // cyan-500
+                light: '#22d3ee',   // cyan-400
               }
             },
             animation: {
               blob: "blob 7s infinite",
+              glow: "glow 2s ease-in-out infinite alternate",
+              float: "float 6s ease-in-out infinite",
+              "pulse-slow": "pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite",
             },
             keyframes: {
               blob: {
-                "0%": {
-                  transform: "translate(0px, 0px) scale(1)",
-                },
-                "33%": {
-                  transform: "translate(30px, -50px) scale(1.1)",
-                },
-                "66%": {
-                  transform: "translate(-20px, 20px) scale(0.9)",
-                },
-                "100%": {
-                  transform: "translate(0px, 0px) scale(1)",
-                },
+                "0%": { transform: "translate(0px, 0px) scale(1)" },
+                "33%": { transform: "translate(30px, -50px) scale(1.1)" },
+                "66%": { transform: "translate(-20px, 20px) scale(0.9)" },
+                "100%": { transform: "translate(0px, 0px) scale(1)" },
               },
+              glow: {
+                "0%": { boxShadow: "0 0 20px rgba(139, 92, 246, 0.3)" },
+                "100%": { boxShadow: "0 0 30px rgba(139, 92, 246, 0.6)" },
+              },
+              float: {
+                "0%, 100%": { transform: "translateY(0px)" },
+                "50%": { transform: "translateY(-10px)" },
+              },
+            },
+            boxShadow: {
+              'glow-sm': '0 0 10px rgba(139, 92, 246, 0.3)',
+              'glow': '0 0 20px rgba(139, 92, 246, 0.4)',
+              'glow-lg': '0 0 30px rgba(139, 92, 246, 0.5)',
+              'glow-success': '0 0 15px rgba(34, 197, 94, 0.3)',
+              'dark-sm': '0 1px 2px rgba(0, 0, 0, 0.4)',
+              'dark-md': '0 4px 6px rgba(0, 0, 0, 0.5)',
+              'dark-lg': '0 10px 15px rgba(0, 0, 0, 0.6)',
+              'dark-xl': '0 20px 25px rgba(0, 0, 0, 0.7)',
             },
           },
         },
       }
     </script>
     <style>
-      body {
-        background-color: #f8fafc;
+      /* CSS Custom Properties for theming */
+      :root {
+        --bg-primary: #0c0a1d;
+        --bg-secondary: #13102a;
+        --bg-tertiary: #1e1a3a;
+        --bg-elevated: #2a2550;
+        --accent: #8b5cf6;
+        --accent-light: #a78bfa;
+        --accent-dark: #7c3aed;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border-subtle: rgba(139, 92, 246, 0.2);
       }
+
+      body {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+      }
+
+      /* Smooth scrolling */
+      html {
+        scroll-behavior: smooth;
+      }
+
+      /* Custom scrollbar for dark theme */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--bg-elevated);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--accent);
+      }
+
+      /* Animations */
       .animate-fade-in {
         animation: fadeIn 0.6s ease-out forwards;
       }
-      .animation-delay-2000 {
-        animation-delay: 2s;
+      .animate-fade-in-up {
+        animation: fadeInUp 0.6s ease-out forwards;
       }
-      .animation-delay-4000 {
-        animation-delay: 4s;
-      }
+      .animation-delay-100 { animation-delay: 0.1s; }
+      .animation-delay-200 { animation-delay: 0.2s; }
+      .animation-delay-300 { animation-delay: 0.3s; }
+      .animation-delay-400 { animation-delay: 0.4s; }
+      .animation-delay-2000 { animation-delay: 2s; }
+      .animation-delay-4000 { animation-delay: 4s; }
+
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
       }
 
-      /* Slide up animation (from CookieConsent) */
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Slide up animation */
       .animate-slide-up {
         animation: slideUp 0.4s ease-out;
       }
       @keyframes slideUp {
-        from {
-          opacity: 0;
-          transform: translateY(100px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(100px); }
+        to { opacity: 1; transform: translateY(0); }
       }
 
-      /* Shimmer loading animation */
+      /* Shimmer loading animation - dark theme */
       @keyframes shimmer {
-        0% {
-          background-position: -1000px 0;
-        }
-        100% {
-          background-position: 1000px 0;
-        }
+        0% { background-position: -1000px 0; }
+        100% { background-position: 1000px 0; }
       }
 
       .shimmer {
         animation: shimmer 2s infinite linear;
         background: linear-gradient(
           to right,
-          #f0f0f0 0%,
-          #e0e0e0 20%,
-          #f0f0f0 40%,
-          #f0f0f0 100%
+          #1e1a3a 0%,
+          #2a2550 20%,
+          #1e1a3a 40%,
+          #1e1a3a 100%
         );
         background-size: 1000px 100%;
       }
 
+      /* Gradient text utility */
+      .text-gradient {
+        background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 50%, #7c3aed 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      /* Glass effect */
+      .glass {
+        background: rgba(19, 16, 42, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+
+      /* Glow effects */
+      .glow-violet {
+        box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+      }
+      .glow-violet-lg {
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+      }
+
+      /* Button hover glow */
+      .btn-glow {
+        transition: all 0.3s ease;
+      }
+      .btn-glow:hover {
+        box-shadow: 0 0 25px rgba(139, 92, 246, 0.5);
+        transform: translateY(-2px);
+      }
+
+      /* Card hover effect */
+      .card-hover {
+        transition: all 0.3s ease;
+      }
+      .card-hover:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        border-color: rgba(139, 92, 246, 0.3);
+      }
+
+      /* Print styles */
       @media print {
         .no-print {
           display: none !important;
@@ -107,6 +217,7 @@
         }
         body {
           background-color: white;
+          color: black;
         }
         .print-container {
           box-shadow: none;
