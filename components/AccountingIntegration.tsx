@@ -299,12 +299,12 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
 
           {/* Setup Instructions */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="text-sm font-bold text-blue-900 mb-2">⚙️ Setup Requirements</h4>
+            <h4 className="text-sm font-bold text-blue-900 mb-2">⚙️ Setup Instructions</h4>
             <ul className="space-y-1 text-xs text-blue-800">
-              <li>• Nango account required (free at <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a>)</li>
-              <li>• Configure each provider in your Nango dashboard with integration IDs: xero, quickbooks, freeagent, sage</li>
-              <li>• Add VITE_NANGO_PUBLIC_KEY to your .env file</li>
-              <li>• QuickBooks, FreeAgent, and Sage connections are ready - invoice importers coming soon</li>
+              <li>• <strong>Step 1:</strong> Get your Nango secret key from <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a></li>
+              <li>• <strong>Step 2:</strong> Add <code className="bg-blue-100 px-1 rounded">NANGO_SECRET_KEY=your_key</code> to your .env file</li>
+              <li>• <strong>Step 3:</strong> Run <code className="bg-blue-100 px-1 rounded">npm run dev:full</code> (starts backend + frontend)</li>
+              <li>• Configure integrations in Nango dashboard with IDs: xero, quickbooks, freeagent, sage</li>
             </ul>
           </div>
 

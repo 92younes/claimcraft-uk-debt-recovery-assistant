@@ -23,15 +23,15 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, onDashboardClick, onCloseMobile, onStepSelect }) => {
   
-  // Updated step order to match App.tsx Enum
+  // Step IDs must match App.tsx Step enum values (ASSESSMENT=3 is skipped in flow)
   const steps = [
-    { id: 1, label: 'Evidence Source', icon: Upload },
-    { id: 2, label: 'Details & Analysis', icon: SearchCheck },
-    { id: 3, label: 'Legal Viability', icon: Scale },
-    { id: 4, label: 'Timeline', icon: CalendarClock },
-    { id: 5, label: 'Clarification', icon: MessageSquareText },
-    { id: 6, label: 'Final Review', icon: CheckCircle2 },
-    { id: 7, label: 'Drafting', icon: FileSignature },
+    { id: 1, label: 'Evidence Source', icon: Upload },            // Step.SOURCE
+    { id: 2, label: 'Details & Analysis', icon: SearchCheck },    // Step.DETAILS
+    { id: 4, label: 'Timeline', icon: CalendarClock },            // Step.TIMELINE (3 is skipped)
+    { id: 5, label: 'AI Consultation', icon: MessageSquareText }, // Step.QUESTIONS
+    { id: 6, label: 'Strategy', icon: Scale },                    // Step.FINAL
+    { id: 7, label: 'Document Draft', icon: FileSignature },      // Step.DRAFT
+    { id: 8, label: 'Final Review', icon: CheckCircle2 },         // Step.PREVIEW
   ];
 
   return (

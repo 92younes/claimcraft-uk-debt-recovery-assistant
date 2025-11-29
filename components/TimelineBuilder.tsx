@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TimelineEvent } from '../types';
-import { Calendar, Plus, Trash2, MessageCircle, FileText, PoundSterling, Mail, Zap, Clock, AlertCircle, MessageSquareText } from 'lucide-react';
+import { Calendar, Plus, Trash2, MessageCircle, FileText, PoundSterling, Mail, Zap, Clock, AlertCircle, Scale, CheckCircle, Truck, CreditCard } from 'lucide-react';
 
 interface TimelineBuilderProps {
   events: TimelineEvent[];
@@ -21,8 +21,20 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
 
     // Find key events
     const contractIdx = eventTypes.findIndex(e => e.type === 'contract');
+    const serviceIdx = eventTypes.findIndex(e => e.type === 'service_delivered');
     const invoiceIdx = eventTypes.findIndex(e => e.type === 'invoice');
     const paymentDueIdx = eventTypes.findIndex(e => e.type === 'payment_due');
+    const lbaIdx = eventTypes.findIndex(e => e.type === 'lba_sent');
+
+    // Contract should come before service delivery (if both exist)
+    if (contractIdx !== -1 && serviceIdx !== -1 && contractIdx > serviceIdx) {
+      return 'Warning: Contract typically comes before service delivery';
+    }
+
+    // Service should come before invoice (if both exist)
+    if (serviceIdx !== -1 && invoiceIdx !== -1 && serviceIdx > invoiceIdx) {
+      return 'Warning: Service delivery typically comes before invoicing';
+    }
 
     // Contract should come before invoice (if both exist)
     if (contractIdx !== -1 && invoiceIdx !== -1 && contractIdx > invoiceIdx) {
@@ -32,6 +44,11 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
     // Invoice should come before payment due (if both exist)
     if (invoiceIdx !== -1 && paymentDueIdx !== -1 && invoiceIdx > paymentDueIdx) {
       return 'Warning: Invoice should be sent before Payment Due date';
+    }
+
+    // LBA should come after payment due (if both exist)
+    if (lbaIdx !== -1 && paymentDueIdx !== -1 && lbaIdx < paymentDueIdx) {
+      return 'Warning: Letter Before Action should be sent after payment is overdue';
     }
 
     return null;
@@ -78,9 +95,13 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
   const getIcon = (type: string) => {
     switch(type) {
       case 'contract': return <FileText className="w-4 h-4 text-blue-600"/>;
+      case 'service_delivered': return <Truck className="w-4 h-4 text-purple-600"/>;
       case 'invoice': return <FileText className="w-4 h-4 text-green-600"/>;
       case 'payment_due': return <PoundSterling className="w-4 h-4 text-red-600"/>;
+      case 'part_payment': return <CreditCard className="w-4 h-4 text-emerald-600"/>;
       case 'chaser': return <Mail className="w-4 h-4 text-amber-600"/>;
+      case 'lba_sent': return <Scale className="w-4 h-4 text-red-700"/>;
+      case 'acknowledgment': return <CheckCircle className="w-4 h-4 text-teal-600"/>;
       default: return <MessageCircle className="w-4 h-4 text-slate-600"/>;
     }
   };
@@ -148,13 +169,13 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                 </button>
                 <button
                   onClick={() => addQuickEvent(44, 'chaser', 'Final Demand sent via Email')}
-                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border-2 border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-red-500 hover:bg-red-50 hover:text-red-700 hover:shadow-md transition-all duration-200 flex flex-col items-start gap-1 group"
+                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border-2 border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-orange-500 hover:bg-orange-50 hover:text-orange-700 hover:shadow-md transition-all duration-200 flex flex-col items-start gap-1 group"
                 >
                    <div className="flex items-center gap-2 w-full">
-                     <AlertCircle className="w-4 h-4 text-red-500" />
+                     <AlertCircle className="w-4 h-4 text-orange-500" />
                      <span>Final Demand</span>
                    </div>
-                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-red-600">
+                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-orange-600">
                      {(() => {
                        const date = new Date(invoiceDate);
                        date.setDate(date.getDate() + 44);
@@ -162,6 +183,24 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                      })()}
                      {' '}(+14 days overdue)
                    </span>
+                </button>
+                <button
+                  onClick={() => addQuickEvent(58, 'lba_sent', 'Letter Before Action sent via Recorded Delivery')}
+                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border-2 border-slate-200 shadow-sm rounded-lg text-xs font-bold text-slate-700 hover:border-red-600 hover:bg-red-50 hover:text-red-700 hover:shadow-md transition-all duration-200 flex flex-col items-start gap-1 group"
+                >
+                   <div className="flex items-center gap-2 w-full">
+                     <Scale className="w-4 h-4 text-red-600" />
+                     <span>Letter Before Action</span>
+                   </div>
+                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-red-600">
+                     {(() => {
+                       const date = new Date(invoiceDate);
+                       date.setDate(date.getDate() + 58);
+                       return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                     })()}
+                     {' '}(+28 days overdue)
+                   </span>
+                   <span className="text-[10px] text-red-600 font-bold">REQUIRED before court</span>
                 </button>
             </div>
             <div className="mt-3 text-[10px] text-slate-600 bg-white/60 p-2 rounded border border-blue-100">
@@ -191,15 +230,19 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
         </div>
         <div className="md:col-span-3">
            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Event Type</label>
-           <select 
+           <select
              value={newEvent.type}
              onChange={e => setNewEvent({...newEvent, type: e.target.value as any})}
              className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
            >
              <option value="contract">Contract Signed</option>
+             <option value="service_delivered">Service/Goods Delivered</option>
              <option value="invoice">Invoice Sent</option>
              <option value="payment_due">Payment Due</option>
+             <option value="part_payment">Part Payment Received</option>
              <option value="chaser">Chaser / Reminder</option>
+             <option value="lba_sent">Letter Before Action</option>
+             <option value="acknowledgment">Debtor Acknowledged</option>
              <option value="communication">Other Comms</option>
            </select>
         </div>

@@ -54,10 +54,10 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
   const prompt = `
     Analyze the provided evidence documents (Invoices, Contracts, Emails).
     Extract the following details for a UK Debt Claim.
-    
-    1. Identify the Creditor (Claimant).
-    2. Identify the Debtor (Defendant).
-    3. Extract the MAIN Invoice details (Number, Date, Due Date, Amount).
+
+    1. Identify the Creditor (Claimant) with full address including UK county.
+    2. Identify the Debtor (Defendant) with full address including UK county.
+    3. Extract the MAIN Invoice details (Number, Date, Due Date, Amount, Description of goods/services).
     4. Look for any other dates in the documents (emails, contracts) to build a mini-timeline of events.
     5. CLASSIFY each document:
        - Is it a "Signed Contract"?
@@ -65,6 +65,9 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
        - Is it a "Payment Chaser (Email/Letter)"?
        - Is it a "Text/Whatsapp Message"?
        - Is it a "Bank Statement"?
+
+    IMPORTANT: Extract the UK county for both claimant and defendant addresses (e.g., "Greater London", "West Midlands", "Surrey").
+    If county is not explicitly stated, infer it from the postcode or city.
 
     Return valid JSON matching the schema.
     Use 'Individual' or 'Business' based on entities (Ltd/Plc = Business).
@@ -86,17 +89,19 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          claimant: { type: Type.OBJECT, properties: { 
-              name: { type: Type.STRING }, 
+          claimant: { type: Type.OBJECT, properties: {
+              name: { type: Type.STRING },
               address: { type: Type.STRING },
               city: { type: Type.STRING },
+              county: { type: Type.STRING, description: "UK county (e.g. Greater London, West Yorkshire)" },
               postcode: { type: Type.STRING },
               type: { type: Type.STRING, enum: ['Individual', 'Business'] }
           } },
-          defendant: { type: Type.OBJECT, properties: { 
-              name: { type: Type.STRING }, 
+          defendant: { type: Type.OBJECT, properties: {
+              name: { type: Type.STRING },
               address: { type: Type.STRING },
               city: { type: Type.STRING },
+              county: { type: Type.STRING, description: "UK county (e.g. Greater London, West Yorkshire)" },
               postcode: { type: Type.STRING },
               type: { type: Type.STRING, enum: ['Individual', 'Business'] }
           } },
@@ -105,7 +110,8 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
               dateIssued: { type: Type.STRING },
               dueDate: { type: Type.STRING },
               totalAmount: { type: Type.NUMBER },
-              currency: { type: Type.STRING }
+              currency: { type: Type.STRING },
+              description: { type: Type.STRING, description: "Brief description of goods/services provided" }
           } },
           timelineEvents: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
               date: { type: Type.STRING },
