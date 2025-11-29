@@ -336,7 +336,10 @@ export class NangoClient {
   }
 
   /**
-   * Generic API call via Nango proxy
+   * Generic API call via backend proxy
+   *
+   * API calls must go through the backend because the Nango frontend SDK
+   * only handles OAuth flows, not API requests.
    *
    * @param provider - Accounting provider
    * @param endpoint - API endpoint (e.g., '/Invoices')
@@ -350,7 +353,6 @@ export class NangoClient {
     connectionId?: string,
     params?: Record<string, string>
   ): Promise<T> {
-    const nango = await this.getNango() as any; // Type assertion for proxy method
     const { connectionId: connIdKey } = getStorageKeys(provider);
     const connId = connectionId || localStorage.getItem(connIdKey);
 
@@ -359,26 +361,37 @@ export class NangoClient {
     }
 
     try {
-      // Nango proxy endpoint format
-      const response = await nango.proxy({
-        method: 'GET',
-        endpoint: endpoint,
-        providerConfigKey: INTEGRATION_IDS[provider],
-        connectionId: connId,
-        params: params
+      // Call backend proxy endpoint
+      const response = await fetch(`${API_BASE_URL}/api/nango/proxy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider: INTEGRATION_IDS[provider],
+          connectionId: connId,
+          endpoint,
+          method: 'GET',
+          params
+        })
       });
 
-      return response.data as T;
-    } catch (error: any) {
-      console.error(`❌ ${provider} API call failed:`, error);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }));
 
-      // Handle token expiration
-      if (error?.response?.status === 401) {
-        console.warn(`⚠️ ${provider} token expired, disconnecting...`);
-        await this.disconnect(provider);
-        throw new Error(`${provider} connection expired. Please reconnect.`);
+        // Handle token expiration
+        if (response.status === 401) {
+          console.warn(`⚠️ ${provider} token expired, disconnecting...`);
+          await this.disconnect(provider);
+          throw new Error(`${provider} connection expired. Please reconnect.`);
+        }
+
+        throw new Error(error.message || `API call failed with status ${response.status}`);
       }
 
+      return await response.json() as T;
+    } catch (error: any) {
+      console.error(`❌ ${provider} API call failed:`, error);
       throw new Error(`${provider} API error: ${error?.message || 'Unknown error'}`);
     }
   }

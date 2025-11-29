@@ -150,6 +150,60 @@ app.delete('/api/nango/connections/:provider/:connectionId', async (req, res) =>
   }
 });
 
+/**
+ * Proxy API calls to accounting providers via Nango
+ * POST /api/nango/proxy
+ *
+ * Body: {
+ *   provider: string,      // e.g., 'xero', 'quickbooks'
+ *   connectionId: string,  // Nango connection ID
+ *   endpoint: string,      // API endpoint (e.g., '/Invoices')
+ *   method?: string,       // HTTP method (default: 'GET')
+ *   params?: object,       // Query parameters
+ *   data?: object          // Request body (for POST/PUT)
+ * }
+ */
+app.post('/api/nango/proxy', async (req, res) => {
+  try {
+    const { provider, connectionId, endpoint, method = 'GET', params, data } = req.body;
+
+    if (!provider || !connectionId || !endpoint) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'provider, connectionId, and endpoint are required'
+      });
+    }
+
+    console.log(`📡 Proxy request: ${method} ${provider}${endpoint}`);
+
+    // Use Nango's proxy to make authenticated API call
+    const response = await nango.proxy({
+      method,
+      endpoint,
+      providerConfigKey: provider,
+      connectionId,
+      params,
+      data
+    });
+
+    console.log(`✅ Proxy request successful: ${provider}${endpoint}`);
+
+    res.json(response.data);
+
+  } catch (error) {
+    console.error('❌ Proxy request failed:', error);
+
+    // Extract status code if available
+    const statusCode = error.response?.status || 500;
+
+    res.status(statusCode).json({
+      error: 'Proxy request failed',
+      message: error.message || 'Unknown error',
+      status: statusCode
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`
@@ -163,6 +217,7 @@ app.listen(PORT, () => {
 ║  Endpoints:                                                 ║
 ║  • GET  /api/health              - Health check             ║
 ║  • POST /api/nango/session       - Create session token     ║
+║  • POST /api/nango/proxy         - Proxy API calls          ║
 ║  • GET  /api/nango/connections   - List connections         ║
 ║  • DELETE /api/nango/connections - Delete connection        ║
 ╚════════════════════════════════════════════════════════════╝
