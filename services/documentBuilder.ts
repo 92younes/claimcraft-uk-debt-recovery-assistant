@@ -363,8 +363,8 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       warnings.push('No evidence uploaded. Upload invoices, contracts, or email chains to strengthen your case (especially important if debtor disputes the claim).');
     }
 
-    if (data.timeline.length < 2) {
-      warnings.push(`Timeline has only ${data.timeline.length} event(s). Add more events (e.g., invoice sent, payment reminders, chaser emails) to demonstrate your efforts to resolve the debt before legal action.`);
+    if (data.timeline.length < 1) {
+      warnings.push(`Timeline is empty. Add at least the invoice date to establish when the debt arose.`);
     }
 
     if (!data.chatHistory || data.chatHistory.length === 0) {

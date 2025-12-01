@@ -181,13 +181,13 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
         {/* Header */}
         <div className="bg-white border-b border-slate-200 p-6 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 font-serif flex items-center gap-3">
-              <Download className="w-6 h-6 text-blue-600" />
+            <h2 className="text-2xl font-bold text-slate-900 font-display tracking-tight flex items-center gap-3">
+              <Download className="w-6 h-6 text-emerald-600" />
               Import Overdue Invoices from Xero
             </h2>
             <p className="text-sm text-slate-500 mt-1">
@@ -221,7 +221,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
           {/* Loading State */}
           {isLoading && (
             <div className="flex flex-col items-center justify-center py-20">
-              <Loader className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+              <Loader className="w-12 h-12 text-emerald-600 animate-spin mb-4" />
               <p className="text-slate-600 font-medium">Fetching overdue invoices from Xero...</p>
               <p className="text-sm text-slate-400 mt-2">This may take a few seconds</p>
             </div>
@@ -230,8 +230,8 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
           {/* Empty State */}
           {!isLoading && invoiceRows.length === 0 && !error && (
             <div className="flex flex-col items-center justify-center py-20">
-              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle className="w-8 h-8 text-green-600" />
+              <div className="w-16 h-16 bg-emerald-50 rounded-xl flex items-center justify-center mb-4">
+                <CheckCircle className="w-8 h-8 text-emerald-600" />
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">No Overdue Invoices!</h3>
               <p className="text-slate-600">All your invoices are up to date. Great job! 🎉</p>
@@ -249,9 +249,9 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                       filter === f
-                        ? 'bg-blue-600 text-white shadow-md'
+                        ? 'bg-emerald-600 text-white shadow-sm'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -264,7 +264,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
               <div className="flex items-center justify-between py-2 border-y border-slate-200">
                 <button
                   onClick={handleToggleAll}
-                  className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors duration-200"
+                  className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors duration-200"
                 >
                   {selectAll ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                   {selectAll ? 'Deselect All' : 'Select All'}
@@ -272,7 +272,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
                 <div className="text-sm text-slate-600">
                   Selected: <span className="font-bold text-slate-900">{selectionSummary.count}</span> invoice{selectionSummary.count === 1 ? '' : 's'}
                   {selectionSummary.count > 0 && (
-                    <span className="ml-2 text-blue-600 font-bold">
+                    <span className="ml-2 text-emerald-600 font-bold font-mono">
                       (£{selectionSummary.totalValue.toLocaleString('en-GB', { minimumFractionDigits: 2 })})
                     </span>
                   )}
@@ -289,17 +289,17 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
                     <div
                       key={row.invoice.InvoiceID}
                       onClick={() => handleToggleRow(index)}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
                         row.selected
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm'
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-slate-200 bg-white hover:border-emerald-300 hover:shadow-sm'
                       }`}
                     >
                       <div className="flex items-center gap-4">
                         {/* Checkbox */}
                         <div className="shrink-0">
                           {row.selected ? (
-                            <CheckSquare className="w-5 h-5 text-blue-600" />
+                            <CheckSquare className="w-5 h-5 text-emerald-600" />
                           ) : (
                             <Square className="w-5 h-5 text-slate-400" />
                           )}
@@ -346,7 +346,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
                   <p className="text-slate-600">No invoices match this filter</p>
                   <button
                     onClick={() => setFilter('all')}
-                    className="mt-2 text-blue-600 font-medium hover:underline"
+                    className="mt-2 text-emerald-600 font-medium hover:underline"
                   >
                     Show all invoices
                   </button>
@@ -361,14 +361,14 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
           <div className="bg-slate-50 border-t border-slate-200 p-6 flex items-center justify-between gap-4">
             <button
               onClick={onClose}
-              className="px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
+              className="px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition-colors duration-200"
             >
               Cancel
             </button>
             <button
               onClick={handleImport}
               disabled={isImporting || selectionSummary.count === 0}
-              className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]"
+              className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]"
             >
               {isImporting ? (
                 <>

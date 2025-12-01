@@ -10,8 +10,10 @@ export const UK_COUNTIES = [
   "Warwickshire", "West Midlands", "West Sussex", "West Yorkshire", "Wiltshire", "Worcestershire"
 ];
 
-// Bank of England base rate (as of Jan 2025)
+// Bank of England base rate - LAST UPDATED: January 2025
+// Check https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate for current rate
 export const BOE_BASE_RATE = 4.75;
+export const BOE_RATE_LAST_UPDATED = '2025-01-01';
 
 // Late Payment of Commercial Debts (Interest) Act 1998
 // Statutory rate = BoE base rate + 8%

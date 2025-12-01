@@ -41,21 +41,21 @@ export const Input: React.FC<InputProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 mb-4">
+    <div className="flex flex-col gap-1.5 mb-5">
       {/* Label */}
       <div className="flex items-center justify-between">
         <label
           htmlFor={inputId}
-          className="text-sm font-medium text-slate-300 flex items-center gap-1"
+          className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
         >
           {label}
-          {required && <span className="text-violet-400" aria-label="required">*</span>}
+          {required && <span className="text-emerald-600" aria-label="required">*</span>}
         </label>
 
         {/* Character Count */}
         {showCharacterCount && maxLength && (
           <span
-            className={`text-xs ${currentLength > maxLength * 0.9 ? 'text-amber-400 font-medium' : 'text-slate-500'}`}
+            className={`text-xs font-mono ${currentLength > maxLength * 0.9 ? 'text-amber-500 font-medium' : 'text-slate-400'}`}
             aria-live="polite"
           >
             {currentLength}/{maxLength}
@@ -67,7 +67,7 @@ export const Input: React.FC<InputProps> = ({
       <div className="relative">
         {/* Icon */}
         {icon && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
             {icon}
           </div>
         )}
@@ -76,15 +76,15 @@ export const Input: React.FC<InputProps> = ({
         <input
           id={inputId}
           className={`
-            w-full px-4 py-3 bg-dark-700 border rounded-xl transition-all duration-200
-            text-slate-100 placeholder-slate-500
-            focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-offset-dark-900
-            disabled:bg-dark-800 disabled:text-slate-600 disabled:cursor-not-allowed
+            w-full px-4 py-3 bg-white border rounded-xl transition-all duration-200
+            text-base text-slate-900 placeholder-slate-400
+            focus:outline-none focus:ring-2 focus:ring-offset-0
+            disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
             ${icon ? 'pl-11' : ''}
-            ${hasError ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500' :
-              hasSuccess ? 'border-green-500/50 focus:ring-green-500/50 focus:border-green-500 pr-11' :
-              isFocused ? 'border-violet-500/50 focus:ring-violet-500/50' :
-              'border-dark-600 hover:border-dark-500 focus:ring-violet-500/50 focus:border-violet-500'}
+            ${hasError ? 'border-red-300 focus:ring-red-500/30 focus:border-red-500 pr-11' :
+              hasSuccess ? 'border-emerald-300 focus:ring-emerald-500/30 focus:border-emerald-500 pr-11' :
+              isFocused ? 'border-emerald-400 focus:ring-emerald-500/30' :
+              'border-slate-200 hover:border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}
             ${className}
           `}
           value={value}
@@ -104,14 +104,14 @@ export const Input: React.FC<InputProps> = ({
 
         {/* Success Icon */}
         {hasSuccess && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 pointer-events-none">
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500 pointer-events-none">
             <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
           </div>
         )}
 
         {/* Error Icon */}
         {hasError && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 pointer-events-none">
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-red-500 pointer-events-none">
             <AlertCircle className="w-5 h-5" aria-hidden="true" />
           </div>
         )}
@@ -126,7 +126,7 @@ export const Input: React.FC<InputProps> = ({
 
       {/* Error Message */}
       {error && (
-        <p id={errorId} className="text-xs text-red-400 flex items-center gap-1" role="alert">
+        <p id={errorId} className="text-xs text-red-600 flex items-center gap-1" role="alert">
           <AlertCircle className="w-3 h-3" aria-hidden="true" />
           {error}
         </p>
@@ -134,7 +134,7 @@ export const Input: React.FC<InputProps> = ({
 
       {/* Success Message */}
       {success && !error && (
-        <p id={successId} className="text-xs text-green-400 flex items-center gap-1">
+        <p id={successId} className="text-xs text-emerald-600 flex items-center gap-1">
           <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
           {success}
         </p>
@@ -165,22 +165,22 @@ export const Select: React.FC<SelectProps> = ({
   const hasError = !!error;
 
   return (
-    <div className="flex flex-col gap-1.5 mb-4">
+    <div className="flex flex-col gap-1.5 mb-5">
       <label
         htmlFor={selectId}
-        className="text-sm font-medium text-slate-300 flex items-center gap-1"
+        className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
       >
         {label}
-        {required && <span className="text-violet-400" aria-label="required">*</span>}
+        {required && <span className="text-emerald-600" aria-label="required">*</span>}
       </label>
       <select
         id={selectId}
         className={`
-          px-4 py-3 bg-dark-700 border rounded-xl transition-all duration-200
-          text-slate-100
-          focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500
-          disabled:bg-dark-800 disabled:text-slate-600 disabled:cursor-not-allowed
-          ${hasError ? 'border-red-500/50 focus:ring-red-500/50' : 'border-dark-600 hover:border-dark-500'}
+          px-4 py-3 bg-white border rounded-xl transition-all duration-200
+          text-base text-slate-900
+          focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500
+          disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
+          ${hasError ? 'border-red-300 focus:ring-red-500/30' : 'border-slate-200 hover:border-slate-300'}
           ${className}
         `}
         aria-required={required}
@@ -189,7 +189,7 @@ export const Select: React.FC<SelectProps> = ({
         {...props}
       >
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value} className="bg-dark-700">
+          <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}
@@ -202,7 +202,7 @@ export const Select: React.FC<SelectProps> = ({
       )}
 
       {error && (
-        <p id={errorId} className="text-xs text-red-400 flex items-center gap-1" role="alert">
+        <p id={errorId} className="text-xs text-red-600 flex items-center gap-1" role="alert">
           <AlertCircle className="w-3 h-3" aria-hidden="true" />
           {error}
         </p>
@@ -242,19 +242,19 @@ export const TextArea: React.FC<TextAreaProps> = ({
   const hasSuccess = !!success && !hasError;
 
   return (
-    <div className="flex flex-col gap-1.5 mb-4">
+    <div className="flex flex-col gap-1.5 mb-5">
       <div className="flex items-center justify-between">
         <label
           htmlFor={textareaId}
-          className="text-sm font-medium text-slate-300 flex items-center gap-1"
+          className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
         >
           {label}
-          {required && <span className="text-violet-400" aria-label="required">*</span>}
+          {required && <span className="text-emerald-600" aria-label="required">*</span>}
         </label>
 
         {showCharacterCount && maxLength && (
           <span
-            className={`text-xs ${currentLength > maxLength * 0.9 ? 'text-amber-400 font-medium' : 'text-slate-500'}`}
+            className={`text-xs font-mono ${currentLength > maxLength * 0.9 ? 'text-amber-500 font-medium' : 'text-slate-400'}`}
             aria-live="polite"
           >
             {currentLength}/{maxLength}
@@ -265,13 +265,13 @@ export const TextArea: React.FC<TextAreaProps> = ({
       <textarea
         id={textareaId}
         className={`
-          px-4 py-3 bg-dark-700 border rounded-xl transition-all duration-200
-          text-slate-100 placeholder-slate-500
-          focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-offset-dark-900
-          disabled:bg-dark-800 disabled:text-slate-600 disabled:cursor-not-allowed
-          ${hasError ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500' :
-            hasSuccess ? 'border-green-500/50 focus:ring-green-500/50 focus:border-green-500' :
-            'border-dark-600 hover:border-dark-500 focus:ring-violet-500/50 focus:border-violet-500'}
+          px-4 py-3 bg-white border rounded-xl transition-all duration-200
+          text-base text-slate-900 placeholder-slate-400
+          focus:outline-none focus:ring-2 focus:ring-offset-0
+          disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
+          ${hasError ? 'border-red-300 focus:ring-red-500/30 focus:border-red-500' :
+            hasSuccess ? 'border-emerald-300 focus:ring-emerald-500/30 focus:border-emerald-500' :
+            'border-slate-200 hover:border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}
           ${className}
         `}
         rows={5}
@@ -295,14 +295,14 @@ export const TextArea: React.FC<TextAreaProps> = ({
       )}
 
       {error && (
-        <p id={errorId} className="text-xs text-red-400 flex items-center gap-1" role="alert">
+        <p id={errorId} className="text-xs text-red-600 flex items-center gap-1" role="alert">
           <AlertCircle className="w-3 h-3" aria-hidden="true" />
           {error}
         </p>
       )}
 
       {success && !error && (
-        <p id={successId} className="text-xs text-green-400 flex items-center gap-1">
+        <p id={successId} className="text-xs text-emerald-600 flex items-center gap-1">
           <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
           {success}
         </p>

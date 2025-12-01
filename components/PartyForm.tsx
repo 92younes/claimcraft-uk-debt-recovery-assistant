@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Party, PartyType } from '../types';
 import { Input, Select } from './ui/Input';
 import { UK_COUNTIES } from '../constants';
-import { validateUKPostcode, formatUKPostcode, validateEmail, validateUKPhone } from '../utils/validation';
+import { validateUKPostcode, formatUKPostcode, validateEmail, validateUKPhone, validateCompanyNumber } from '../utils/validation';
 import { searchCompaniesHouse } from '../services/companiesHouse';
 import { Search, Loader2, CheckCircle, AlertCircle, Building2 } from 'lucide-react';
 
@@ -98,9 +98,14 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
       return 'County is required';
     }
 
-    // Company number required for businesses
-    if (field === 'companyNumber' && party.type === PartyType.BUSINESS && !value.trim()) {
-      return 'Company number is required for limited companies';
+    // Company number validation for businesses
+    if (field === 'companyNumber' && party.type === PartyType.BUSINESS) {
+      if (!value.trim()) {
+        return 'Company number is required for limited companies';
+      }
+      if (!validateCompanyNumber(value)) {
+        return 'Invalid company number format (e.g., 12345678 or SC123456)';
+      }
     }
 
     // Optional field validation (only if provided)
@@ -170,18 +175,18 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-100 animate-fade-in">
-      <h2 className="text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">{title}</h2>
-      
+    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-fade-in">
+      <h2 className="text-lg font-semibold text-slate-900 mb-4 pb-2 border-b border-slate-200 font-display">{title}</h2>
+
       <div className="mb-4">
         <label className="text-sm font-medium text-slate-700 mb-2 block">Party Type</label>
         <div className="flex gap-4 mb-3">
           <button
             onClick={() => handleChange('type', PartyType.INDIVIDUAL)}
             disabled={readOnly}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors duration-200 duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:ring-offset-2 ${
               party.type === PartyType.INDIVIDUAL
-                ? 'bg-slate-800 text-white shadow-md'
+                ? 'bg-emerald-600 text-white shadow-sm'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -190,9 +195,9 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           <button
             onClick={() => handleChange('type', PartyType.BUSINESS)}
             disabled={readOnly}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors duration-200 duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:ring-offset-2 ${
               party.type === PartyType.BUSINESS
-                ? 'bg-slate-800 text-white shadow-md'
+                ? 'bg-emerald-600 text-white shadow-sm'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -200,14 +205,14 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           </button>
         </div>
         {title.includes('Claimant') && party.type === PartyType.BUSINESS && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-            <p className="text-blue-900">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm">
+            <p className="text-emerald-900">
               <strong>B2B Claim Benefits:</strong> Business-to-Business claims allow Late Payment of Commercial Debts (Interest) Act 1998 interest (8% + Bank of England base rate) plus £100 statutory compensation.
             </p>
           </div>
         )}
         {title.includes('Claimant') && party.type === PartyType.INDIVIDUAL && (
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm">
             <p className="text-slate-700">
               <strong>B2C Claim:</strong> Individual/Sole Trader claims use County Courts Act 1984 s.69 interest (8% per annum) without statutory compensation.
             </p>
@@ -230,12 +235,12 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
         <div className="space-y-3">
           {/* Companies House Lookup UI - Only for Defendant */}
           {isDefendant && !readOnly && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
-                <Building2 className="w-5 h-5 text-blue-600" />
-                <span className="font-medium text-blue-900">Companies House Lookup</span>
+                <Building2 className="w-5 h-5 text-emerald-600" />
+                <span className="font-medium text-slate-900">Companies House Lookup</span>
               </div>
-              <p className="text-sm text-blue-700 mb-3">
+              <p className="text-sm text-slate-600 mb-3">
                 Enter a company number or name below, then click search to auto-fill details.
               </p>
               <div className="flex gap-2">
@@ -245,14 +250,14 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
                     placeholder="Company number (e.g. 12345678) or name"
                     value={party.companyNumber || ''}
                     onChange={(e) => handleChange('companyNumber', e.target.value)}
-                    className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white transition-colors"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={handleCompaniesHouseLookup}
                   disabled={isSearching}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-medium text-sm flex items-center gap-2 transition-colors"
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl font-medium text-sm flex items-center gap-2 transition-colors"
                 >
                   {isSearching ? (
                     <>
@@ -275,7 +280,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
                 </div>
               )}
               {searchSuccess && (
-                <div className="mt-2 flex items-center gap-2 text-green-600 text-sm">
+                <div className="mt-2 flex items-center gap-2 text-emerald-600 text-sm">
                   <CheckCircle className="w-4 h-4" />
                   Company details loaded successfully!
                 </div>
@@ -283,12 +288,12 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
               {/* Solvency status display */}
               {party.solvencyStatus && party.solvencyStatus !== 'Unknown' && (
                 <div className={`mt-2 flex items-center gap-2 text-sm ${
-                  party.solvencyStatus === 'Active' ? 'text-green-700' :
+                  party.solvencyStatus === 'Active' ? 'text-emerald-700' :
                   party.solvencyStatus === 'Insolvent' ? 'text-red-700' :
                   'text-amber-700'
                 }`}>
                   <span className={`w-2 h-2 rounded-full ${
-                    party.solvencyStatus === 'Active' ? 'bg-green-500' :
+                    party.solvencyStatus === 'Active' ? 'bg-emerald-500' :
                     party.solvencyStatus === 'Insolvent' ? 'bg-red-500' :
                     'bg-amber-500'
                   }`} />

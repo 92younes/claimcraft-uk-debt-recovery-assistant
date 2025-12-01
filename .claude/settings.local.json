@@ -5,7 +5,8 @@
       "WebFetch(domain:garfield.law)",
       "WebSearch",
       "WebFetch(domain:docs.nango.dev)",
-      "WebFetch(domain:nango.dev)"
+      "WebFetch(domain:nango.dev)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

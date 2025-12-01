@@ -78,8 +78,8 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full max-w-lg">
-       <h3 className="text-sm font-bold text-slate-500 uppercase mb-2">Sign Here</h3>
+    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm w-full max-w-lg">
+       <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Sign Here</h3>
        <div className="relative border border-slate-300 rounded-lg bg-slate-50 touch-none overflow-hidden">
           <canvas
             ref={canvasRef}
@@ -101,16 +101,16 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
           )}
        </div>
        <div className="flex justify-end gap-2 mt-3">
-          <button 
+          <button
             onClick={handleClear}
-            className="text-slate-500 hover:text-slate-800 px-3 py-1.5 text-sm font-medium flex items-center gap-1"
+            className="text-slate-500 hover:text-slate-800 px-3 py-1.5 text-sm font-medium flex items-center gap-1 transition-colors"
           >
              <Eraser className="w-4 h-4" /> Clear
           </button>
-          <button 
+          <button
             onClick={handleSave}
             disabled={!hasContent}
-            className="bg-slate-900 text-white hover:bg-slate-800 px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1 disabled:opacity-50 transition-colors duration-200"
+            className="bg-emerald-600 text-white hover:bg-emerald-700 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:bg-slate-300 transition-colors duration-200 shadow-sm"
           >
              <Check className="w-4 h-4" /> Apply Signature
           </button>

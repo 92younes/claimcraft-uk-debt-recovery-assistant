@@ -312,3 +312,124 @@ export const validateUniqueInvoice = (
     return false;
   }
 };
+
+/**
+ * Import Validation Result
+ */
+export interface ImportValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Validates claim data from imports (CSV, Xero, AI extraction)
+ *
+ * Ensures imported data meets minimum requirements before being added to the system.
+ * This provides consistent validation regardless of the data source.
+ *
+ * @param claim - Partial claim data from import source
+ * @returns Validation result with errors and warnings
+ */
+export const validateImportedClaim = (claim: {
+  defendant?: { name?: string; postcode?: string };
+  claimant?: { name?: string; postcode?: string };
+  invoice?: { totalAmount?: number; invoiceNumber?: string; dateIssued?: string; dueDate?: string };
+}): ImportValidationResult => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Required: Defendant name
+  if (!claim.defendant?.name || !claim.defendant.name.trim()) {
+    errors.push('Defendant name is required');
+  }
+
+  // Required: Invoice amount
+  if (!claim.invoice?.totalAmount || claim.invoice.totalAmount <= 0) {
+    errors.push('Valid invoice amount is required (must be greater than 0)');
+  }
+
+  // Warning: Missing claimant name (can be filled later)
+  if (!claim.claimant?.name || !claim.claimant.name.trim()) {
+    warnings.push('Claimant name is missing - you will need to provide this');
+  }
+
+  // Warning: Defendant postcode validation
+  if (claim.defendant?.postcode && !validateUKPostcode(claim.defendant.postcode)) {
+    warnings.push('Defendant postcode may be invalid or incorrectly formatted');
+  }
+
+  // Warning: Claimant postcode validation
+  if (claim.claimant?.postcode && !validateUKPostcode(claim.claimant.postcode)) {
+    warnings.push('Claimant postcode may be invalid or incorrectly formatted');
+  }
+
+  // Warning: Invoice number missing
+  if (!claim.invoice?.invoiceNumber || !claim.invoice.invoiceNumber.trim()) {
+    warnings.push('Invoice number is missing - you should add this for reference');
+  }
+
+  // Date validation
+  if (claim.invoice?.dateIssued && claim.invoice?.dueDate) {
+    const dateResult = validateDateRelationship(
+      claim.invoice.dateIssued,
+      claim.invoice.dueDate
+    );
+    if (!dateResult.isValid) {
+      // Date issues are errors, not warnings, as they affect legal viability
+      errors.push(dateResult.error || 'Invalid date relationship');
+    }
+  } else if (claim.invoice?.dateIssued) {
+    // Check if invoice date is in the future
+    const invoiceDate = new Date(claim.invoice.dateIssued);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (invoiceDate > today) {
+      warnings.push('Invoice date appears to be in the future');
+    }
+
+    // Check for statute of limitations
+    const sixYearsAgo = new Date();
+    sixYearsAgo.setFullYear(sixYearsAgo.getFullYear() - 6);
+    if (invoiceDate < sixYearsAgo) {
+      warnings.push('Invoice is more than 6 years old - may be statute-barred');
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings
+  };
+};
+
+/**
+ * Validates a UK company number format
+ *
+ * UK company numbers:
+ * - Are exactly 8 characters (or 6-7 with leading zeros implied)
+ * - Can start with 2-letter prefixes for Scottish (SC), Northern Irish (NI), etc.
+ * - The numeric portion should be valid
+ *
+ * @param companyNumber - The company number to validate
+ * @returns true if valid format, false otherwise
+ */
+export const validateCompanyNumber = (companyNumber: string): boolean => {
+  if (!companyNumber || typeof companyNumber !== 'string') {
+    return false;
+  }
+
+  const cleaned = companyNumber.trim().toUpperCase();
+
+  // Empty is valid (company number is optional for some party types)
+  if (cleaned.length === 0) {
+    return true;
+  }
+
+  // UK company number regex pattern
+  // Prefixes: SC (Scotland), NI (Northern Ireland), NP, NC, NF, LP, SL, OC, SO, SF, R0-R9, AC, ZC, RC, IC, IP, SP, RS
+  // Followed by 6-8 digits
+  const ukCompanyNumberRegex = /^(SC|NI|NP|NC|NF|LP|SL|OC|SO|SF|R[0-9]|AC|ZC|RC|IC|IP|SP|RS)?[0-9]{6,8}$/i;
+
+  return ukCompanyNumberRegex.test(cleaned);
+};

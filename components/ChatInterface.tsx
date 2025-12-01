@@ -31,40 +31,40 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
   return (
     <div className="max-w-2xl mx-auto animate-fade-in flex flex-col h-[calc(100vh-180px)]">
       <div className="text-center mb-6 flex-shrink-0">
-        <div className="bg-gradient-to-br from-violet-500 to-violet-600 text-white w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-glow">
+        <div className="bg-emerald-600 text-white w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-emerald-md">
           <Gavel className="w-6 h-6" />
         </div>
-        <h2 className="text-2xl font-bold text-white font-serif">AI Case Consultation</h2>
-        <p className="text-slate-400 text-sm mt-2 max-w-md mx-auto">
+        <h2 className="text-2xl md:text-3xl font-bold text-slate-900 font-display tracking-tight">AI Case Consultation</h2>
+        <p className="text-slate-500 text-sm mt-2 max-w-md mx-auto leading-relaxed">
           Answer a few questions to strengthen your claim. The AI will identify gaps in your evidence and help ensure your case is complete.
         </p>
-        <div className="flex items-center justify-center gap-2 mt-3 text-xs text-slate-500">
-          <Sparkles className="w-3 h-3 text-violet-400" />
-          <span>Powered by Google Gemini AI • Confidential</span>
+        <div className="flex items-center justify-center gap-2 mt-3 text-xs text-slate-400">
+          <Sparkles className="w-3 h-3 text-emerald-500" />
+          <span>Powered by Google Gemini AI</span>
         </div>
       </div>
 
       {/* Chat Area */}
-      <div className="flex-grow overflow-y-auto px-6 py-6 bg-dark-800 rounded-t-2xl border border-dark-600 shadow-dark-xl space-y-6 scrollbar-thin scrollbar-thumb-dark-600">
+      <div className="flex-grow overflow-y-auto px-6 py-6 bg-white rounded-t-2xl border border-slate-200 shadow-sm space-y-6">
         {messages.length === 0 && !isThinking && (
-             <div className="text-center text-slate-500 italic mt-10 text-sm">
+             <div className="text-center text-slate-400 italic mt-10 text-sm">
                Establishing secure link to AI legal assistant...
              </div>
         )}
 
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 border shadow-sm ${msg.role === 'user' ? 'bg-dark-600 text-slate-300 border-dark-500' : 'bg-gradient-to-br from-violet-500 to-violet-600 text-white border-violet-500 shadow-glow-sm'}`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border shadow-sm ${msg.role === 'user' ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-sm'}`}>
                {msg.role === 'user' ? <User className="w-5 h-5" /> : <Briefcase className="w-5 h-5" />}
             </div>
             <div className="flex flex-col max-w-[80%]">
-                <span className={`text-[10px] font-bold uppercase mb-1 ${msg.role === 'user' ? 'text-right text-slate-500' : 'text-left text-slate-500'}`}>
+                <span className={`text-[10px] font-semibold uppercase mb-1 tracking-wider ${msg.role === 'user' ? 'text-right text-slate-400' : 'text-left text-slate-400'}`}>
                     {msg.role === 'user' ? 'Client' : 'Legal Assistant'}
                 </span>
                 <div className={`px-5 py-4 rounded-2xl text-sm leading-relaxed ${
                 msg.role === 'user'
-                    ? 'bg-violet-500/20 text-slate-100 border border-violet-500/30 rounded-tr-sm'
-                    : 'bg-dark-700 text-slate-200 border border-dark-600 rounded-tl-sm'
+                    ? 'bg-emerald-50 text-slate-800 border border-emerald-200 rounded-tr-sm'
+                    : 'bg-slate-50 text-slate-700 border border-slate-200 rounded-tl-sm'
                 }`}>
                 {msg.content}
                 </div>
@@ -74,14 +74,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
 
         {isThinking && (
           <div className="flex gap-4">
-             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-violet-600 text-white flex items-center justify-center flex-shrink-0 shadow-glow-sm">
+             <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-emerald-sm">
                 <Briefcase className="w-5 h-5" />
              </div>
-             <div className="bg-dark-700 border border-dark-600 px-5 py-4 rounded-2xl rounded-tl-sm flex items-center gap-2 w-fit">
-                <span className="text-xs font-bold text-slate-400 uppercase mr-2">Reviewing Evidence</span>
-                <div className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></div>
-                <div className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce delay-75"></div>
-                <div className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce delay-150"></div>
+             <div className="bg-slate-50 border border-slate-200 px-5 py-4 rounded-2xl rounded-tl-sm flex items-center gap-2 w-fit">
+                <span className="text-xs font-semibold text-slate-500 uppercase mr-2 tracking-wide">Reviewing Evidence</span>
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce delay-75"></div>
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce delay-150"></div>
              </div>
           </div>
         )}
@@ -89,30 +89,30 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
       </div>
 
       {/* Input Area */}
-      <div className="bg-dark-700 border-x border-b border-dark-600 rounded-b-2xl p-4 flex-shrink-0">
+      <div className="bg-slate-50 border-x border-b border-slate-200 rounded-b-2xl p-4 flex-shrink-0">
         <form onSubmit={handleSend} className="relative flex gap-2">
            <input
              type="text"
              value={input}
              onChange={(e) => setInput(e.target.value)}
              placeholder="Answer clearly..."
-             className="flex-grow px-4 py-4 pr-14 bg-dark-800 border border-dark-600 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 text-sm"
+             className="flex-grow px-4 py-3.5 pr-14 bg-white border border-slate-200 rounded-xl text-base text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all duration-200"
              disabled={isThinking}
              autoFocus
            />
            <button
              type="submit"
              disabled={!input.trim() || isThinking}
-             className="absolute right-2 top-2 bottom-2 bg-gradient-to-r from-violet-600 to-violet-500 text-white px-4 rounded-lg hover:from-violet-500 hover:to-violet-400 disabled:bg-dark-600 disabled:from-dark-600 disabled:to-dark-600 transition-all duration-200 shadow-glow-sm flex items-center justify-center"
+             className="absolute right-2 top-2 bottom-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-lg disabled:bg-slate-200 disabled:text-slate-400 transition-all duration-200 shadow-sm flex items-center justify-center"
            >
              <Send className="w-4 h-4" />
            </button>
         </form>
         <div className="mt-4 flex justify-between items-center px-2">
-           <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Press Enter to send</span>
+           <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Press Enter to send</span>
            <button
              onClick={onComplete}
-             className="flex items-center gap-2 text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 px-4 py-2 rounded-lg transition-all duration-200 shadow-glow-sm"
+             className="flex items-center gap-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg transition-all duration-200 shadow-sm btn-primary"
            >
              Review Extracted Data <ArrowRight className="w-4 h-4" />
            </button>

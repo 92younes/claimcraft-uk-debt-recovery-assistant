@@ -140,17 +140,17 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-dark-700 rounded-2xl shadow-dark-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-dark-600">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-700 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
               <FileCheck className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold">Final Review Checklist</h2>
-              <p className="text-violet-100 text-sm mt-0.5">Last Check Before Filing</p>
+              <h2 className="text-2xl font-bold font-display">Final Review Checklist</h2>
+              <p className="text-emerald-100 text-sm mt-0.5 leading-relaxed">Last Check Before Filing</p>
             </div>
           </div>
           <button
@@ -162,59 +162,59 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 md:p-8 space-y-6">
           {/* Claim Summary */}
-          <div className="bg-dark-600 border border-dark-500 rounded-xl p-5">
-            <h3 className="font-bold text-white text-lg mb-4 flex items-center gap-2">
-              <Eye className="w-5 h-5 text-violet-400" />
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+            <h3 className="font-bold text-slate-900 text-lg mb-4 flex items-center gap-2">
+              <Eye className="w-5 h-5 text-emerald-500" />
               Claim Summary
             </h3>
             <div className="grid md:grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Claimant</p>
-                <p className="font-medium text-white">{claimData.claimantName}</p>
+                <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Claimant</p>
+                <p className="font-medium text-slate-900">{claimData.claimantName}</p>
               </div>
               <div>
-                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Defendant</p>
-                <p className="font-medium text-white">{claimData.debtorName}</p>
+                <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Defendant</p>
+                <p className="font-medium text-slate-900">{claimData.debtorName}</p>
               </div>
               <div>
-                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Invoice Number</p>
-                <p className="font-medium text-white">{claimData.invoiceNumber}</p>
+                <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Invoice Number</p>
+                <p className="font-medium text-slate-900 font-mono">{claimData.invoiceNumber}</p>
               </div>
               <div>
-                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Invoice Amount</p>
-                <p className="font-medium text-white">£{claimData.invoiceAmount.toFixed(2)}</p>
+                <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Invoice Amount</p>
+                <p className="font-medium text-slate-900 font-mono">£{claimData.invoiceAmount.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Interest</p>
-                <p className="font-medium text-white">£{claimData.interest.toFixed(2)}</p>
+                <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Interest</p>
+                <p className="font-medium text-slate-900 font-mono">£{claimData.interest.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Court Fee</p>
-                <p className="font-medium text-white">£{claimData.courtFee.toFixed(2)}</p>
+                <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Court Fee</p>
+                <p className="font-medium text-slate-900 font-mono">£{claimData.courtFee.toFixed(2)}</p>
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-dark-500">
+            <div className="mt-4 pt-4 border-t border-slate-200">
               <div className="flex justify-between items-center">
-                <p className="font-bold text-slate-300">Total Claim Amount:</p>
-                <p className="font-bold text-2xl text-violet-400">£{claimData.totalClaim.toFixed(2)}</p>
+                <p className="font-bold text-slate-700">Total Claim Amount:</p>
+                <p className="font-bold text-2xl text-emerald-600 font-mono">£{claimData.totalClaim.toFixed(2)}</p>
               </div>
             </div>
           </div>
 
           {/* Statement of Truth Reminder */}
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-bold text-red-300 text-lg mb-2">Critical Reminder: Statement of Truth</h3>
-                <p className="text-sm text-red-400 mb-3">
-                  This Form N1 contains a <span className="font-bold text-red-300">Statement of Truth</span> under CPR Part 22.
-                  False statements are <span className="font-bold text-red-300">contempt of court - a criminal offence</span> punishable by
+                <h3 className="font-bold text-red-800 text-lg mb-2">Critical Reminder: Statement of Truth</h3>
+                <p className="text-sm text-red-700 mb-3">
+                  This Form N1 contains a <span className="font-bold text-red-800">Statement of Truth</span> under CPR Part 22.
+                  False statements are <span className="font-bold text-red-800">contempt of court - a criminal offence</span> punishable by
                   imprisonment, unlimited fines, and immediate claim dismissal.
                 </p>
-                <div className="bg-dark-800 border border-red-500/30 rounded-lg p-3 text-xs text-red-400 italic">
+                <div className="bg-white border border-red-200 rounded-lg p-3 text-xs text-red-700 italic">
                   "I believe that the facts stated in this claim form are true. I understand that proceedings for contempt
                   of court may be brought against anyone who makes, or causes to be made, a false statement in a document
                   verified by a statement of truth without an honest belief in its truth."
@@ -224,9 +224,9 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
           </div>
 
           {/* Pre-Filing Checklist */}
-          <div className="bg-dark-600 border border-dark-500 rounded-xl p-5">
-            <h3 className="font-bold text-white text-lg mb-4">Pre-Filing Checklist</h3>
-            <p className="text-sm text-slate-400 mb-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+            <h3 className="font-bold text-slate-900 text-lg mb-4">Pre-Filing Checklist</h3>
+            <p className="text-sm text-slate-600 mb-4">
               Please confirm you have completed ALL critical items below. Non-critical items are recommended but optional.
             </p>
 
@@ -236,37 +236,37 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
                 return (
                   <label
                     key={item.id}
-                    className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all duration-200 ${
+                    className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
                       isChecked
-                        ? 'bg-green-500/10 border-green-500/30'
+                        ? 'bg-emerald-50 border-emerald-300'
                         : item.critical
-                        ? 'bg-dark-700 border-red-500/30 hover:border-red-500/50'
-                        : 'bg-dark-700 border-dark-500 hover:border-dark-400'
+                        ? 'bg-white border-red-200 hover:border-red-300'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => toggleItem(item.id)}
-                      className="mt-1 w-5 h-5 rounded border-dark-500 bg-dark-700 text-green-500 focus:ring-2 focus:ring-violet-500/50 cursor-pointer"
+                      className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-emerald-500 focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-bold text-sm ${isChecked ? 'text-green-400' : 'text-white'}`}>
+                        <span className={`font-bold text-sm ${isChecked ? 'text-emerald-700' : 'text-slate-900'}`}>
                           {item.label}
                         </span>
                         {item.critical && !isChecked && (
-                          <span className="text-[10px] font-bold bg-red-500/20 text-red-400 px-2 py-0.5 rounded">
+                          <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded">
                             REQUIRED
                           </span>
                         )}
                       </div>
-                      <p className={`text-xs ${isChecked ? 'text-green-400/80' : 'text-slate-400'}`}>
+                      <p className={`text-xs ${isChecked ? 'text-emerald-600' : 'text-slate-500'}`}>
                         {item.description}
                       </p>
                     </div>
                     {isChecked && (
-                      <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+                      <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                     )}
                   </label>
                 );
@@ -274,19 +274,19 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
             </div>
 
             {/* Progress Indicator */}
-            <div className="mt-4 pt-4 border-t border-dark-500">
+            <div className="mt-4 pt-4 border-t border-slate-200">
               <div className="flex justify-between items-center text-sm mb-2">
-                <span className="text-slate-400">
+                <span className="text-slate-600">
                   Critical Items: {criticalItems.filter(i => checkedItems.has(i.id)).length} / {criticalItems.length}
                 </span>
-                <span className="text-slate-400">
+                <span className="text-slate-600">
                   All Items: {checkedItems.size} / {CHECKLIST_ITEMS.length}
                 </span>
               </div>
-              <div className="h-2 bg-dark-500 rounded-full overflow-hidden">
+              <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-200 ${
-                    allCriticalChecked ? 'bg-green-500' : 'bg-red-500'
+                    allCriticalChecked ? 'bg-emerald-500' : 'bg-red-500'
                   }`}
                   style={{
                     width: `${(criticalItems.filter(i => checkedItems.has(i.id)).length / criticalItems.length) * 100}%`
@@ -297,17 +297,17 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
           </div>
 
           {/* Final Acknowledgment */}
-          <div className="bg-dark-600 border border-dark-500 rounded-xl p-5">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
             <label className="flex items-start gap-3 cursor-pointer group">
               <input
                 type="checkbox"
                 checked={acknowledgesConsequences}
                 onChange={(e) => setAcknowledgesConsequences(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-dark-500 bg-dark-700 text-violet-500 focus:ring-2 focus:ring-violet-500/50 cursor-pointer"
+                className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-emerald-500 focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
               />
-              <span className="text-sm text-slate-300 group-hover:text-slate-200">
-                <span className="font-bold text-white">I confirm that:</span>
-                <ul className="mt-2 space-y-1.5 ml-4 list-disc text-slate-400">
+              <span className="text-sm text-slate-700 group-hover:text-slate-900">
+                <span className="font-bold text-slate-900">I confirm that:</span>
+                <ul className="mt-2 space-y-1.5 ml-4 list-disc text-slate-600">
                   <li>I have personally reviewed the entire Form N1 and all information is accurate</li>
                   <li>I have an honest belief that all facts stated are true</li>
                   <li>I understand that signing a false Statement of Truth is contempt of court (criminal offence)</li>
@@ -320,18 +320,18 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
 
           {/* Warning if not ready */}
           {!canProceed && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
-              <p className="text-sm text-amber-400">
-                <span className="font-bold text-amber-300">Not Ready to Proceed:</span> Please complete all critical checklist items
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+              <p className="text-sm text-amber-700">
+                <span className="font-bold text-amber-800">Not Ready to Proceed:</span> Please complete all critical checklist items
                 and read the final acknowledgment above before downloading Form N1.
               </p>
             </div>
           )}
 
           {/* Solicitor Recommendation */}
-          <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-4 text-center">
-            <p className="text-sm text-violet-200">
-              <span className="font-bold text-violet-300">Final Recommendation:</span> Have a solicitor review your Form N1 before filing.
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+            <p className="text-sm text-emerald-800">
+              <span className="font-bold text-emerald-900">Final Recommendation:</span> Have a solicitor review your Form N1 before filing.
               Even a brief consultation (£100-£300) can identify critical errors and save you thousands in potential
               costs if your claim is struck out.
             </p>
@@ -339,17 +339,17 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
         </div>
 
         {/* Footer - Action Buttons */}
-        <div className="sticky bottom-0 bg-dark-800 border-t border-dark-600 p-6 rounded-b-2xl flex gap-3">
+        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 p-6 rounded-b-2xl flex gap-3">
           <button
             onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-dark-600 border border-dark-500 hover:bg-dark-500 text-slate-300 rounded-xl font-medium transition-colors duration-200"
+            className="flex-1 px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 text-slate-700 rounded-xl font-medium transition-colors duration-200"
           >
             Cancel - Review Document
           </button>
           <button
             onClick={handleConfirm}
             disabled={!canProceed}
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 disabled:from-dark-600 disabled:to-dark-600 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-all duration-200 shadow-glow disabled:shadow-none"
+            className="flex-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all duration-200 shadow-sm disabled:shadow-none"
           >
             {canProceed ? 'Download Form N1' : `Complete ${criticalItems.length - criticalItems.filter(i => checkedItems.has(i.id)).length} Critical Items`}
           </button>

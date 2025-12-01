@@ -15,7 +15,7 @@
  */
 
 import React, { useState } from 'react';
-import { Percent, Building2, User, AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { Percent, Building2, User, AlertTriangle, CheckCircle, X, AlertCircle } from 'lucide-react';
 
 interface InterestRateConfirmModalProps {
   isOpen: boolean;
@@ -165,9 +165,13 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
                 </p>
                 <p className="text-xs text-blue-800">
                   When BOTH parties are companies/LLPs - Late Payment of Commercial Debts Act 1998
-                  (8% Bank of England base rate + 8% statutory = 12.75% total as of 2024)
+                  (4.75% Bank of England base rate + 8% statutory = 12.75% total)
                 </p>
               </div>
+              <p className="text-xs text-amber-600 flex items-center gap-1 mt-2">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                Rate based on BoE base rate as of Jan 2025. Verify current rate at bankofengland.co.uk before filing.
+              </p>
 
               <div className="bg-white border border-blue-200 rounded-lg p-3">
                 <p className="font-bold flex items-center gap-2 mb-1">

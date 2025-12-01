@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
-import { X, Upload, FileSpreadsheet, Download, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, Download, Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { ClaimState, INITIAL_STATE, PartyType, INITIAL_PARTY, INITIAL_INVOICE } from '../types';
 import { getCountyFromPostcode } from '../constants';
+import { validateImportedClaim, ImportValidationResult } from '../utils/validation';
 
 interface CsvImportModalProps {
   isOpen: boolean;
@@ -10,10 +11,17 @@ interface CsvImportModalProps {
   onImport: (claims: ClaimState[]) => void;
 }
 
+interface ParsedClaimWithValidation {
+  claim: ClaimState;
+  validation: ImportValidationResult;
+  rowNumber: number;
+}
+
 export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose, onImport }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
-  const [parsedClaims, setParsedClaims] = useState<ClaimState[]>([]);
+  const [parsedClaims, setParsedClaims] = useState<ParsedClaimWithValidation[]>([]);
+  const [skippedRows, setSkippedRows] = useState<{ row: number; reason: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,11 +75,11 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
       'SW1A 1AA',
       'Business'
     ];
-    
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(",") + "\n" 
+
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + headers.join(",") + "\n"
       + example.join(",");
-      
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -98,12 +106,12 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
         startValueIndex = i + 1;
       }
     }
-    
+
     // Push last value
     let lastVal = line.substring(startValueIndex);
     if (lastVal.startsWith('"') && lastVal.endsWith('"')) lastVal = lastVal.slice(1, -1);
     result.push(lastVal.trim());
-    
+
     return result;
   };
 
@@ -115,13 +123,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
 
     setParsing(true);
     setError(null);
-    
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
         const lines = text.split(/\r\n|\n/).filter(l => l.trim().length > 0);
-        
+
         if (lines.length < 2) {
             throw new Error("CSV file appears empty or missing headers.");
         }
@@ -131,7 +139,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
 
         // Helper to find index of column
         const getIdx = (keywords: string[]) => headers.findIndex(h => keywords.some(k => h.includes(k)));
-        
+
         const idxInvNum = getIdx(['invoicenumber', 'ref', 'inv']);
         const idxDate = getIdx(['dateissued', 'issue', 'date']);
         const idxDue = getIdx(['duedate', 'due']);
@@ -147,15 +155,23 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
             throw new Error("Could not detect required columns: Total Amount or Debtor Name.");
         }
 
+        const skipped: { row: number; reason: string }[] = [];
+
         for (let i = 1; i < lines.length; i++) {
             const row = parseCSVLine(lines[i]);
-            if (row.length < headers.length / 2) continue; // Skip empty-ish rows
+            if (row.length < headers.length / 2) {
+              skipped.push({ row: i + 1, reason: 'Row appears empty or malformed' });
+              continue;
+            }
 
             const amount = parseFloat(row[idxAmount]?.replace(/[^0-9.]/g, '') || '0');
-            if (isNaN(amount) || amount === 0) continue;
+            if (isNaN(amount) || amount === 0) {
+              skipped.push({ row: i + 1, reason: 'Invalid or missing amount' });
+              continue;
+            }
 
-            const name = row[idxName] || 'Unknown Debtor';
-            
+            const name = row[idxName] || '';
+
             // Infer type if missing
             let pType = PartyType.BUSINESS;
             if (idxType !== -1) {
@@ -202,9 +218,24 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                     type: 'invoice'
                 }]
             };
-            claims.push(newClaim);
+
+            // Validate the claim
+            const validation = validateImportedClaim({
+              defendant: newClaim.defendant,
+              claimant: newClaim.claimant,
+              invoice: newClaim.invoice
+            });
+
+            // If has critical errors, skip the row
+            if (!validation.isValid) {
+              skipped.push({ row: i + 1, reason: validation.errors.join('; ') });
+              continue;
+            }
+
+            claims.push({ claim: newClaim, validation, rowNumber: i + 1 });
         }
 
+        setSkippedRows(skipped);
         setParsedClaims(claims);
       } catch (err: any) {
         setError(err.message || "Failed to parse CSV");
@@ -216,24 +247,29 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
   };
 
   const handleFinalize = () => {
-    onImport(parsedClaims);
+    // Extract just the claims from the validation wrapper
+    const claimsToImport = parsedClaims.map(p => p.claim);
+    onImport(claimsToImport);
     setParsedClaims([]);
+    setSkippedRows([]);
     setError(null);
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-dark-700 rounded-2xl shadow-dark-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-dark-600">
+  const totalWarnings = parsedClaims.reduce((acc, p) => acc + p.validation.warnings.length, 0);
 
-        <div className="bg-gradient-to-r from-green-600 to-green-700 p-5 flex justify-between items-center text-white">
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200">
+
+        <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 p-5 flex justify-between items-center text-white">
             <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
+                <div className="bg-white/20 p-2 rounded-xl">
                     <FileSpreadsheet className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                    <h2 className="font-bold text-xl">Import Claims (CSV)</h2>
-                    <p className="text-xs text-green-100">Bulk create drafts from spreadsheet</p>
+                    <h2 className="font-bold text-xl font-display">Import Claims (CSV)</h2>
+                    <p className="text-xs text-emerald-100">Bulk create drafts from spreadsheet</p>
                 </div>
             </div>
             <button onClick={onClose} className="text-white/70 hover:text-white"><X className="w-6 h-6" /></button>
@@ -243,18 +279,18 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
             {!parsedClaims.length ? (
                 <>
                     <div
-                        className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200 mb-6 ${isDragging ? 'border-violet-500 bg-violet-500/10' : 'border-dark-500 hover:border-violet-500/50 hover:bg-dark-600'}`}
+                        className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200 mb-6 ${isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400 hover:bg-slate-50'}`}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
                     >
-                        <div className="w-16 h-16 bg-violet-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-violet-400">
+                        <div className="w-16 h-16 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-4 text-emerald-500">
                             {parsing ? <Loader2 className="w-8 h-8 animate-spin" /> : <Upload className="w-8 h-8" />}
                         </div>
-                        <p className="text-lg font-bold text-white mb-1">
+                        <p className="text-lg font-bold text-slate-900 mb-1">
                             {parsing ? "Parsing CSV..." : "Drag & Drop CSV file here"}
                         </p>
-                        <p className="text-sm text-slate-400 mb-6">or click to browse your computer</p>
+                        <p className="text-sm text-slate-500 mb-6">or click to browse your computer</p>
                         <input
                             type="file"
                             accept=".csv"
@@ -266,42 +302,82 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={parsing}
-                            className="px-6 py-2 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg font-bold text-sm hover:from-violet-500 hover:to-violet-400 transition-all duration-200 shadow-glow-sm"
+                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-all duration-200 shadow-sm"
                         >
                             Select File
                         </button>
                     </div>
 
                     {error && (
-                        <div className="flex items-center gap-3 bg-red-500/10 text-red-400 p-4 rounded-lg border border-red-500/30 mb-6">
+                        <div className="flex items-center gap-3 bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 mb-6">
                             <AlertCircle className="w-5 h-5 flex-shrink-0" />
                             <p className="text-sm">{error}</p>
                         </div>
                     )}
 
-                    <div className="bg-dark-600 rounded-xl p-4 border border-dark-500">
-                        <h3 className="font-bold text-sm text-white mb-2 flex items-center gap-2">
-                            <Download className="w-4 h-4 text-violet-400" /> Need a template?
+                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <h3 className="font-bold text-sm text-slate-900 mb-2 flex items-center gap-2">
+                            <Download className="w-4 h-4 text-emerald-500" /> Need a template?
                         </h3>
-                        <p className="text-xs text-slate-400 mb-3">Download our standard CSV template to ensure your columns are mapped correctly.</p>
-                        <button onClick={downloadTemplate} className="text-violet-400 text-xs font-bold hover:text-violet-300 transition-colors">
+                        <p className="text-xs text-slate-500 mb-3">Download our standard CSV template to ensure your columns are mapped correctly.</p>
+                        <button onClick={downloadTemplate} className="text-emerald-600 text-xs font-bold hover:text-emerald-700 transition-colors">
                             Download Template.csv
                         </button>
                     </div>
                 </>
             ) : (
                 <div className="text-center">
-                    <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-green-400">
+                    <div className="w-16 h-16 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-4 text-emerald-500">
                         <Check className="w-8 h-8" />
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">Ready to Import</h3>
-                    <p className="text-slate-400 mb-8">
-                        We successfully parsed <strong className="text-white">{parsedClaims.length}</strong> claims from your file.
+                    <h3 className="text-2xl font-bold text-slate-900 mb-2">Ready to Import</h3>
+                    <p className="text-slate-500 mb-4">
+                        We successfully parsed <strong className="text-slate-900">{parsedClaims.length}</strong> claims from your file.
                     </p>
 
-                    <div className="bg-dark-600 rounded-lg p-4 border border-dark-500 mb-8 max-h-[200px] overflow-y-auto text-left">
-                        <table className="w-full text-xs text-slate-300">
-                            <thead className="border-b border-dark-500 font-bold text-white">
+                    {/* Skipped rows warning */}
+                    {skippedRows.length > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-left">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                          <h4 className="font-bold text-red-900 text-sm">
+                            {skippedRows.length} row(s) skipped due to errors
+                          </h4>
+                        </div>
+                        <div className="max-h-[80px] overflow-y-auto">
+                          <ul className="text-xs text-red-800 space-y-1">
+                            {skippedRows.slice(0, 5).map((s, i) => (
+                              <li key={i}>Row {s.row}: {s.reason}</li>
+                            ))}
+                            {skippedRows.length > 5 && (
+                              <li className="text-red-600 font-medium">
+                                ...and {skippedRows.length - 5} more
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Warnings summary */}
+                    {totalWarnings > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-left">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="w-5 h-5 text-amber-600" />
+                          <h4 className="font-bold text-amber-900 text-sm">
+                            {totalWarnings} validation warning(s) detected
+                          </h4>
+                        </div>
+                        <p className="text-xs text-amber-800">
+                          Some claims have minor issues (e.g., missing postcodes, no invoice number).
+                          You can still import them but should review and complete the data.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-8 max-h-[200px] overflow-y-auto text-left">
+                        <table className="w-full text-xs text-slate-600">
+                            <thead className="border-b border-slate-200 font-bold text-slate-900">
                                 <tr>
                                     <th className="pb-2 pl-2">Invoice</th>
                                     <th className="pb-2">Debtor</th>
@@ -309,11 +385,18 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                                 </tr>
                             </thead>
                             <tbody>
-                                {parsedClaims.map((c, i) => (
-                                    <tr key={i} className="border-b border-dark-500 last:border-0">
-                                        <td className="py-2 pl-2 font-mono">{c.invoice.invoiceNumber}</td>
-                                        <td className="py-2">{c.defendant.name}</td>
-                                        <td className="py-2 text-right pr-2 font-bold text-violet-400">£{c.invoice.totalAmount.toFixed(2)}</td>
+                                {parsedClaims.map((p, i) => (
+                                    <tr key={i} className={`border-b border-slate-100 last:border-0 ${p.validation.warnings.length > 0 ? 'bg-amber-50/50' : ''}`}>
+                                        <td className="py-2 pl-2 font-mono">{p.claim.invoice.invoiceNumber}</td>
+                                        <td className="py-2">
+                                          {p.claim.defendant.name}
+                                          {p.validation.warnings.length > 0 && (
+                                            <span className="ml-1 text-amber-600" title={p.validation.warnings.join(', ')}>
+                                              <AlertTriangle className="w-3 h-3 inline" />
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="py-2 text-right pr-2 font-bold text-emerald-600 font-mono">£{p.claim.invoice.totalAmount.toFixed(2)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -322,16 +405,17 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
 
                     <div className="flex gap-3">
                         <button
-                            onClick={() => { setParsedClaims([]); setError(null); }}
-                            className="flex-1 py-3 bg-dark-600 border border-dark-500 text-slate-300 font-bold rounded-xl hover:bg-dark-500 transition-colors duration-200"
+                            onClick={() => { setParsedClaims([]); setSkippedRows([]); setError(null); }}
+                            className="flex-1 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors duration-200"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handleFinalize}
-                            className="flex-1 py-3 bg-gradient-to-r from-violet-600 to-violet-500 text-white font-bold rounded-xl hover:from-violet-500 hover:to-violet-400 transition-all duration-200 shadow-glow"
+                            disabled={parsedClaims.length === 0}
+                            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Import All
+                            Import {parsedClaims.length} Claim{parsedClaims.length !== 1 ? 's' : ''}
                         </button>
                     </div>
                 </div>

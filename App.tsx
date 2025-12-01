@@ -16,6 +16,7 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { StatementOfTruthModal } from './components/StatementOfTruthModal';
 import { InterestRateConfirmModal } from './components/InterestRateConfirmModal';
 import { LitigantInPersonModal } from './components/LitigantInPersonModal';
+import { ViabilityBlockModal } from './components/ViabilityBlockModal';
 import { AccountingIntegration } from './components/AccountingIntegration';
 import { XeroInvoiceImporter } from './components/XeroInvoiceImporter';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
@@ -28,6 +29,7 @@ import { assessClaimViability, calculateCourtFee, calculateCompensation } from '
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData } from './services/storageService';
 import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection, ExtractedClaimData } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS, getCountyFromPostcode } from './constants';
+import { validateDateRelationship, validateInterestCalculation, validateUniqueInvoice } from './utils/validation';
 import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, ChevronUp, ChevronDown, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent } from 'lucide-react';
 
 // New view state
@@ -66,6 +68,7 @@ const App: React.FC = () => {
 
   // Wizard State
   const [step, setStep] = useState<Step>(Step.SOURCE);
+  const [maxStepReached, setMaxStepReached] = useState<Step>(Step.SOURCE);
   const [claimData, setClaimData] = useState<ClaimState>(INITIAL_STATE);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingText, setProcessingText] = useState("");
@@ -99,6 +102,16 @@ const App: React.FC = () => {
   const [recommendationReason, setRecommendationReason] = useState<string>('');
   const [extractedFields, setExtractedFields] = useState<string[]>([]);
   const [chatHistoryExpanded, setChatHistoryExpanded] = useState(false);
+
+  // Validation State
+  const [dateValidationError, setDateValidationError] = useState<string | null>(null);
+  const [duplicateInvoiceWarning, setDuplicateInvoiceWarning] = useState<string | null>(null);
+  const [showViabilityWarning, setShowViabilityWarning] = useState(false);
+  const [viabilityIssues, setViabilityIssues] = useState<string[]>([]);
+  const [hasAcknowledgedViability, setHasAcknowledgedViability] = useState(false);
+  const [hasAcknowledgedLbaWarning, setHasAcknowledgedLbaWarning] = useState(false);
+  const [lbaAlreadySent, setLbaAlreadySent] = useState(false); // Manual override: user confirms they already sent an LBA
+  const [lbaSentDate, setLbaSentDate] = useState<string>(''); // Date when LBA was sent (for 30-day warning)
 
   // Initialize Nango on mount
   useEffect(() => {
@@ -203,6 +216,85 @@ const App: React.FC = () => {
     }
   }, [claimData, view]);
 
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (view === 'wizard' && claimData.id) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [view, claimData.id]);
+
+  // Helper to save claim immediately (used for critical transitions)
+  const saveClaimImmediately = async () => {
+    if (claimData.id) {
+      await saveClaimToStorage({ ...claimData, lastModified: Date.now() });
+      const stored = await getStoredClaims();
+      setDashboardClaims(stored);
+    }
+  };
+
+  // Check for duplicate invoice numbers
+  useEffect(() => {
+    if (claimData.invoice.invoiceNumber && dashboardClaims.length > 0) {
+      const isUnique = validateUniqueInvoice(
+        claimData.invoice.invoiceNumber,
+        claimData.id,
+        dashboardClaims
+      );
+      if (!isUnique) {
+        setDuplicateInvoiceWarning(
+          `Invoice "${claimData.invoice.invoiceNumber}" may already exist in another claim. Please verify this is not a duplicate.`
+        );
+      } else {
+        setDuplicateInvoiceWarning(null);
+      }
+    } else {
+      setDuplicateInvoiceWarning(null);
+    }
+  }, [claimData.invoice.invoiceNumber, claimData.id, dashboardClaims]);
+
+  // Auto-populate timeline when entering Timeline step if empty but invoice data exists
+  useEffect(() => {
+    if (step === Step.TIMELINE && claimData.timeline.length === 0 && claimData.invoice.dateIssued) {
+      const invoiceEvent: TimelineEvent = {
+        date: claimData.invoice.dateIssued,
+        description: `Invoice #${claimData.invoice.invoiceNumber || 'N/A'} sent for £${claimData.invoice.totalAmount?.toFixed(2) || '0.00'}`,
+        type: 'invoice'
+      };
+
+      const events: TimelineEvent[] = [invoiceEvent];
+
+      // Also add payment due date if we can calculate it
+      if (claimData.invoice.paymentTermsDays) {
+        const invoiceDate = new Date(claimData.invoice.dateIssued);
+        invoiceDate.setDate(invoiceDate.getDate() + claimData.invoice.paymentTermsDays);
+        const dueDateEvent: TimelineEvent = {
+          date: invoiceDate.toISOString().split('T')[0],
+          description: `Payment due (${claimData.invoice.paymentTermsDays} day terms)`,
+          type: 'payment_due'
+        };
+        events.push(dueDateEvent);
+      }
+
+      setClaimData(prev => ({ ...prev, timeline: events }));
+    }
+  }, [step, claimData.timeline.length, claimData.invoice.dateIssued]);
+
+  // --- Step Navigation Wrapper ---
+  // Updates step and tracks the highest step reached for forward navigation after going back
+  const handleStepChange = (newStep: Step) => {
+    setStep(newStep);
+    if (newStep > maxStepReached) {
+      setMaxStepReached(newStep);
+    }
+  };
+
   // --- Navigation Handlers ---
   const handleStartNewClaim = () => {
     // Phase 2: Show combined onboarding modal (disclaimer + eligibility)
@@ -215,6 +307,7 @@ const App: React.FC = () => {
     // Reset Wizard and Enter
     setClaimData({ ...INITIAL_STATE, id: Math.random().toString(36).substr(2, 9) });
     setStep(Step.SOURCE);
+    setMaxStepReached(Step.SOURCE);
     setIsEditingAnalysis(false);
     setView('wizard');
   };
@@ -227,28 +320,31 @@ const App: React.FC = () => {
   const handleResumeClaim = (claim: ClaimState) => {
     setClaimData(claim);
     // Smart heuristic to jump to the correct step based on claim completeness
+    let resumeStep: Step;
     if (claim.status === 'sent') {
-      setStep(Step.PREVIEW);
+      resumeStep = Step.PREVIEW;
       setIsFinalized(true);
     } else if (claim.generated) {
-      setStep(Step.DRAFT);
+      resumeStep = Step.DRAFT;
     } else if (!claim.claimant.name || !claim.defendant.name || !claim.invoice.totalAmount) {
       // Missing essential party/invoice details
-      setStep(Step.DETAILS);
-    } else if (claim.timeline.length < 2) {
-      // Need at least invoice + one other event
-      setStep(Step.TIMELINE);
+      resumeStep = Step.DETAILS;
+    } else if (claim.timeline.length < 1) {
+      // Need at least the invoice event
+      resumeStep = Step.TIMELINE;
     } else if (claim.chatHistory.length === 0) {
       // Must go through AI consultation before document selection
       // This ensures the AI checks for missing data and recommends the right document
-      setStep(Step.TIMELINE);
+      resumeStep = Step.TIMELINE;
     } else if (claim.selectedDocType && claim.chatHistory.length > 0) {
       // Has completed consultation and selected a document type
-      setStep(Step.RECOMMENDATION);
+      resumeStep = Step.RECOMMENDATION;
     } else {
       // In the middle of consultation
-      setStep(Step.QUESTIONS);
+      resumeStep = Step.QUESTIONS;
     }
+    setStep(resumeStep);
+    setMaxStepReached(resumeStep);
     setView('wizard');
   };
 
@@ -355,6 +451,22 @@ const App: React.FC = () => {
   // --- Wizard Logic (Existing) ---
   useEffect(() => {
     if (view !== 'wizard') return;
+
+    // Validate date relationship
+    if (claimData.invoice.dateIssued && claimData.invoice.dueDate) {
+      const dateValidation = validateDateRelationship(
+        claimData.invoice.dateIssued,
+        claimData.invoice.dueDate
+      );
+      if (!dateValidation.isValid) {
+        setDateValidationError(dateValidation.error || 'Invalid date relationship');
+      } else {
+        setDateValidationError(null);
+      }
+    } else {
+      setDateValidationError(null);
+    }
+
     const interest = calculateInterest(
       claimData.invoice.totalAmount,
       claimData.invoice.dateIssued,
@@ -362,6 +474,22 @@ const App: React.FC = () => {
       claimData.claimant.type,
       claimData.defendant.type
     );
+
+    // Verify interest calculation
+    if (interest.totalInterest > 0 && interest.daysOverdue > 0) {
+      const isB2B = claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS;
+      const rate = isB2B ? LATE_PAYMENT_ACT_RATE : 8.0;
+      const interestValidation = validateInterestCalculation(
+        claimData.invoice.totalAmount,
+        rate,
+        interest.daysOverdue,
+        interest.totalInterest
+      );
+      if (!interestValidation.isValid) {
+        console.warn('Interest calculation discrepancy:', interestValidation.error);
+      }
+    }
+
     const compensation = calculateCompensation(
         claimData.invoice.totalAmount,
         claimData.claimant.type,
@@ -484,7 +612,7 @@ const App: React.FC = () => {
             if (companyDetails) newState.defendant = { ...newState.defendant, ...companyDetails };
         }
         setClaimData(newState);
-        setStep(Step.DETAILS);
+        handleStepChange(Step.DETAILS);
         setIsEditingAnalysis(false);
     } catch (err) {
         setError("Failed to analyze documents. Please ensure they are legible.");
@@ -495,7 +623,7 @@ const App: React.FC = () => {
 
   const handleManualEntry = () => {
     setClaimData(prev => ({ ...prev, source: 'manual' }));
-    setStep(Step.DETAILS);
+    handleStepChange(Step.DETAILS);
   };
 
   const handleLegacyXeroImport = async (importedData: Partial<ClaimState>) => {
@@ -531,7 +659,7 @@ const App: React.FC = () => {
        setIsProcessing(false);
     }
     setClaimData(newState as ClaimState);
-    setStep(Step.DETAILS);
+    handleStepChange(Step.DETAILS);
     setIsEditingAnalysis(false);
   };
 
@@ -589,10 +717,10 @@ const App: React.FC = () => {
   const runAssessment = async () => {
     setIsProcessing(true);
     setProcessingText("Running Legal Judgment Agent...");
-    
+
     // 1. Basic Rules Assessment
     const assessment = assessClaimViability(claimData);
-    
+
     // 2. AI Strength Assessment
     try {
        const aiStrength = await getClaimStrengthAssessment(claimData);
@@ -605,13 +733,55 @@ const App: React.FC = () => {
 
     setClaimData(prev => ({ ...prev, assessment }));
     setIsProcessing(false);
-    // Assessment now shown inline in DETAILS step, no longer a separate step
+
+    // Check for viability issues and show blocking modal if needed
+    if (!assessment.isViable && !hasAcknowledgedViability) {
+      const issues: Array<{ type: 'statute_barred' | 'defendant_dissolved' | 'exceeds_track' | 'other'; message: string }> = [];
+
+      // Check for specific viability issues
+      if (assessment.checks) {
+        const limitationCheck = assessment.checks.find((c: any) => c.name === 'Limitation Act 1980');
+        if (limitationCheck && !limitationCheck.passed) {
+          issues.push({
+            type: 'statute_barred',
+            message: 'This claim may be statute-barred under the Limitation Act 1980. Claims for breach of contract must generally be brought within 6 years of the cause of action.'
+          });
+        }
+
+        const solvencyCheck = assessment.checks.find((c: any) => c.name === 'Solvency Check');
+        if (solvencyCheck && !solvencyCheck.passed) {
+          issues.push({
+            type: 'defendant_dissolved',
+            message: 'The defendant company appears to be dissolved, in liquidation, or insolvent. Recovery may be impossible or severely limited.'
+          });
+        }
+
+        const valueCheck = assessment.checks.find((c: any) => c.name === 'Claim Value Check');
+        if (valueCheck && !valueCheck.passed) {
+          issues.push({
+            type: 'exceeds_track',
+            message: 'This claim exceeds the Small Claims Track limit of £10,000. You may need legal representation and costs will be significantly higher.'
+          });
+        }
+      }
+
+      // Generic issue if no specific ones found
+      if (issues.length === 0) {
+        issues.push({
+          type: 'other',
+          message: 'The claim has failed viability checks. Please review the assessment details for more information.'
+        });
+      }
+
+      setViabilityIssues(issues);
+      setShowViabilityWarning(true);
+    }
   };
 
   const handleStartChat = async () => {
     setIsProcessing(true);
     setProcessingText("Initializing Legal Assistant...");
-    setStep(Step.QUESTIONS);
+    handleStepChange(Step.QUESTIONS);
     
     // If chat is empty, seed it with the initial analysis
     if (claimData.chatHistory.length === 0) {
@@ -720,11 +890,11 @@ const App: React.FC = () => {
         return merged;
       });
 
-      setStep(Step.DATA_REVIEW);
+      handleStepChange(Step.DATA_REVIEW);
     } catch (error) {
       console.error('Extraction failed:', error);
       // Fallback: go to data review anyway with existing data
-      setStep(Step.DATA_REVIEW);
+      handleStepChange(Step.DATA_REVIEW);
     } finally {
       setIsProcessing(false);
       setProcessingText("");
@@ -825,7 +995,7 @@ const App: React.FC = () => {
         // Use new DocumentBuilder with template + AI hybrid approach
         const result = await DocumentBuilder.generateDocument(claimData);
         setClaimData(prev => ({ ...prev, generated: result }));
-        setStep(Step.DRAFT);
+        handleStepChange(Step.DRAFT);
 
         // Show validation warnings to user if any
         if (result.validation?.warnings && result.validation.warnings.length > 0) {
@@ -889,7 +1059,7 @@ const App: React.FC = () => {
     // Validation is now built into DocumentBuilder.generateDocument()
     // So we can go straight to preview
     setIsFinalized(false);
-    setStep(Step.PREVIEW);
+    handleStepChange(Step.PREVIEW);
   };
 
   const handleConfirmDraft = async () => {
@@ -950,7 +1120,7 @@ const App: React.FC = () => {
             return (
                 <div className="space-y-8 animate-fade-in py-10 max-w-5xl mx-auto">
                     <button
-                      onClick={() => setStep(Step.SOURCE)}
+                      onClick={() => handleStepChange(Step.SOURCE)}
                       className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
                     >
                       <ArrowLeft className="w-4 h-4" />
@@ -1014,10 +1184,30 @@ const App: React.FC = () => {
                               helpText={`Leave blank to use ${DEFAULT_PAYMENT_TERMS_DAYS}-day payment terms`}
                             />
                         </div>
+                        {/* Date validation error */}
+                        {dateValidationError && (
+                          <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                            <div>
+                              <h4 className="font-bold text-red-900 text-sm">Date Validation Issue</h4>
+                              <p className="text-red-800 text-sm mt-1">{dateValidationError}</p>
+                            </div>
+                          </div>
+                        )}
+                        {/* Duplicate invoice warning */}
+                        {duplicateInvoiceWarning && (
+                          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                              <h4 className="font-bold text-amber-900 text-sm">Possible Duplicate</h4>
+                              <p className="text-amber-800 text-sm mt-1">{duplicateInvoiceWarning}</p>
+                            </div>
+                          </div>
+                        )}
                     </div>
                     <div className="flex justify-end pt-4">
                         <button onClick={runAssessment} disabled={!claimData.invoice.totalAmount || !claimData.claimant.name} className="bg-slate-900 text-white px-12 py-4 rounded-xl shadow-lg font-bold text-lg flex items-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                            {isProcessing ? <Loader2 className="animate-spin" /> : <>Analyze & Assess Claim <ArrowRight className="w-5 h-5" /></>}
+                            {isProcessing ? <Loader2 className="animate-spin" /> : <>Check Eligibility <ArrowRight className="w-5 h-5" /></>}
                         </button>
                     </div>
 
@@ -1026,7 +1216,7 @@ const App: React.FC = () => {
                         <div className="mt-12 pt-8 border-t-2 border-slate-200">
                             <AssessmentReport
                                 assessment={claimData.assessment}
-                                onContinue={() => setStep(Step.TIMELINE)}
+                                onContinue={() => handleStepChange(Step.TIMELINE)}
                             />
                         </div>
                     )}
@@ -1037,7 +1227,7 @@ const App: React.FC = () => {
             return (
                 <div className="max-w-3xl mx-auto animate-fade-in py-10">
                     <button
-                      onClick={() => setStep(Step.SOURCE)}
+                      onClick={() => handleStepChange(Step.SOURCE)}
                       className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
                     >
                       <ArrowLeft className="w-4 h-4" />
@@ -1066,7 +1256,7 @@ const App: React.FC = () => {
                         <div className="mt-12 pt-8 border-t-2 border-slate-200">
                             <AssessmentReport
                                 assessment={claimData.assessment}
-                                onContinue={() => setStep(Step.TIMELINE)}
+                                onContinue={() => handleStepChange(Step.TIMELINE)}
                             />
                         </div>
                     )}
@@ -1079,7 +1269,7 @@ const App: React.FC = () => {
             <div className="space-y-8 py-10">
                 <div className="max-w-4xl mx-auto">
                     <button
-                        onClick={() => setStep(Step.DETAILS)}
+                        onClick={() => handleStepChange(Step.DETAILS)}
                         className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
                     >
                         <ArrowLeft className="w-4 h-4" />
@@ -1093,14 +1283,13 @@ const App: React.FC = () => {
                 />
 
                 {/* Timeline validation warning */}
-                {claimData.timeline.length < 2 && (
+                {claimData.timeline.length === 0 && (
                   <div className="max-w-4xl mx-auto bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="font-bold text-amber-900 text-sm">Timeline Incomplete</h4>
+                      <h4 className="font-bold text-amber-900 text-sm">Timeline Empty</h4>
                       <p className="text-amber-800 text-sm mt-1">
-                        A strong claim needs at least the invoice date and one follow-up action (chaser email, phone call, or formal reminder).
-                        This demonstrates you made reasonable efforts to recover the debt before legal action.
+                        Add at least the invoice date to proceed. Additional events (chaser emails, phone calls) strengthen your claim.
                       </p>
                     </div>
                   </div>
@@ -1110,7 +1299,7 @@ const App: React.FC = () => {
                     {/* AI Consultation is now the primary and required path */}
                     <button
                         onClick={() => handleStartChat()}
-                        disabled={claimData.timeline.length < 2}
+                        disabled={claimData.timeline.length < 1}
                         className="w-full max-w-md bg-slate-900 text-white px-8 py-4 rounded-xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 font-medium shadow-lg"
                     >
                         <MessageSquareText className="w-5 h-5"/>
@@ -1141,7 +1330,7 @@ const App: React.FC = () => {
         return (
           <div className="space-y-6 animate-fade-in py-10 max-w-5xl mx-auto">
             <button
-              onClick={() => setStep(Step.QUESTIONS)}
+              onClick={() => handleStepChange(Step.QUESTIONS)}
               className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -1268,7 +1457,7 @@ const App: React.FC = () => {
             {/* Navigation */}
             <div className="flex justify-end pt-6 border-t border-slate-100">
               <button
-                onClick={() => setStep(Step.RECOMMENDATION)}
+                onClick={() => handleStepChange(Step.RECOMMENDATION)}
                 className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all"
               >
                 Continue to Document Selection
@@ -1280,14 +1469,15 @@ const App: React.FC = () => {
       }
 
       case Step.RECOMMENDATION: {
-        // Legal Compliance Logic: Check timeline for LBA
-        const hasLBA = claimData.timeline.some(e =>
+        // Legal Compliance Logic: Check timeline for LBA or manual override
+        const timelineHasLBA = claimData.timeline.some(e =>
             e.type === 'lba_sent' ||
             (e.type === 'chaser' &&
               (e.description.toLowerCase().includes('letter before action') ||
                e.description.toLowerCase().includes('lba') ||
                e.description.toLowerCase().includes('formal demand')))
         );
+        const hasLBA = timelineHasLBA || lbaAlreadySent;
 
         const recommendedDoc = hasLBA ? DocumentType.FORM_N1 : DocumentType.LBA;
 
@@ -1421,7 +1611,7 @@ const App: React.FC = () => {
         return (
           <div className="space-y-8 animate-fade-in py-10 max-w-6xl mx-auto">
             <button
-              onClick={() => setStep(Step.DATA_REVIEW)}
+              onClick={() => handleStepChange(Step.DATA_REVIEW)}
               className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -1462,7 +1652,7 @@ const App: React.FC = () => {
                     <button
                       onClick={() => {
                         setHasVerifiedInterest(true);
-                        setStep(Step.DRAFT);
+                        handleStepChange(Step.DRAFT);
                       }}
                       className="bg-white text-slate-900 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-100 transition-all shadow-lg"
                     >
@@ -1548,13 +1738,127 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {/* Warning for N1 without LBA */}
+            {/* LBA Override Toggle - shown when timeline doesn't have LBA but user may have sent one externally */}
+            {!timelineHasLBA && (() => {
+              const daysSinceLba = lbaSentDate
+                ? Math.floor((Date.now() - new Date(lbaSentDate).getTime()) / (1000 * 60 * 60 * 24))
+                : 0;
+
+              return (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-4">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={lbaAlreadySent}
+                        onChange={(e) => {
+                          setLbaAlreadySent(e.target.checked);
+                          if (!e.target.checked) setLbaSentDate('');
+                        }}
+                        className="mt-1 w-5 h-5 rounded border-blue-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div>
+                        <span className="font-semibold text-blue-900">I have already sent a Letter Before Action</span>
+                        <p className="text-sm text-blue-700 mt-1">
+                          Check this if you sent an LBA outside of this system. This will enable Form N1 as an option.
+                          You should keep evidence of your LBA for court.
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Date input when checkbox is checked */}
+                    {lbaAlreadySent && (
+                      <div className="mt-4 ml-8">
+                        <label className="block text-sm font-medium text-blue-900 mb-1">
+                          Date LBA was sent:
+                        </label>
+                        <input
+                          type="date"
+                          value={lbaSentDate}
+                          onChange={(e) => setLbaSentDate(e.target.value)}
+                          max={new Date().toISOString().split('T')[0]}
+                          className="block w-48 rounded-lg border-blue-300 bg-white px-3 py-2 text-slate-900 focus:ring-2 focus:ring-blue-500"
+                        />
+
+                        {/* 30-day warning */}
+                        {lbaSentDate && daysSinceLba < 30 && (
+                          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-800">
+                              <strong>Only {daysSinceLba} day{daysSinceLba !== 1 ? 's' : ''} since LBA.</strong>{' '}
+                              Pre-Action Protocol requires 30 days before filing Form N1.
+                              You may proceed, but the court may impose cost sanctions for premature filing.
+                            </p>
+                          </div>
+                        )}
+
+                        {lbaSentDate && daysSinceLba >= 30 && (
+                          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
+                            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-green-800">
+                              <strong>{daysSinceLba} days since LBA.</strong>{' '}
+                              30-day response period has elapsed. You may proceed to file Form N1.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Soft-Block Warning for N1 without LBA */}
             {claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && (
-              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 flex items-start gap-4 animate-fade-in">
-                <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-red-900 mb-1">Pre-Action Protocol Warning</h4>
-                  <p className="text-sm text-red-700">Filing N1 without a compliant Letter Before Action may result in cost sanctions, even if you win your case. The court may refuse to award you costs or order you to pay the defendant's costs.</p>
+              <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6 animate-fade-in">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-red-900 text-lg mb-2">Pre-Action Protocol Warning</h3>
+                    <p className="text-sm text-red-700 mb-3">
+                      Filing Form N1 without a compliant Letter Before Action (LBA) violates the Pre-Action Protocol for Debt Claims.
+                      The court may impose cost sanctions, even if you win your case.
+                    </p>
+                    <div className="bg-red-100 border border-red-200 rounded-lg p-3 mb-4">
+                      <h4 className="font-bold text-red-900 text-sm mb-2">Potential Consequences:</h4>
+                      <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
+                        <li>Court may refuse to award you costs</li>
+                        <li>Court may order you to pay defendant's costs</li>
+                        <li>Court may stay proceedings until LBA requirements are met</li>
+                        <li>Claim may be struck out in severe cases</li>
+                      </ul>
+                    </div>
+                    <div className="bg-white border border-red-200 rounded-lg p-3 mb-4">
+                      <p className="text-sm text-slate-700">
+                        <strong>Recommended:</strong> Add an LBA to your timeline first, or{' '}
+                        <button
+                          onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: DocumentType.LBA }))}
+                          className="text-red-600 underline hover:text-red-700 font-medium"
+                        >
+                          generate an LBA document
+                        </button>
+                        {' '}instead.
+                      </p>
+                    </div>
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={hasAcknowledgedLbaWarning}
+                        onChange={(e) => setHasAcknowledgedLbaWarning(e.target.checked)}
+                        className="mt-1 w-5 h-5 rounded border-red-300 text-red-600 focus:ring-2 focus:ring-red-500 cursor-pointer"
+                      />
+                      <span className="text-sm text-red-900">
+                        <span className="font-bold">I understand and accept the risks:</span>{' '}
+                        I am proceeding without an LBA and accept that I may face cost sanctions or other adverse consequences.
+                        I take full responsibility for this decision.
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </div>
             )}
@@ -1619,7 +1923,7 @@ const App: React.FC = () => {
             <div className="flex justify-end pt-4 border-t border-slate-200">
                 <button
                   onClick={handleDraftClaim}
-                  disabled={isProcessing || !claimData.selectedDocType || !hasVerifiedInterest}
+                  disabled={isProcessing || !claimData.selectedDocType || !hasVerifiedInterest || (claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && !hasAcknowledgedLbaWarning)}
                   className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-12 py-4 rounded-xl shadow-lg hover:shadow-2xl font-bold text-lg flex items-center gap-3 transition-all transform hover:-translate-y-1 disabled:transform-none"
                 >
                     {isProcessing ? <Loader2 className="animate-spin"/> : <><Wand2 className="w-5 h-5" /> Generate Document</>}
@@ -1702,12 +2006,12 @@ const App: React.FC = () => {
                             onChange={(e) => setClaimData(prev => prev.generated ? ({...prev, generated: {...prev.generated!, content: e.target.value}}) : prev)}
                         />
                     )}
-                    <div className="flex justify-between mt-6 pt-6 border-t border-slate-100"><button onClick={() => setStep(Step.RECOMMENDATION)} className="text-slate-500 font-medium hover:text-slate-800 transition-colors flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back to Selection</button><button onClick={handlePrePreview} disabled={isProcessing} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all">{isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <>Finalize & Preview <ArrowRight className="w-5 h-5" /></>}</button></div>
+                    <div className="flex justify-between mt-6 pt-6 border-t border-slate-100"><button onClick={() => handleStepChange(Step.RECOMMENDATION)} className="text-slate-500 font-medium hover:text-slate-800 transition-colors flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back to Selection</button><button onClick={handlePrePreview} disabled={isProcessing} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all">{isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <>Finalize & Preview <ArrowRight className="w-5 h-5" /></>}</button></div>
                  </div>
             </div>
         );
       case Step.PREVIEW:
-        return <DocumentPreview data={claimData} onBack={() => setStep(Step.DRAFT)} isFinalized={isFinalized} onConfirm={handleConfirmDraft} onUpdateSignature={(sig) => setClaimData(p => ({...p, signature: sig}))} />;
+        return <DocumentPreview data={claimData} onBack={() => handleStepChange(Step.DRAFT)} isFinalized={isFinalized} onConfirm={handleConfirmDraft} onUpdateSignature={(sig) => setClaimData(p => ({...p, signature: sig}))} />;
     }
   };
 
@@ -2160,14 +2464,14 @@ const App: React.FC = () => {
 
       {/* Desktop Sidebar */}
       <div className="w-72 flex-shrink-0 hidden md:block h-full">
-        <Sidebar view={view} currentStep={step} onDashboardClick={handleExitWizard} onStepSelect={setStep} />
+        <Sidebar view={view} currentStep={step} maxStepReached={maxStepReached} onDashboardClick={handleExitWizard} onStepSelect={setStep} />
       </div>
 
       {/* Mobile Sidebar Drawer */}
       <div className={`fixed inset-0 z-40 md:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
          <div className="absolute inset-0 bg-dark-900/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
          <div className={`absolute left-0 top-0 bottom-0 w-72 bg-dark-900 transition-transform duration-300 shadow-dark-xl ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-             <Sidebar view={view} currentStep={step} onDashboardClick={handleExitWizard} onCloseMobile={() => setIsMobileMenuOpen(false)} onStepSelect={setStep} />
+             <Sidebar view={view} currentStep={step} maxStepReached={maxStepReached} onDashboardClick={handleExitWizard} onCloseMobile={() => setIsMobileMenuOpen(false)} onStepSelect={setStep} />
          </div>
       </div>
 
@@ -2198,7 +2502,7 @@ const App: React.FC = () => {
                           <button
                             onClick={() => {
                               setError(null);
-                              setStep(Step.DETAILS);
+                              handleStepChange(Step.DETAILS);
                             }}
                             className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
                           >
@@ -2207,7 +2511,7 @@ const App: React.FC = () => {
                           <button
                             onClick={() => {
                               setError(null);
-                              setStep(Step.TIMELINE);
+                              handleStepChange(Step.TIMELINE);
                             }}
                             className="bg-white text-red-700 border border-red-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors"
                           >
@@ -2301,7 +2605,7 @@ const App: React.FC = () => {
           try {
             const result = await DocumentBuilder.generateDocument(claimData);
             setClaimData(prev => ({ ...prev, generated: result }));
-            setStep(Step.DRAFT);
+            handleStepChange(Step.DRAFT);
             if (result.validation?.warnings && result.validation.warnings.length > 0) {
               console.warn('Document warnings:', result.validation.warnings);
             }
@@ -2333,6 +2637,17 @@ const App: React.FC = () => {
           claimData.selectedDocType === DocumentType.ADMISSION ? 'Admission (N225A)' :
           'Court Document'
         }
+      />
+
+      {/* Viability Warning Modal */}
+      <ViabilityBlockModal
+        isOpen={showViabilityWarning}
+        onClose={() => setShowViabilityWarning(false)}
+        onProceed={() => {
+          setHasAcknowledgedViability(true);
+          setShowViabilityWarning(false);
+        }}
+        issues={viabilityIssues}
       />
     </div>
   );
