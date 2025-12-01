@@ -20,14 +20,14 @@ import { AccountingIntegration } from './components/AccountingIntegration';
 import { XeroInvoiceImporter } from './components/XeroInvoiceImporter';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
-import { analyzeEvidence, startClarificationChat, sendChatMessage, getClaimStrengthAssessment } from './services/geminiService';
+import { analyzeEvidence, startClarificationChat, sendChatMessage, getClaimStrengthAssessment, extractDataFromChat } from './services/geminiService';
 import { DocumentBuilder } from './services/documentBuilder';
 import { NangoClient } from './services/nangoClient';
 import { searchCompaniesHouse } from './services/companiesHouse';
 import { assessClaimViability, calculateCourtFee, calculateCompensation } from './services/legalRules';
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData } from './services/storageService';
-import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection } from './types';
-import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS } from './constants';
+import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection, ExtractedClaimData } from './types';
+import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS, getCountyFromPostcode } from './constants';
 import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, ChevronUp, ChevronDown, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent } from 'lucide-react';
 
 // New view state
@@ -39,9 +39,10 @@ enum Step {
   ASSESSMENT = 3,  // DEPRECATED: Not used in flow, kept for enum stability
   TIMELINE = 4,    // Moved before Questions so AI has context
   QUESTIONS = 5,   // Chat / Consultation
-  FINAL = 6,       // Strategy & Doc Selection
-  DRAFT = 7,
-  PREVIEW = 8
+  DATA_REVIEW = 6, // NEW: Review AI-extracted data
+  RECOMMENDATION = 7, // Renamed from FINAL: Strategy & Doc Selection
+  DRAFT = 8,
+  PREVIEW = 9
 }
 
 // Wizard step definitions for progress indicator
@@ -50,7 +51,8 @@ const WIZARD_STEPS = [
   { number: Step.DETAILS, label: 'Claim Details', description: 'Parties & amounts' },
   { number: Step.TIMELINE, label: 'Timeline', description: 'Event history' },
   { number: Step.QUESTIONS, label: 'Consultation', description: 'AI questions' },
-  { number: Step.FINAL, label: 'Strategy', description: 'Document type' },
+  { number: Step.DATA_REVIEW, label: 'Review Data', description: 'Verify details' },
+  { number: Step.RECOMMENDATION, label: 'Strategy', description: 'Document type' },
   { number: Step.DRAFT, label: 'Draft', description: 'Edit content' },
   { number: Step.PREVIEW, label: 'Review', description: 'Final check' }
 ];
@@ -91,6 +93,12 @@ const App: React.FC = () => {
 
   // Phase 2: Inline interest verification (replaces InterestRateConfirmModal)
   const [hasVerifiedInterest, setHasVerifiedInterest] = useState(false);
+
+  // AI Data Extraction State (for DATA_REVIEW step)
+  const [extractedData, setExtractedData] = useState<ExtractedClaimData | null>(null);
+  const [recommendationReason, setRecommendationReason] = useState<string>('');
+  const [extractedFields, setExtractedFields] = useState<string[]>([]);
+  const [chatHistoryExpanded, setChatHistoryExpanded] = useState(false);
 
   // Initialize Nango on mount
   useEffect(() => {
@@ -230,11 +238,16 @@ const App: React.FC = () => {
     } else if (claim.timeline.length < 2) {
       // Need at least invoice + one other event
       setStep(Step.TIMELINE);
-    } else if (claim.chatHistory.length > 0) {
-      // Has started consultation, continue there
-      setStep(Step.QUESTIONS);
+    } else if (claim.chatHistory.length === 0) {
+      // Must go through AI consultation before document selection
+      // This ensures the AI checks for missing data and recommends the right document
+      setStep(Step.TIMELINE);
+    } else if (claim.selectedDocType && claim.chatHistory.length > 0) {
+      // Has completed consultation and selected a document type
+      setStep(Step.RECOMMENDATION);
     } else {
-      setStep(Step.FINAL);
+      // In the middle of consultation
+      setStep(Step.QUESTIONS);
     }
     setView('wizard');
   };
@@ -438,12 +451,24 @@ const App: React.FC = () => {
            return match ? { ...file, classification: match.type } : { ...file, classification: "Unclassified" };
         });
 
+        // Merge AI results with existing data
+        const mergedClaimant = { ...claimData.claimant, ...result.claimant };
+        const mergedDefendant = { ...claimData.defendant, ...result.defendant };
+
+        // Infer county from postcode if AI didn't return it
+        if (!mergedClaimant.county && mergedClaimant.postcode) {
+          mergedClaimant.county = getCountyFromPostcode(mergedClaimant.postcode);
+        }
+        if (!mergedDefendant.county && mergedDefendant.postcode) {
+          mergedDefendant.county = getCountyFromPostcode(mergedDefendant.postcode);
+        }
+
         let newState = {
           ...claimData,
           evidence: updatedEvidence,
           source: 'upload' as const,
-          claimant: { ...claimData.claimant, ...result.claimant },
-          defendant: { ...claimData.defendant, ...result.defendant },
+          claimant: mergedClaimant,
+          defendant: mergedDefendant,
           invoice: { ...claimData.invoice, ...result.invoice },
           timeline: result.timelineEvents || []
         };
@@ -477,11 +502,22 @@ const App: React.FC = () => {
     const mergedClaimant = (claimData.claimant.name && claimData.claimant.name.length > 0)
       ? claimData.claimant
       : { ...claimData.claimant, ...importedData.claimant };
+    const mergedDefendant = { ...claimData.defendant, ...importedData.defendant };
     const mergedTimeline = [...(claimData.timeline || []), ...(importedData.timeline || [])];
+
+    // Infer county from postcode if not set (Xero often doesn't have UK county data)
+    if (!mergedClaimant.county && mergedClaimant.postcode) {
+      mergedClaimant.county = getCountyFromPostcode(mergedClaimant.postcode);
+    }
+    if (!mergedDefendant.county && mergedDefendant.postcode) {
+      mergedDefendant.county = getCountyFromPostcode(mergedDefendant.postcode);
+    }
+
     let newState = {
       ...claimData,
       ...importedData,
       claimant: mergedClaimant,
+      defendant: mergedDefendant,
       timeline: mergedTimeline
     };
     setIsProcessing(true);
@@ -615,6 +651,84 @@ const App: React.FC = () => {
       } finally {
          setIsProcessing(false);
       }
+  };
+
+  // Handle transition from chat to data review
+  const handleContinueFromChat = async () => {
+    setIsProcessing(true);
+    setProcessingText("Analyzing conversation...");
+
+    try {
+      // Extract structured data from chat
+      const extracted = await extractDataFromChat(claimData.chatHistory, claimData);
+
+      // Store extraction results
+      setExtractedData(extracted);
+      setRecommendationReason(extracted.documentReason);
+      setExtractedFields(extracted.extractedFields);
+
+      // Merge extracted data with existing data (don't overwrite user-entered data)
+      setClaimData(prev => {
+        const merged = { ...prev };
+
+        // Merge claimant data (only fill empty fields)
+        if (extracted.claimant) {
+          merged.claimant = {
+            ...prev.claimant,
+            county: prev.claimant.county || extracted.claimant.county || prev.claimant.county,
+            address: prev.claimant.address || extracted.claimant.address || prev.claimant.address,
+            city: prev.claimant.city || extracted.claimant.city || prev.claimant.city,
+            postcode: prev.claimant.postcode || extracted.claimant.postcode || prev.claimant.postcode,
+            name: prev.claimant.name || extracted.claimant.name || prev.claimant.name,
+          };
+        }
+
+        // Merge defendant data (only fill empty fields)
+        if (extracted.defendant) {
+          merged.defendant = {
+            ...prev.defendant,
+            county: prev.defendant.county || extracted.defendant.county || prev.defendant.county,
+            address: prev.defendant.address || extracted.defendant.address || prev.defendant.address,
+            city: prev.defendant.city || extracted.defendant.city || prev.defendant.city,
+            postcode: prev.defendant.postcode || extracted.defendant.postcode || prev.defendant.postcode,
+            name: prev.defendant.name || extracted.defendant.name || prev.defendant.name,
+          };
+        }
+
+        // Merge invoice data (only fill empty fields)
+        if (extracted.invoice) {
+          merged.invoice = {
+            ...prev.invoice,
+            invoiceNumber: prev.invoice.invoiceNumber || extracted.invoice.invoiceNumber || '',
+            totalAmount: prev.invoice.totalAmount || extracted.invoice.totalAmount || 0,
+            dateIssued: prev.invoice.dateIssued || extracted.invoice.dateIssued || '',
+            dueDate: prev.invoice.dueDate || extracted.invoice.dueDate || '',
+            description: prev.invoice.description || extracted.invoice.description || '',
+          };
+        }
+
+        // Merge timeline events (add new ones)
+        if (extracted.timeline && extracted.timeline.length > 0) {
+          const existingDates = prev.timeline.map(e => e.date);
+          const newEvents = extracted.timeline.filter(e => !existingDates.includes(e.date));
+          merged.timeline = [...prev.timeline, ...newEvents];
+        }
+
+        // Set recommended document type
+        merged.selectedDocType = extracted.recommendedDocument;
+
+        return merged;
+      });
+
+      setStep(Step.DATA_REVIEW);
+    } catch (error) {
+      console.error('Extraction failed:', error);
+      // Fallback: go to data review anyway with existing data
+      setStep(Step.DATA_REVIEW);
+    } finally {
+      setIsProcessing(false);
+      setProcessingText("");
+    }
   };
 
   // Pre-validation before document generation
@@ -992,21 +1106,20 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                <div className="flex justify-between items-center max-w-4xl mx-auto">
+                <div className="flex flex-col items-center gap-4 max-w-4xl mx-auto">
+                    {/* AI Consultation is now the primary and required path */}
                     <button
                         onClick={() => handleStartChat()}
-                        className="text-slate-600 hover:text-slate-900 border-2 border-slate-200 hover:border-slate-300 px-6 py-3 rounded-xl transition-all flex items-center gap-2 font-medium shadow-sm"
-                    >
-                        <MessageSquareText className="w-4 h-4"/>
-                        AI Case Consultation
-                    </button>
-                    <button
-                        onClick={() => setStep(Step.FINAL)}
                         disabled={claimData.timeline.length < 2}
-                        className="bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all flex items-center gap-2 font-medium shadow-lg"
+                        className="w-full max-w-md bg-slate-900 text-white px-8 py-4 rounded-xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 font-medium shadow-lg"
                     >
-                        Continue to Strategy <ArrowRight className="w-4 h-4"/>
+                        <MessageSquareText className="w-5 h-5"/>
+                        Start AI Case Consultation
+                        <ArrowRight className="w-4 h-4"/>
                     </button>
+                    <p className="text-sm text-slate-500 text-center max-w-md">
+                        The AI will review your case data, check for missing information, and help you choose the right document type.
+                    </p>
                 </div>
             </div>
         );
@@ -1016,12 +1129,157 @@ const App: React.FC = () => {
           <ChatInterface
             messages={claimData.chatHistory}
             onSendMessage={handleSendMessage}
-            onComplete={() => setStep(Step.FINAL)}
+            onComplete={handleContinueFromChat}
             isThinking={isProcessing}
           />
         );
 
-      case Step.FINAL: {
+      case Step.DATA_REVIEW: {
+        // Show extracted data for review before proceeding to document selection
+        const showChatHistory = claimData.chatHistory.length > 0;
+
+        return (
+          <div className="space-y-6 animate-fade-in py-10 max-w-5xl mx-auto">
+            <button
+              onClick={() => setStep(Step.QUESTIONS)}
+              className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Consultation
+            </button>
+
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Review Your Claim Details</h2>
+              <p className="text-slate-500">We've extracted the following from your consultation. Please review and correct if needed.</p>
+              {extractedData && extractedData.confidenceScore < 70 && (
+                <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  Some fields could not be confidently extracted. Please verify all information.
+                </div>
+              )}
+            </div>
+
+            {/* Party Details Side by Side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Claimant */}
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <User className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-bold text-slate-900">Claimant (You)</h3>
+                  {extractedFields.some(f => f.startsWith('claimant')) && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
+                  )}
+                </div>
+                <PartyForm
+                  party={claimData.claimant}
+                  onChange={(p) => setClaimData(prev => ({ ...prev, claimant: p }))}
+                  title="Claimant"
+                />
+              </div>
+
+              {/* Defendant */}
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <User className="w-5 h-5 text-red-600" />
+                  <h3 className="font-bold text-slate-900">Defendant (Debtor)</h3>
+                  {extractedFields.some(f => f.startsWith('defendant')) && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
+                  )}
+                </div>
+                <PartyForm
+                  party={claimData.defendant}
+                  onChange={(p) => setClaimData(prev => ({ ...prev, defendant: p }))}
+                  title="Defendant"
+                />
+              </div>
+            </div>
+
+            {/* Invoice Details */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-green-600" />
+                <h3 className="font-bold text-slate-900">Invoice Details</h3>
+                {extractedFields.some(f => f.startsWith('invoice')) && (
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Input
+                  label="Invoice Number"
+                  value={claimData.invoice.invoiceNumber}
+                  onChange={(e) => setClaimData(prev => ({ ...prev, invoice: { ...prev.invoice, invoiceNumber: e.target.value } }))}
+                />
+                <Input
+                  label="Amount (£)"
+                  type="number"
+                  value={claimData.invoice.totalAmount || ''}
+                  onChange={(e) => setClaimData(prev => ({ ...prev, invoice: { ...prev.invoice, totalAmount: parseFloat(e.target.value) || 0 } }))}
+                />
+                <Input
+                  label="Invoice Date"
+                  type="date"
+                  value={claimData.invoice.dateIssued}
+                  onChange={(e) => setClaimData(prev => ({ ...prev, invoice: { ...prev.invoice, dateIssued: e.target.value } }))}
+                />
+              </div>
+            </div>
+
+            {/* Timeline */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="w-5 h-5 text-purple-600" />
+                <h3 className="font-bold text-slate-900">Timeline Events</h3>
+                {extractedFields.some(f => f.startsWith('timeline')) && (
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
+                )}
+              </div>
+              <TimelineBuilder
+                events={claimData.timeline}
+                onChange={(events) => setClaimData(prev => ({ ...prev, timeline: events }))}
+              />
+            </div>
+
+            {/* Chat History (Collapsible) */}
+            {showChatHistory && (
+              <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                <button
+                  onClick={() => setChatHistoryExpanded(!chatHistoryExpanded)}
+                  className="w-full px-6 py-4 flex items-center justify-between text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  <span className="font-medium flex items-center gap-2">
+                    <MessageSquareText className="w-4 h-4" />
+                    View Consultation Transcript ({claimData.chatHistory.length} messages)
+                  </span>
+                  {chatHistoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+                {chatHistoryExpanded && (
+                  <div className="px-6 pb-4 max-h-64 overflow-y-auto">
+                    {claimData.chatHistory.map((msg, i) => (
+                      <div key={i} className={`py-2 ${msg.role === 'user' ? 'text-blue-700' : 'text-slate-700'}`}>
+                        <span className="font-medium">{msg.role === 'user' ? 'You: ' : 'AI: '}</span>
+                        <span className="text-sm">{msg.content}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="flex justify-end pt-6 border-t border-slate-100">
+              <button
+                onClick={() => setStep(Step.RECOMMENDATION)}
+                className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all"
+              >
+                Continue to Document Selection
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      case Step.RECOMMENDATION: {
         // Legal Compliance Logic: Check timeline for LBA
         const hasLBA = claimData.timeline.some(e =>
             e.type === 'lba_sent' ||
@@ -1155,105 +1413,139 @@ const App: React.FC = () => {
           }
         ];
 
+        // Get the recommended document details (config object with icon, title, description)
+        const recommendedDocConfig = documentConfigs
+          .flatMap(stage => stage.docs)
+          .find(doc => doc.type === claimData.selectedDocType);
+
         return (
           <div className="space-y-8 animate-fade-in py-10 max-w-6xl mx-auto">
             <button
-              onClick={() => setStep(Step.TIMELINE)}
+              onClick={() => setStep(Step.DATA_REVIEW)}
               className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Timeline
+              Back to Data Review
             </button>
 
             <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Select Document Type</h2>
-                <p className="text-slate-500">Choose the appropriate legal document based on your claim's current stage</p>
+                <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Recommended Document</h2>
+                <p className="text-slate-500">Based on your case details, we recommend the following document</p>
             </div>
 
-            {/* Document Selection by Stage */}
-            <div className="space-y-8">
-              {documentConfigs.map((stageGroup) => {
-                // Progressive disclosure: only show Pre-Action and Court Filing by default
-                const isAdvanced = ['Settlement', 'Post-Filing', 'Trial Preparation'].includes(stageGroup.stage);
-                if (isAdvanced && !showAdvancedDocs) {
-                  return null;
-                }
-
-                return (
-                <div key={stageGroup.stage} className="space-y-4">
-                  {/* Stage Header */}
-                  <div className="flex items-center gap-3">
-                    <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent"></div>
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-4">{stageGroup.stage}</h3>
-                    <div className="h-px flex-1 bg-gradient-to-l from-slate-200 to-transparent"></div>
+            {/* Prominent Recommended Document Card */}
+            {recommendedDocConfig && (
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-2xl mb-8">
+                <div className="flex items-start gap-6">
+                  <div className="p-4 bg-white/10 rounded-xl">
+                    <recommendedDocConfig.icon className="w-10 h-10" />
                   </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-2xl font-bold">{recommendedDocConfig.title}</h3>
+                      <span className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> AI RECOMMENDED
+                      </span>
+                    </div>
+                    <p className="text-slate-300 mb-4">{recommendedDocConfig.description}</p>
 
-                  {/* Documents Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {stageGroup.docs.map((doc) => {
-                      const Icon = doc.icon;
-                      const isSelected = claimData.selectedDocType === doc.type;
+                    {/* AI Recommendation Reason */}
+                    {recommendationReason && (
+                      <div className="bg-white/10 rounded-lg p-4 mb-4">
+                        <h4 className="font-semibold text-amber-300 mb-2 flex items-center gap-2">
+                          <Wand2 className="w-4 h-4" /> Why This Document?
+                        </h4>
+                        <p className="text-sm text-slate-200">{recommendationReason}</p>
+                      </div>
+                    )}
 
-                      return (
-                        <div
-                          key={doc.type}
-                          onClick={() => setClaimData(p => ({...p, selectedDocType: doc.type}))}
-                          className={`relative p-6 rounded-xl border-2 transition-all cursor-pointer group ${
-                            isSelected
-                              ? 'border-slate-900 bg-slate-900 text-white shadow-xl scale-105'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:shadow-md'
-                          }`}
-                        >
-                          {/* Badge */}
-                          {doc.badge && (
-                            <div className={`absolute top-0 right-0 ${doc.badge.color} text-white text-xs font-bold px-2 py-1 rounded-bl-lg shadow-sm flex items-center gap-1`}>
-                              <Check className="w-3 h-3" /> {doc.badge.text}
-                            </div>
-                          )}
-
-                          {/* Icon & Title */}
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/10' : 'bg-blue-50 text-blue-600'}`}>
-                              <Icon className="w-5 h-5" />
-                            </div>
-                            <h4 className="font-bold text-sm">{doc.title}</h4>
-                          </div>
-
-                          {/* Description */}
-                          <p className={`text-xs leading-relaxed mb-3 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                            {doc.description}
-                          </p>
-
-                          {/* When to use */}
-                          <div className={`text-xs font-medium flex items-center gap-1 ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
-                            <Calendar className="w-3 h-3" /> {doc.when}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <button
+                      onClick={() => {
+                        setHasVerifiedInterest(true);
+                        setStep(Step.DRAFT);
+                      }}
+                      className="bg-white text-slate-900 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-100 transition-all shadow-lg"
+                    >
+                      Generate {recommendedDocConfig.title}
+                      <ArrowRight className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
-              )})}
-            </div>
+              </div>
+            )}
 
-            {/* Toggle for Advanced Documents */}
-            <div className="flex justify-center pt-4">
+            {/* Other Options (Collapsed by Default) */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
               <button
                 onClick={() => setShowAdvancedDocs(!showAdvancedDocs)}
-                className="flex items-center gap-2 px-6 py-3 bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-300 text-slate-700 rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow-md group"
+                className="w-full px-6 py-4 flex items-center justify-between text-slate-700 bg-slate-50 hover:bg-slate-100 transition-colors"
               >
-                {showAdvancedDocs ? (
-                  <>
-                    <ChevronUp className="w-5 h-5 text-slate-500 group-hover:text-slate-700 transition-colors" />
-                    Hide Advanced Documents
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="w-5 h-5 text-slate-500 group-hover:text-slate-700 transition-colors" />
-                    Show More Documents (Settlement, Post-Filing, Trial)
-                  </>
-                )}
+                <span className="font-medium flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4" />
+                  Other Document Options
+                </span>
+                {showAdvancedDocs ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
+
+              {showAdvancedDocs && (
+                <div className="p-6 space-y-8">
+                  {documentConfigs.map((stageGroup) => (
+                    <div key={stageGroup.stage} className="space-y-4">
+                      {/* Stage Header */}
+                      <div className="flex items-center gap-3">
+                        <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent"></div>
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-4">{stageGroup.stage}</h3>
+                        <div className="h-px flex-1 bg-gradient-to-l from-slate-200 to-transparent"></div>
+                      </div>
+
+                      {/* Documents Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {stageGroup.docs.map((doc) => {
+                          const Icon = doc.icon;
+                          const isSelected = claimData.selectedDocType === doc.type;
+
+                          return (
+                            <div
+                              key={doc.type}
+                              onClick={() => setClaimData(p => ({...p, selectedDocType: doc.type}))}
+                              className={`relative p-6 rounded-xl border-2 transition-all cursor-pointer group ${
+                                isSelected
+                                  ? 'border-slate-900 bg-slate-900 text-white shadow-xl scale-105'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:shadow-md'
+                              }`}
+                            >
+                              {/* Badge */}
+                              {doc.badge && (
+                                <div className={`absolute top-0 right-0 ${doc.badge.color} text-white text-xs font-bold px-2 py-1 rounded-bl-lg shadow-sm flex items-center gap-1`}>
+                                  <Check className="w-3 h-3" /> {doc.badge.text}
+                                </div>
+                              )}
+
+                              {/* Icon & Title */}
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/10' : 'bg-blue-50 text-blue-600'}`}>
+                                  <Icon className="w-5 h-5" />
+                                </div>
+                                <h4 className="font-bold text-sm">{doc.title}</h4>
+                              </div>
+
+                              {/* Description */}
+                              <p className={`text-xs leading-relaxed mb-3 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                                {doc.description}
+                              </p>
+
+                              {/* When to use */}
+                              <div className={`text-xs font-medium flex items-center gap-1 ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
+                                <Calendar className="w-3 h-3" /> {doc.when}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Warning for N1 without LBA */}
@@ -1410,7 +1702,7 @@ const App: React.FC = () => {
                             onChange={(e) => setClaimData(prev => prev.generated ? ({...prev, generated: {...prev.generated!, content: e.target.value}}) : prev)}
                         />
                     )}
-                    <div className="flex justify-between mt-6 pt-6 border-t border-slate-100"><button onClick={() => setStep(Step.FINAL)} className="text-slate-500 font-medium hover:text-slate-800 transition-colors flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back to Selection</button><button onClick={handlePrePreview} disabled={isProcessing} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all">{isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <>Finalize & Preview <ArrowRight className="w-5 h-5" /></>}</button></div>
+                    <div className="flex justify-between mt-6 pt-6 border-t border-slate-100"><button onClick={() => setStep(Step.RECOMMENDATION)} className="text-slate-500 font-medium hover:text-slate-800 transition-colors flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back to Selection</button><button onClick={handlePrePreview} disabled={isProcessing} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all">{isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <>Finalize & Preview <ArrowRight className="w-5 h-5" /></>}</button></div>
                  </div>
             </div>
         );

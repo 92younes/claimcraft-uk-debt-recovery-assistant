@@ -85,6 +85,18 @@ export interface GeneratedContent {
   };
 }
 
+// AI Chat Data Extraction Types
+export interface ExtractedClaimData {
+  claimant?: Partial<Party>;
+  defendant?: Partial<Party>;
+  invoice?: Partial<InvoiceData>;
+  timeline?: TimelineEvent[];
+  recommendedDocument: DocumentType;
+  documentReason: string;
+  confidenceScore: number; // 0-100 - how confident AI is in the extraction
+  extractedFields: string[]; // List of fields that were extracted from chat
+}
+
 export interface TimelineEvent {
   date: string;
   description: string;

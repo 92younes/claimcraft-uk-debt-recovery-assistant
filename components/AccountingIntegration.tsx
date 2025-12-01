@@ -19,11 +19,13 @@ interface ProviderConfig {
   icon: string;
 }
 
+// Only include integrations that are configured in your Nango dashboard
 const PROVIDERS: ProviderConfig[] = [
-  { id: 'xero', name: 'Xero', color: 'bg-blue-600', icon: 'X' },
-  { id: 'quickbooks', name: 'QuickBooks', color: 'bg-green-600', icon: 'Q' },
-  { id: 'freeagent', name: 'FreeAgent', color: 'bg-purple-600', icon: 'F' },
-  { id: 'sage', name: 'Sage', color: 'bg-teal-600', icon: 'S' }
+  { id: 'xero', name: 'Xero', color: 'bg-blue-600', icon: 'X' }
+  // Add more providers here once configured in Nango:
+  // { id: 'quickbooks', name: 'QuickBooks', color: 'bg-green-600', icon: 'Q' },
+  // { id: 'freeagent', name: 'FreeAgent', color: 'bg-purple-600', icon: 'F' },
+  // { id: 'sage', name: 'Sage', color: 'bg-teal-600', icon: 'S' }
 ];
 
 interface AccountingIntegrationProps {
@@ -304,7 +306,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
               <li>• <strong>Step 1:</strong> Get your Nango secret key from <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a></li>
               <li>• <strong>Step 2:</strong> Add <code className="bg-blue-100 px-1 rounded">NANGO_SECRET_KEY=your_key</code> to your .env file</li>
               <li>• <strong>Step 3:</strong> Run <code className="bg-blue-100 px-1 rounded">npm run dev:full</code> (starts backend + frontend)</li>
-              <li>• Configure integrations in Nango dashboard with IDs: xero, quickbooks, freeagent, sage</li>
+              <li>• Configure the Xero integration in Nango dashboard with ID: <code className="bg-blue-100 px-1 rounded">xero</code></li>
             </ul>
           </div>
 

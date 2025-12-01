@@ -114,7 +114,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
              onClick={onComplete}
              className="flex items-center gap-2 text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 px-4 py-2 rounded-lg transition-all duration-200 shadow-glow-sm"
            >
-             Continue to Strategy <ArrowRight className="w-4 h-4" />
+             Review Extracted Data <ArrowRight className="w-4 h-4" />
            </button>
         </div>
       </div>

@@ -11,6 +11,7 @@
 import express from 'express';
 import cors from 'cors';
 import { Nango } from '@nangohq/node';
+import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -37,6 +38,17 @@ if (!nangoSecretKey) {
 }
 
 const nango = new Nango({ secretKey: nangoSecretKey });
+
+// Initialize Anthropic client (optional - for document generation)
+const anthropicApiKey = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
+let anthropic = null;
+
+if (anthropicApiKey) {
+  anthropic = new Anthropic({ apiKey: anthropicApiKey });
+  console.log('✅ Anthropic API configured');
+} else {
+  console.warn('⚠️ ANTHROPIC_API_KEY not set - document generation will be limited');
+}
 
 /**
  * Health check endpoint
@@ -84,18 +96,29 @@ app.post('/api/nango/session', async (req, res) => {
     const result = await nango.createConnectSession(sessionConfig);
 
     console.log(`✅ Session created successfully for user: ${userId}`);
+    console.log('Session result:', JSON.stringify(result, null, 2));
+
+    // Handle both old and new SDK response formats
+    const token = result.data?.token || result.token;
+    const expiresAt = result.data?.expires_at || result.expires_at;
+
+    if (!token) {
+      throw new Error('No session token returned from Nango');
+    }
 
     res.json({
-      sessionToken: result.data.token,
-      expiresAt: result.data.expires_at
+      sessionToken: token,
+      expiresAt: expiresAt
     });
 
   } catch (error) {
-    console.error('❌ Failed to create Nango session:', error);
+    console.error('❌ Failed to create Nango session:', error.message);
+    console.error('Error details:', JSON.stringify(error.response?.data, null, 2));
 
     res.status(500).json({
       error: 'Failed to create session',
-      message: error.message || 'Unknown error occurred'
+      message: error.response?.data?.error?.message || error.response?.data?.message || error.message || 'Unknown error occurred',
+      details: error.response?.data?.error?.errors || null
     });
   }
 });
@@ -123,6 +146,38 @@ app.get('/api/nango/connections/:userId', async (req, res) => {
     res.status(500).json({
       error: 'Failed to list connections',
       message: error.message
+    });
+  }
+});
+
+/**
+ * Get connection details including metadata (tenant_id for Xero)
+ * GET /api/nango/connections/:provider/:connectionId
+ */
+app.get('/api/nango/connections/:provider/:connectionId', async (req, res) => {
+  try {
+    const { provider, connectionId } = req.params;
+
+    console.log(`📡 Getting connection details: ${provider}/${connectionId}`);
+
+    const connection = await nango.getConnection(provider, connectionId);
+
+    console.log(`✅ Connection details retrieved for: ${provider}/${connectionId}`);
+    console.log('Connection config:', JSON.stringify(connection.connection_config, null, 2));
+
+    res.json({
+      connectionId: connection.connection_id,
+      provider: connection.provider_config_key,
+      metadata: connection.metadata || {},
+      connectionConfig: connection.connection_config || {}
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to get connection:', error.message);
+    console.error('Error response:', error.response?.data);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to get connection',
+      message: error.response?.data?.message || error.message
     });
   }
 });
@@ -160,12 +215,13 @@ app.delete('/api/nango/connections/:provider/:connectionId', async (req, res) =>
  *   endpoint: string,      // API endpoint (e.g., '/Invoices')
  *   method?: string,       // HTTP method (default: 'GET')
  *   params?: object,       // Query parameters
+ *   headers?: object,      // Custom headers (e.g., Xero-Tenant-Id)
  *   data?: object          // Request body (for POST/PUT)
  * }
  */
 app.post('/api/nango/proxy', async (req, res) => {
   try {
-    const { provider, connectionId, endpoint, method = 'GET', params, data } = req.body;
+    const { provider, connectionId, endpoint, method = 'GET', params, headers, data } = req.body;
 
     if (!provider || !connectionId || !endpoint) {
       return res.status(400).json({
@@ -176,15 +232,23 @@ app.post('/api/nango/proxy', async (req, res) => {
 
     console.log(`📡 Proxy request: ${method} ${provider}${endpoint}`);
 
-    // Use Nango's proxy to make authenticated API call
-    const response = await nango.proxy({
+    // Build proxy config
+    const proxyConfig = {
       method,
       endpoint,
       providerConfigKey: provider,
       connectionId,
       params,
       data
-    });
+    };
+
+    // Add custom headers if provided (required for Xero-Tenant-Id)
+    if (headers) {
+      proxyConfig.headers = headers;
+    }
+
+    // Use Nango's proxy to make authenticated API call
+    const response = await nango.proxy(proxyConfig);
 
     console.log(`✅ Proxy request successful: ${provider}${endpoint}`);
 
@@ -192,17 +256,87 @@ app.post('/api/nango/proxy', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Proxy request failed:', error);
+    console.error('Error details:', error.response?.data || error.message);
 
     // Extract status code if available
     const statusCode = error.response?.status || 500;
 
     res.status(statusCode).json({
       error: 'Proxy request failed',
+      message: error.response?.data?.message || error.message || 'Unknown error',
+      status: statusCode
+    });
+  }
+});
+
+/**
+ * Proxy Claude/Anthropic API calls
+ * POST /api/anthropic/messages
+ *
+ * This keeps the API key secure on the server side.
+ *
+ * Body: {
+ *   model: string,       // e.g., 'claude-3-5-sonnet-20241022'
+ *   max_tokens: number,  // Maximum tokens in response
+ *   temperature?: number, // Optional temperature (0-1)
+ *   messages: array      // Message array for Claude
+ * }
+ */
+app.post('/api/anthropic/messages', async (req, res) => {
+  try {
+    if (!anthropic) {
+      return res.status(503).json({
+        error: 'Anthropic API not configured',
+        message: 'Please set ANTHROPIC_API_KEY in your .env file'
+      });
+    }
+
+    const { model, max_tokens, temperature, messages, system } = req.body;
+
+    if (!model || !messages || !max_tokens) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'model, max_tokens, and messages are required'
+      });
+    }
+
+    console.log(`📝 Anthropic request: ${model}, ${messages.length} messages`);
+
+    const requestParams = {
+      model,
+      max_tokens,
+      messages
+    };
+
+    // Add optional parameters if provided
+    if (temperature !== undefined) {
+      requestParams.temperature = temperature;
+    }
+    if (system) {
+      requestParams.system = system;
+    }
+
+    const message = await anthropic.messages.create(requestParams);
+
+    console.log(`✅ Anthropic response received: ${message.content.length} content blocks`);
+
+    res.json(message);
+
+  } catch (error) {
+    console.error('❌ Anthropic request failed:', error);
+
+    const statusCode = error.status || 500;
+
+    res.status(statusCode).json({
+      error: 'Anthropic request failed',
       message: error.message || 'Unknown error',
       status: statusCode
     });
   }
 });
+
+// Increase request body size limit for document generation (templates can be large)
+app.use(express.json({ limit: '1mb' }));
 
 // Start server
 app.listen(PORT, () => {
@@ -213,6 +347,7 @@ app.listen(PORT, () => {
 ║  Status: Running                                            ║
 ║  Port: ${PORT}                                                 ║
 ║  Nango: Connected                                           ║
+║  Anthropic: ${anthropic ? 'Connected' : 'Not Configured'}                                    ║
 ╠════════════════════════════════════════════════════════════╣
 ║  Endpoints:                                                 ║
 ║  • GET  /api/health              - Health check             ║
@@ -220,6 +355,7 @@ app.listen(PORT, () => {
 ║  • POST /api/nango/proxy         - Proxy API calls          ║
 ║  • GET  /api/nango/connections   - List connections         ║
 ║  • DELETE /api/nango/connections - Delete connection        ║
+║  • POST /api/anthropic/messages  - Claude AI proxy          ║
 ╚════════════════════════════════════════════════════════════╝
   `);
 });

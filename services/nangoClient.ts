@@ -2,7 +2,7 @@
  * Nango Client - OAuth and API Management for Accounting Integrations
  *
  * Handles secure OAuth flows and API calls to accounting systems via Nango.
- * Supports: Xero, QuickBooks, FreeAgent, Sage
+ * Currently configured for: Xero
  *
  * This implementation uses session tokens from a backend server.
  * The backend server runs on port 3001 and handles token generation.
@@ -34,7 +34,8 @@ const INTEGRATION_IDS: Record<AccountingProvider, string> = {
 // Storage keys per provider
 const getStorageKeys = (provider: AccountingProvider) => ({
   connectionId: `claimcraft_${provider}_connection_id`,
-  metadata: `claimcraft_${provider}_metadata`
+  metadata: `claimcraft_${provider}_metadata`,
+  tenantId: `claimcraft_${provider}_tenant_id`
 });
 
 // Generate a unique user ID for this browser session
@@ -68,7 +69,8 @@ export class NangoClient {
       },
       body: JSON.stringify({
         userId,
-        allowedIntegrations: ['xero', 'quickbooks', 'freeagent', 'sage']
+        // Only include integrations that are configured in your Nango dashboard
+        allowedIntegrations: ['xero']
       })
     });
 
@@ -179,21 +181,32 @@ export class NangoClient {
     const { connectionId: connIdKey, metadata: metadataKey } = getStorageKeys(provider);
 
     try {
-      // Generate unique connection ID for this user
-      const userId = getUserId();
-      const connectionId = `${userId}_${provider}_${Date.now()}`;
-
       console.log(`🔗 Initiating OAuth flow for ${provider}...`);
 
-      // Trigger OAuth flow
-      const result = await nango.auth(integrationId, connectionId);
+      // Trigger OAuth flow - don't pass connectionId when using session tokens
+      // Nango generates the connectionId and returns it in the result
+      const result = await nango.auth(integrationId);
 
       if (!result) {
         throw new Error('OAuth flow cancelled or failed');
       }
 
+      // Get connectionId from the result (Nango generates it when using session tokens)
+      const connectionId = result.connectionId;
+
+      if (!connectionId) {
+        throw new Error('No connection ID returned from OAuth flow');
+      }
+
       // Store connection ID locally
       localStorage.setItem(connIdKey, connectionId);
+
+      // Fetch connection details to get tenant_id (required for Xero API calls)
+      const { tenantId: tenantIdKey } = getStorageKeys(provider);
+      const connectionDetails = await this.fetchConnectionDetails(provider, connectionId);
+      if (connectionDetails.tenantId) {
+        localStorage.setItem(tenantIdKey, connectionDetails.tenantId);
+      }
 
       // Fetch organization details
       const orgDetails = await this.fetchOrganizationDetails(provider, connectionId);
@@ -282,7 +295,8 @@ export class NangoClient {
    * Get all active connections
    */
   static getAllConnections(): AccountingConnection[] {
-    const providers: AccountingProvider[] = ['xero', 'quickbooks', 'freeagent', 'sage'];
+    // Only check providers that are configured in Nango
+    const providers: AccountingProvider[] = ['xero'];
     return providers
       .map(provider => this.getConnection(provider))
       .filter((conn): conn is AccountingConnection => conn !== null);
@@ -292,7 +306,7 @@ export class NangoClient {
    * Disconnect from a provider (revoke tokens and clear local data)
    */
   static async disconnect(provider: AccountingProvider): Promise<void> {
-    const { connectionId: connIdKey, metadata: metadataKey } = getStorageKeys(provider);
+    const { connectionId: connIdKey, metadata: metadataKey, tenantId: tenantIdKey } = getStorageKeys(provider);
     const connectionId = localStorage.getItem(connIdKey);
 
     if (connectionId) {
@@ -310,6 +324,7 @@ export class NangoClient {
     // Clear local storage
     localStorage.removeItem(connIdKey);
     localStorage.removeItem(metadataKey);
+    localStorage.removeItem(tenantIdKey);
 
     console.log(`✅ ${provider} disconnected locally`);
   }
@@ -320,6 +335,47 @@ export class NangoClient {
    */
   static async disconnectXero(): Promise<void> {
     return this.disconnect('xero');
+  }
+
+  /**
+   * Fetch connection details from backend (including tenant_id for Xero)
+   */
+  private static async fetchConnectionDetails(
+    provider: AccountingProvider,
+    connectionId: string
+  ): Promise<{ tenantId?: string }> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/nango/connections/${INTEGRATION_IDS[provider]}/${connectionId}`
+      );
+
+      if (!response.ok) {
+        console.warn(`⚠️ Failed to fetch connection details for ${provider}`);
+        return {};
+      }
+
+      const data = await response.json();
+
+      // Xero stores tenant_id in connection_config
+      const tenantId = data.connectionConfig?.tenant_id || data.metadata?.tenant_id;
+
+      if (tenantId) {
+        console.log(`✅ Retrieved tenant_id for ${provider}: ${tenantId}`);
+      }
+
+      return { tenantId };
+    } catch (error) {
+      console.warn(`⚠️ Failed to fetch connection details:`, error);
+      return {};
+    }
+  }
+
+  /**
+   * Get stored tenant ID for a provider
+   */
+  static getTenantId(provider: AccountingProvider): string | null {
+    const { tenantId: tenantIdKey } = getStorageKeys(provider);
+    return localStorage.getItem(tenantIdKey);
   }
 
   /**
@@ -353,11 +409,29 @@ export class NangoClient {
     connectionId?: string,
     params?: Record<string, string>
   ): Promise<T> {
-    const { connectionId: connIdKey } = getStorageKeys(provider);
+    const { connectionId: connIdKey, tenantId: tenantIdKey } = getStorageKeys(provider);
     const connId = connectionId || localStorage.getItem(connIdKey);
 
     if (!connId) {
       throw new Error(`No ${provider} connection found. Please connect first.`);
+    }
+
+    // Build headers - Xero requires Xero-Tenant-Id header
+    const apiHeaders: Record<string, string> = {};
+    if (provider === 'xero') {
+      const tenantId = localStorage.getItem(tenantIdKey);
+      if (tenantId) {
+        apiHeaders['Xero-Tenant-Id'] = tenantId;
+      } else {
+        // Try to fetch tenant ID if not cached
+        const details = await this.fetchConnectionDetails(provider, connId);
+        if (details.tenantId) {
+          localStorage.setItem(tenantIdKey, details.tenantId);
+          apiHeaders['Xero-Tenant-Id'] = details.tenantId;
+        } else {
+          console.warn('⚠️ No Xero tenant ID available - API calls may fail');
+        }
+      }
     }
 
     try {
@@ -372,7 +446,8 @@ export class NangoClient {
           connectionId: connId,
           endpoint,
           method: 'GET',
-          params
+          params,
+          headers: Object.keys(apiHeaders).length > 0 ? apiHeaders : undefined
         })
       });
 
@@ -421,7 +496,7 @@ export class NangoClient {
         case 'xero': {
           const response = await this.callApi<{ Organisations: any[] }>(
             provider,
-            '/Organisation',
+            '/api.xro/2.0/Organisation',
             connectionId
           );
           if (response.Organisations && response.Organisations.length > 0) {
@@ -474,7 +549,7 @@ export class NangoClient {
         return false;
       }
 
-      const endpoint = provider === 'xero' ? '/Organisation' : '/company';
+      const endpoint = provider === 'xero' ? '/api.xro/2.0/Organisation' : '/company';
       const orgData = await this.callApi(provider, endpoint, connectionId);
       console.log(`✅ ${provider} connection test successful:`, orgData);
       return true;

@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Skill(example-skills:frontend-design)",
-      "WebFetch(domain:garfield.law)"
+      "WebFetch(domain:garfield.law)",
+      "WebSearch",
+      "WebFetch(domain:docs.nango.dev)",
+      "WebFetch(domain:nango.dev)"
     ],
     "deny": [],
     "ask": []

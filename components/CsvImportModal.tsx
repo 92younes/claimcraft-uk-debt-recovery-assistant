@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload, FileSpreadsheet, Download, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { ClaimState, INITIAL_STATE, PartyType, INITIAL_PARTY, INITIAL_INVOICE } from '../types';
+import { getCountyFromPostcode } from '../constants';
 
 interface CsvImportModalProps {
   isOpen: boolean;
@@ -167,6 +168,10 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                }
             }
 
+            // Get postcode and infer county if not provided
+            const postcode = idxPostcode !== -1 ? row[idxPostcode] : '';
+            const county = postcode ? getCountyFromPostcode(postcode) : '';
+
             const newClaim: ClaimState = {
                 ...INITIAL_STATE,
                 id: Math.random().toString(36).substr(2, 9),
@@ -180,7 +185,8 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                     email: idxEmail !== -1 ? row[idxEmail] : '',
                     address: idxAddress !== -1 ? row[idxAddress] : '',
                     city: idxCity !== -1 ? row[idxCity] : '',
-                    postcode: idxPostcode !== -1 ? row[idxPostcode] : '',
+                    postcode: postcode,
+                    county: county,
                 },
                 invoice: {
                     ...INITIAL_INVOICE,

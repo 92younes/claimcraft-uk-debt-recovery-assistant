@@ -7,7 +7,7 @@
 
 import { NangoClient } from './nangoClient';
 import { calculateCourtFee, calculateCompensation } from './legalRules';
-import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR } from '../constants';
+import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, getCountyFromPostcode } from '../constants';
 import {
   XeroInvoice,
   XeroContact,
@@ -19,6 +19,35 @@ import {
   TimelineEvent
 } from '../types';
 
+/**
+ * Parse Xero date format which can be either:
+ * - Microsoft JSON date: /Date(1757548800000+0000)/
+ * - ISO string: 2025-09-11T00:00:00
+ */
+function parseXeroDate(dateString: string): Date {
+  if (!dateString) {
+    return new Date();
+  }
+
+  // Check for Microsoft JSON date format: /Date(1234567890000+0000)/
+  const msDateMatch = dateString.match(/\/Date\((\d+)([+-]\d{4})?\)\//);
+  if (msDateMatch) {
+    const timestamp = parseInt(msDateMatch[1], 10);
+    return new Date(timestamp);
+  }
+
+  // Otherwise try parsing as ISO string
+  return new Date(dateString);
+}
+
+/**
+ * Convert Xero date to ISO string for storage
+ */
+function xeroDateToISOString(dateString: string): string {
+  const date = parseXeroDate(dateString);
+  return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+}
+
 export class XeroPuller {
   /**
    * Fetch all invoices from Xero
@@ -29,7 +58,7 @@ export class XeroPuller {
   static async fetchInvoices(connectionId?: string): Promise<XeroInvoice[]> {
     try {
       const response = await NangoClient.callXeroApi<{ Invoices: XeroInvoice[] }>(
-        '/Invoices',
+        '/api.xro/2.0/Invoices',
         connectionId,
         {
           where: 'Type=="ACCREC"', // Only accounts receivable (sales invoices)
@@ -57,22 +86,37 @@ export class XeroPuller {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Start of day
 
+    console.log(`📋 Filtering ${invoices.length} invoices for overdue...`);
+    console.log(`📅 Today's date: ${today.toISOString()}`);
+
     return invoices.filter(invoice => {
+      // Parse the Xero date format
+      const dueDate = parseXeroDate(invoice.DueDate);
+      dueDate.setHours(0, 0, 0, 0);
+
+      console.log(`  Invoice ${invoice.InvoiceNumber}: Status=${invoice.Status}, AmountDue=${invoice.AmountDue}, DueDate=${invoice.DueDate} -> Parsed: ${dueDate.toISOString()}`);
+
       // Must be AUTHORISED (not draft, paid, or voided)
       if (invoice.Status !== 'AUTHORISED') {
+        console.log(`    ❌ Skipped: Status is ${invoice.Status}, not AUTHORISED`);
         return false;
       }
 
       // Must have amount due
       if (invoice.AmountDue <= 0) {
+        console.log(`    ❌ Skipped: AmountDue is ${invoice.AmountDue}`);
         return false;
       }
 
       // Must be past due date
-      const dueDate = new Date(invoice.DueDate);
-      dueDate.setHours(0, 0, 0, 0);
+      const isOverdue = dueDate < today;
+      if (!isOverdue) {
+        console.log(`    ❌ Skipped: Due date ${dueDate.toISOString()} is not past today ${today.toISOString()}`);
+      } else {
+        console.log(`    ✅ OVERDUE: Due date ${dueDate.toISOString()} is past today ${today.toISOString()}`);
+      }
 
-      return dueDate < today;
+      return isOverdue;
     });
   }
 
@@ -86,7 +130,7 @@ export class XeroPuller {
   static async fetchContactDetails(contactId: string, connectionId?: string): Promise<XeroContact> {
     try {
       const response = await NangoClient.callXeroApi<{ Contacts: XeroContact[] }>(
-        `/Contacts/${contactId}`,
+        `/api.xro/2.0/Contacts/${contactId}`,
         connectionId
       );
 
@@ -114,7 +158,7 @@ export class XeroPuller {
    */
   static calculateInterest(amount: number, dueDate: string): InterestData {
     const today = new Date();
-    const due = new Date(dueDate);
+    const due = parseXeroDate(dueDate);
 
     // Calculate days overdue
     const diffMs = today.getTime() - due.getTime();
@@ -150,6 +194,15 @@ export class XeroPuller {
     // Get primary phone
     const phone = contact.Phones?.find(p => p.PhoneType === 'DEFAULT');
 
+    const postcode = address?.PostalCode || '';
+
+    // Xero's Region field is often empty for UK contacts
+    // Fall back to inferring county from postcode if Region is not set
+    let county = address?.Region || '';
+    if (!county && postcode) {
+      county = getCountyFromPostcode(postcode);
+    }
+
     return {
       type: PartyType.BUSINESS, // Assume business, user can change later
       name: contact.Name,
@@ -157,8 +210,8 @@ export class XeroPuller {
         .filter(Boolean)
         .join(', ') || '',
       city: address?.City || '',
-      county: address?.Region || '',
-      postcode: address?.PostalCode || '',
+      county,
+      postcode,
       phone: phone?.PhoneNumber || '',
       email: contact.EmailAddress || '',
       solvencyStatus: 'Unknown'
@@ -183,6 +236,15 @@ export class XeroPuller {
     // on the unpaid amount, not the original invoice total
     const principal = invoice.AmountDue > 0 ? invoice.AmountDue : invoice.Total;
 
+    console.log('🔄 transformToClaim - Raw invoice data:', {
+      InvoiceNumber: invoice.InvoiceNumber,
+      Date: invoice.Date,
+      DueDate: invoice.DueDate,
+      Total: invoice.Total,
+      AmountDue: invoice.AmountDue,
+      AmountPaid: invoice.AmountPaid
+    });
+
     const interest = this.calculateInterest(principal, invoice.DueDate);
     const defendant = this.transformContactToParty(contact);
 
@@ -191,15 +253,29 @@ export class XeroPuller {
     const totalClaim = principal + interest.totalInterest + compensation;
     const courtFee = calculateCourtFee(totalClaim);
 
+    // Convert Xero dates to ISO format for storage
+    const invoiceDateISO = xeroDateToISOString(invoice.Date);
+    const dueDateISO = xeroDateToISOString(invoice.DueDate);
+
+    console.log('🔄 transformToClaim - Converted values:', {
+      principal,
+      invoiceDateISO,
+      dueDateISO,
+      interest,
+      compensation,
+      totalClaim,
+      courtFee
+    });
+
     // Build timeline
     const timeline: TimelineEvent[] = [
       {
-        date: invoice.Date,
+        date: invoiceDateISO,
         type: 'invoice',
         description: `Invoice ${invoice.InvoiceNumber} issued`
       },
       {
-        date: invoice.DueDate,
+        date: dueDateISO,
         type: 'payment_due',
         description: 'Payment due date'
       }
@@ -217,8 +293,8 @@ export class XeroPuller {
       defendant,
       invoice: {
         invoiceNumber: invoice.InvoiceNumber,
-        dateIssued: invoice.Date,
-        dueDate: invoice.DueDate,
+        dateIssued: invoiceDateISO,
+        dueDate: dueDateISO,
         totalAmount: principal, // Use outstanding balance (AmountDue), not original total
         currency: invoice.CurrencyCode,
         description: invoice.Reference || `Imported from Xero: Invoice ${invoice.InvoiceNumber}`

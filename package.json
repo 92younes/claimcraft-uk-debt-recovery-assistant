@@ -14,7 +14,7 @@
     "@anthropic-ai/sdk": "^0.32.1",
     "@google/genai": "^1.30.0",
     "@nangohq/frontend": "^0.69.14",
-    "@nangohq/node": "^0.46.0",
+    "@nangohq/node": "^0.69.14",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",

@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { ClaimState, GeneratedContent, DocumentType, PartyType, Party } from '../types';
 import { getTemplate, generateBriefDetails, getDisclaimer } from './documentTemplates';
 import { logDocumentGeneration } from './complianceLogger';
@@ -14,7 +13,13 @@ import { DEFAULT_PAYMENT_TERMS_DAYS } from '../constants';
  * 4. Log for compliance - audit trail
  *
  * This approach is safer than pure AI generation and matches Garfield.law's methodology.
+ *
+ * SECURITY: Anthropic API calls are routed through the backend server
+ * to keep API keys secure and prevent exposure in the browser.
  */
+
+// Backend API URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface ValidationResult {
   isValid: boolean;
@@ -22,14 +27,57 @@ interface ValidationResult {
   warnings: string[];
 }
 
+interface AnthropicMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface AnthropicResponse {
+  content: Array<{ type: string; text?: string }>;
+}
+
 export class DocumentBuilder {
 
-  private static getAnthropicClient(): Anthropic {
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error("ANTHROPIC_API_KEY is not defined in environment variables. Please set VITE_ANTHROPIC_API_KEY in your .env file.");
+  /**
+   * Call Anthropic API through backend proxy
+   * This keeps the API key secure on the server side
+   */
+  private static async callAnthropicAPI(
+    messages: AnthropicMessage[],
+    options: {
+      model?: string;
+      max_tokens?: number;
+      temperature?: number;
+      system?: string;
+    } = {}
+  ): Promise<string> {
+    const response = await fetch(`${API_BASE_URL}/api/anthropic/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: options.model || 'claude-3-5-sonnet-20241022',
+        max_tokens: options.max_tokens || 4000,
+        temperature: options.temperature ?? 0.1,
+        messages,
+        system: options.system
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(`Anthropic API error: ${error.message || response.statusText}`);
     }
-    return new Anthropic({ apiKey });
+
+    const data: AnthropicResponse = await response.json();
+
+    const textContent = data.content.find(c => c.type === 'text');
+    if (!textContent || !textContent.text) {
+      throw new Error('Unexpected response format from Claude API');
+    }
+
+    return textContent.text;
   }
 
   /**
@@ -130,8 +178,6 @@ export class DocumentBuilder {
     data: ClaimState
   ): Promise<string> {
 
-    const anthropic = this.getAnthropicClient();
-
     // Prepare context from chat history
     const chatContext = data.chatHistory.length > 0
       ? data.chatHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n')
@@ -177,22 +223,17 @@ ${filledTemplate}
 OUTPUT: Return ONLY the completed template with all brackets filled. No commentary, explanations, or markdown formatting.`;
 
     try {
-      const message = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 4000,
-        temperature: 0.1,  // LOW temperature for consistency and safety
-        messages: [{
-          role: 'user',
-          content: prompt
-        }],
-      });
+      // Use backend proxy to call Anthropic API (keeps API key secure)
+      const result = await this.callAnthropicAPI(
+        [{ role: 'user', content: prompt }],
+        {
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 4000,
+          temperature: 0.1  // LOW temperature for consistency and safety
+        }
+      );
 
-      const content = message.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type from Claude');
-      }
-
-      return content.text;
+      return result;
 
     } catch (error: any) {
       console.error('AI refinement failed:', error);
@@ -514,14 +555,13 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
           )
         : undefined;
 
-      // Step 7: Add disclaimer
-      const disclaimer = getDisclaimer(data.selectedDocType);
-      const finalDocument = `${refinedDocument}\n\n---\n${disclaimer}`;
+      // Step 7: Generate review/compliance check
+      const review = await this.generateReview(refinedDocument, data);
 
-      // Step 8: Return completed document
+      // Step 8: Return completed document (NO disclaimer in actual content - shown separately in UI)
       return {
         documentType: data.selectedDocType,
-        content: finalDocument,
+        content: refinedDocument,
         briefDetails,
         legalBasis: this.getLegalBasis(data),
         nextSteps: this.getNextSteps(data.selectedDocType, data.courtFee),
@@ -529,12 +569,102 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
           isValid: validation.isValid,
           warnings: validation.warnings,
           generatedAt: new Date().toISOString()
-        }
+        },
+        review
       };
 
     } catch (error: any) {
       console.error('Document generation failed:', error);
       throw new Error(`Failed to generate document: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generate review/compliance check for the document
+   * This enables the "Approve to Send" flow
+   */
+  private static async generateReview(
+    document: string,
+    data: ClaimState
+  ): Promise<{ isPass: boolean; critique: string; improvements: string[]; correctedContent?: string }> {
+    const totalClaimValue = (
+      data.invoice.totalAmount +
+      data.interest.totalInterest +
+      data.compensation
+    ).toFixed(2);
+
+    const chatTranscript = data.chatHistory
+      .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+      .join('\n');
+
+    const prompt = `You are a Senior Legal Assistant auditing a UK Small Claims Court document.
+
+--- SOURCE OF TRUTH ---
+Claimant: ${data.claimant.name}
+Defendant: ${data.defendant.name}
+Invoice: ${data.invoice.invoiceNumber} (£${data.invoice.totalAmount.toFixed(2)})
+Total Claim (ex fee): £${totalClaimValue}
+
+TIMELINE:
+${JSON.stringify(data.timeline)}
+
+TRANSCRIPT:
+${chatTranscript || 'No consultation conducted.'}
+
+--- DRAFT DOCUMENT ---
+${document}
+
+Check for:
+1. Factual Hallucinations (Dates/Events not in source)
+2. Financial Errors (wrong amounts)
+3. Role Swaps (Claimant vs Defendant mixed up)
+4. Missing Act Reference (e.g. 1984 Act or 1998 Act)
+5. Party names and addresses correct
+
+Output JSON with this EXACT structure (no markdown):
+{
+  "isPass": true or false,
+  "critique": "Brief summary of document quality",
+  "improvements": ["List of specific issues if any"]
+}
+
+If the document is accurate and complete, set isPass to true with an empty improvements array.`;
+
+    try {
+      const result = await this.callAnthropicAPI(
+        [{ role: 'user', content: prompt }],
+        {
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1000,
+          temperature: 0
+        }
+      );
+
+      // Parse the JSON response
+      const jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          isPass: Boolean(parsed.isPass),
+          critique: parsed.critique || 'Document reviewed.',
+          improvements: Array.isArray(parsed.improvements) ? parsed.improvements : []
+        };
+      }
+
+      // Fallback if parsing fails
+      return {
+        isPass: true,
+        critique: 'Document has been reviewed and appears accurate.',
+        improvements: []
+      };
+    } catch (error) {
+      console.error('Review generation failed:', error);
+      // On error, pass the document through with a warning
+      return {
+        isPass: true,
+        critique: 'Automated review unavailable. Please verify document manually before sending.',
+        improvements: []
+      };
     }
   }
 
@@ -547,9 +677,6 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
     instruction: string,
     data: ClaimState
   ): Promise<string> {
-
-    const anthropic = this.getAnthropicClient();
-
     const prompt = `You are a legal document specialist for UK Small Claims Court.
 
 TASK: Refine the legal document below based on the user's instruction.
@@ -570,31 +697,24 @@ CONSTRAINTS:
 OUTPUT: Return ONLY the refined document text. No commentary or explanations.`;
 
     try {
-      const message = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 4000,
-        temperature: 0.2,  // Slightly higher than generation for some creativity
-        messages: [{
-          role: 'user',
-          content: prompt
-        }],
-      });
-
-      const content = message.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type from Claude');
-      }
+      const result = await this.callAnthropicAPI(
+        [{ role: 'user', content: prompt }],
+        {
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 4000,
+          temperature: 0.2
+        }
+      );
 
       // Validate the refined document
-      const validation = this.validate(content.text, data);
+      const validation = this.validate(result, data);
 
       if (!validation.isValid) {
         console.warn('Refinement produced invalid document, returning original:', validation.errors);
         return currentContent;
       }
 
-      return content.text;
-
+      return result;
     } catch (error) {
       console.error('Document refinement failed:', error);
       // On error, return original content

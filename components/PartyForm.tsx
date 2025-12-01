@@ -3,6 +3,8 @@ import { Party, PartyType } from '../types';
 import { Input, Select } from './ui/Input';
 import { UK_COUNTIES } from '../constants';
 import { validateUKPostcode, formatUKPostcode, validateEmail, validateUKPhone } from '../utils/validation';
+import { searchCompaniesHouse } from '../services/companiesHouse';
+import { Search, Loader2, CheckCircle, AlertCircle, Building2 } from 'lucide-react';
 
 interface PartyFormProps {
   title: string;
@@ -26,6 +28,51 @@ interface ValidationErrors {
 export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, readOnly = false, onValidationChange }) => {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
+
+  // Companies House lookup state
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchSuccess, setSearchSuccess] = useState(false);
+
+  // Check if this is the defendant form (Companies House lookup only for defendant)
+  const isDefendant = title.toLowerCase().includes('defendant');
+
+  // Companies House lookup handler
+  const handleCompaniesHouseLookup = async () => {
+    const searchQuery = party.companyNumber?.trim() || party.name?.trim();
+
+    if (!searchQuery) {
+      setSearchError('Enter a company number or name to search');
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+    setSearchSuccess(false);
+
+    try {
+      const result = await searchCompaniesHouse(searchQuery);
+
+      if (result) {
+        // Merge found data with existing party data
+        onChange({
+          ...party,
+          ...result,
+          type: PartyType.BUSINESS
+        });
+        setSearchSuccess(true);
+        // Clear success message after 3 seconds
+        setTimeout(() => setSearchSuccess(false), 3000);
+      } else {
+        setSearchError('No company found. Try a different search term.');
+      }
+    } catch (err) {
+      setSearchError('Search failed. Please try again.');
+      console.error('Companies House lookup error:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   // Validation logic
   const validateField = (field: keyof Party, value: string): string | undefined => {
@@ -180,18 +227,99 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
       />
 
       {party.type === PartyType.BUSINESS && (
-        <Input
-          label="Company Number"
-          placeholder="e.g. 12345678"
-          value={party.companyNumber || ''}
-          onChange={(e) => handleChange('companyNumber', e.target.value)}
-          onBlur={() => handleBlur('companyNumber')}
-          error={touched.has('companyNumber') ? errors.companyNumber : undefined}
-          helpText="Companies House registration number (8 digits)"
-          maxLength={8}
-          required
-          readOnly={readOnly}
-        />
+        <div className="space-y-3">
+          {/* Companies House Lookup UI - Only for Defendant */}
+          {isDefendant && !readOnly && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Building2 className="w-5 h-5 text-blue-600" />
+                <span className="font-medium text-blue-900">Companies House Lookup</span>
+              </div>
+              <p className="text-sm text-blue-700 mb-3">
+                Enter a company number or name below, then click search to auto-fill details.
+              </p>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="Company number (e.g. 12345678) or name"
+                    value={party.companyNumber || ''}
+                    onChange={(e) => handleChange('companyNumber', e.target.value)}
+                    className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCompaniesHouseLookup}
+                  disabled={isSearching}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-medium text-sm flex items-center gap-2 transition-colors"
+                >
+                  {isSearching ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" />
+                      Search
+                    </>
+                  )}
+                </button>
+              </div>
+              {/* Search feedback */}
+              {searchError && (
+                <div className="mt-2 flex items-center gap-2 text-red-600 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  {searchError}
+                </div>
+              )}
+              {searchSuccess && (
+                <div className="mt-2 flex items-center gap-2 text-green-600 text-sm">
+                  <CheckCircle className="w-4 h-4" />
+                  Company details loaded successfully!
+                </div>
+              )}
+              {/* Solvency status display */}
+              {party.solvencyStatus && party.solvencyStatus !== 'Unknown' && (
+                <div className={`mt-2 flex items-center gap-2 text-sm ${
+                  party.solvencyStatus === 'Active' ? 'text-green-700' :
+                  party.solvencyStatus === 'Insolvent' ? 'text-red-700' :
+                  'text-amber-700'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${
+                    party.solvencyStatus === 'Active' ? 'bg-green-500' :
+                    party.solvencyStatus === 'Insolvent' ? 'bg-red-500' :
+                    'bg-amber-500'
+                  }`} />
+                  Company Status: <strong>{party.solvencyStatus}</strong>
+                  {party.solvencyStatus === 'Insolvent' && (
+                    <span className="text-red-600 font-medium ml-1">(Debt recovery may be difficult)</span>
+                  )}
+                  {party.solvencyStatus === 'Dissolved' && (
+                    <span className="text-amber-600 font-medium ml-1">(Company no longer exists)</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Regular Company Number Input (shown for claimant or if lookup not available) */}
+          {(!isDefendant || readOnly) && (
+            <Input
+              label="Company Number"
+              placeholder="e.g. 12345678"
+              value={party.companyNumber || ''}
+              onChange={(e) => handleChange('companyNumber', e.target.value)}
+              onBlur={() => handleBlur('companyNumber')}
+              error={touched.has('companyNumber') ? errors.companyNumber : undefined}
+              helpText="Companies House registration number (8 digits)"
+              maxLength={8}
+              required
+              readOnly={readOnly}
+            />
+          )}
+        </div>
       )}
 
       <Input
