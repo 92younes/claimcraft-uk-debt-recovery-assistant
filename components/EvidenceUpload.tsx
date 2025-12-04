@@ -19,7 +19,6 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [fileTypeError, setFileTypeError] = useState<string | null>(null);
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (errorTimeoutRef.current) {
@@ -30,15 +29,12 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      // Clear any previous errors and timeout
       setFileTypeError(null);
       if (errorTimeoutRef.current) {
         clearTimeout(errorTimeoutRef.current);
       }
 
       const fileList = Array.from(e.target.files);
-
-      // Separate valid and invalid files
       const validFiles: File[] = [];
       const invalidFiles: File[] = [];
 
@@ -50,21 +46,16 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
         }
       });
 
-      // Show error for invalid files (but don't block valid ones)
       if (invalidFiles.length > 0) {
         const errorMsg = invalidFiles.length === 1
           ? getFileTypeError(invalidFiles[0])
           : `${invalidFiles.length} file(s) rejected: ${invalidFiles.map(f => f.name).join(', ')}. Only PDF, JPG, PNG, and Word documents are accepted.`;
 
         setFileTypeError(errorMsg);
-
-        // Auto-clear error after 8 seconds
         errorTimeoutRef.current = setTimeout(() => setFileTypeError(null), 8000);
       }
 
-      // Process valid files even if some were invalid
       if (validFiles.length === 0) {
-        // Reset input only if ALL files were invalid
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
@@ -81,12 +72,11 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
             name: file.name,
             type: file.type,
             data: base64String,
-            classification: undefined // Reset classification for new files
+            classification: undefined
           });
           processedCount++;
           if (processedCount === fileList.length) {
             onAddFiles(newFiles);
-            // Reset input
             if (fileInputRef.current) fileInputRef.current.value = '';
           }
         };
@@ -96,100 +86,87 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
   };
 
   return (
-    <div className="max-w-2xl mx-auto animate-fade-in">
-      <h2 className="text-2xl font-bold text-slate-900 mb-2 text-center font-display">Evidence Locker</h2>
-      <p className="text-center text-slate-500 mb-8">
-        Upload your Invoices, Contracts, and Emails (PDFs or Images).<br/>
-        Gemini will analyze the entire bundle.
-      </p>
-
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div className="grid grid-cols-1 gap-4 mb-6">
-          <label className="relative block cursor-pointer group">
-            <input
-              type="file"
-              multiple
-              className="hidden"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              onChange={handleFileChange}
-              disabled={isProcessing}
-              ref={fileInputRef}
-            />
-            <div className="h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 flex flex-col items-center justify-center text-center">
-              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200">
-                <Upload className="w-5 h-5 text-emerald-600" />
-              </div>
-              <p className="font-medium text-slate-700">Click to upload Documents</p>
-              <p className="text-xs text-slate-500">PDF, PNG, JPG, Word supported</p>
-            </div>
-          </label>
-        </div>
-
-        {/* File Type Error Message */}
-        {fileTypeError && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
-            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-red-800">Invalid File Type</p>
-              <p className="text-sm text-red-600 mt-1">{fileTypeError}</p>
-              <p className="text-xs text-red-500 mt-2">
-                For security and court submission, only PDF, JPG, PNG, and Word documents are accepted.
-              </p>
-            </div>
+    <div className="animate-fade-in">
+      {/* Upload Zone - Dashed border style matching mockup */}
+      <label className="relative block cursor-pointer group mb-4">
+        <input
+          type="file"
+          multiple
+          className="hidden"
+          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onChange={handleFileChange}
+          disabled={isProcessing}
+          ref={fileInputRef}
+        />
+        <div className="py-8 px-4 border-2 border-dashed border-slate-300 rounded-xl hover:border-teal-400 hover:bg-teal-50/30 transition-all duration-200 flex flex-col items-center justify-center text-center">
+          <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-105 transition-transform duration-200">
+            <Upload className="w-5 h-5 text-teal-500" />
           </div>
-        )}
+          <p className="font-medium text-slate-700">Click to upload Documents</p>
+          <p className="text-xs text-slate-400 mt-1">PDF, PNG, JPG, Word supported</p>
+        </div>
+      </label>
 
-        {files.length > 0 && (
-          <div className="space-y-3 mb-6">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Uploaded Evidence</h3>
-            {files.map((f, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="flex items-center gap-3">
-                  {f.type.includes('pdf') ?
-                    <FileText className="w-5 h-5 text-red-500" /> :
-                    <ImageIcon className="w-5 h-5 text-blue-500" />
-                  }
-                  <div>
-                    <p className="text-sm font-medium text-slate-700 truncate max-w-[200px]">{f.name}</p>
-                    <div className="flex items-center gap-2">
-                        <p className="text-xs text-slate-500 uppercase font-mono">{f.type.split('/')[1]}</p>
-                        {f.classification && (
-                            <span className="flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold border border-emerald-200">
-                                <Tag className="w-3 h-3" /> {f.classification}
-                            </span>
-                        )}
-                    </div>
+      {/* File Type Error Message */}
+      {fileTypeError && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-3 animate-fade-in">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-red-800 text-sm">Invalid File Type</p>
+            <p className="text-xs text-red-600 mt-1">{fileTypeError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Uploaded Files List */}
+      {files.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {files.map((f, idx) => (
+            <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="flex items-center gap-3">
+                {f.type.includes('pdf') ?
+                  <FileText className="w-4 h-4 text-red-500" /> :
+                  <ImageIcon className="w-4 h-4 text-blue-500" />
+                }
+                <div>
+                  <p className="text-sm font-medium text-slate-700 truncate max-w-[200px]">{f.name}</p>
+                  <div className="flex items-center gap-2">
+                      <p className="text-xs text-slate-400 uppercase font-mono">{f.type.split('/')[1]}</p>
+                      {f.classification && (
+                          <span className="flex items-center gap-1 text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium border border-teal-200">
+                              <Tag className="w-2.5 h-2.5" /> {f.classification}
+                          </span>
+                      )}
                   </div>
                 </div>
-                <button
-                  onClick={() => onRemoveFile(idx)}
-                  className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
-                  disabled={isProcessing}
-                >
-                  <X className="w-4 h-4" />
-                </button>
               </div>
-            ))}
-          </div>
-        )}
+              <button
+                onClick={() => onRemoveFile(idx)}
+                className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                disabled={isProcessing}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-        <button
-          onClick={onAnalyze}
-          disabled={files.length === 0 || isProcessing}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white py-3 rounded-xl font-semibold shadow-sm flex items-center justify-center gap-2 transition-all duration-200 btn-primary"
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Classifying & Analyzing...
-            </>
-          ) : (
-            <>
-              Analyze Documents
-            </>
-          )}
-        </button>
-      </div>
+      {/* Analyze Button - Teal themed */}
+      <button
+        onClick={onAnalyze}
+        disabled={files.length === 0 || isProcessing}
+        className="w-full bg-teal-500 hover:bg-teal-600 disabled:bg-slate-200 disabled:text-slate-400 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all duration-200"
+      >
+        {isProcessing ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Analyzing...
+          </>
+        ) : (
+          'Analyze Documents'
+        )}
+      </button>
     </div>
   );
 };

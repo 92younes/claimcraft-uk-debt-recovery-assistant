@@ -6,16 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClaimCraft - Small Claims Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Modern Fintech Typography -->
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap" rel="stylesheet">
+    <!-- Modern Professional Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
               sans: ['DM Sans', 'system-ui', 'sans-serif'],
-              display: ['General Sans', 'DM Sans', 'system-ui', 'sans-serif'],
+              display: ['Playfair Display', 'Georgia', 'serif'],
               mono: ['JetBrains Mono', 'monospace'],
             },
             fontSize: {
@@ -38,6 +37,20 @@
               widest: '0.1em',
             },
             colors: {
+              // Dark - Deep rich backgrounds (custom palette based on slate/navy)
+              dark: {
+                50: '#f8fafc',
+                100: '#f1f5f9',
+                200: '#e2e8f0',
+                300: '#cbd5e1',
+                400: '#94a3b8',
+                500: '#64748b',
+                600: '#475569',
+                700: '#334155',
+                800: '#1e293b',
+                900: '#0f172a', // Slate 900
+                950: '#020617', // Slate 950
+              },
               // Slate - Primary neutrals
               slate: {
                 50: '#f8fafc',
@@ -52,31 +65,58 @@
                 900: '#0f172a',
                 950: '#020617',
               },
-              // Emerald - Primary accent
-              emerald: {
-                50: '#ecfdf5',
-                100: '#d1fae5',
-                200: '#a7f3d0',
-                300: '#6ee7b7',
-                400: '#34d399',
-                500: '#10b981',
-                600: '#059669',
-                700: '#047857',
-                800: '#065f46',
-                900: '#064e3b',
+              // Violet - Primary Brand Color (AI/Tech feel)
+              violet: {
+                50: '#f5f3ff',
+                100: '#ede9fe',
+                200: '#ddd6fe',
+                300: '#c4b5fd',
+                400: '#a78bfa',
+                500: '#8b5cf6',
+                600: '#7c3aed',
+                700: '#6d28d9',
+                800: '#5b21b6',
+                900: '#4c1d95',
+                950: '#2e1065',
               },
-              // Legacy primary mapping for backward compatibility
+              // Teal - Primary Accent Color
+              teal: {
+                50: '#f0fdfa',
+                100: '#ccfbf1',
+                200: '#99f6e4',
+                300: '#5eead4',
+                400: '#2dd4bf',
+                500: '#14b8a6',
+                600: '#0d9488',
+                700: '#0f766e',
+                800: '#115e59',
+                900: '#134e4a',
+              },
+              // Emerald - Keep for backward compatibility
+              emerald: {
+                50: '#f0fdfa',
+                100: '#ccfbf1',
+                200: '#99f6e4',
+                300: '#5eead4',
+                400: '#2dd4bf',
+                500: '#14b8a6',
+                600: '#0d9488',
+                700: '#0f766e',
+                800: '#115e59',
+                900: '#134e4a',
+              },
+              // Legacy primary mapping - now points to teal
               primary: {
-                50: '#ecfdf5',
-                100: '#d1fae5',
-                200: '#a7f3d0',
-                300: '#6ee7b7',
-                400: '#34d399',
-                500: '#10b981',
-                600: '#059669',
-                700: '#047857',
-                800: '#065f46',
-                900: '#064e3b',
+                50: '#f0fdfa',
+                100: '#ccfbf1',
+                200: '#99f6e4',
+                300: '#5eead4',
+                400: '#2dd4bf',
+                500: '#14b8a6',
+                600: '#0d9488',
+                700: '#0f766e',
+                800: '#115e59',
+                900: '#134e4a',
               },
               // Gray mapped to slate for compatibility
               gray: {
@@ -91,11 +131,11 @@
                 800: '#1e293b',
                 900: '#0f172a',
               },
-              // Keep accent for backward compatibility
+              // Keep accent for backward compatibility - now teal
               accent: {
-                DEFAULT: '#10b981',
-                light: '#34d399',
-                dark: '#059669',
+                DEFAULT: '#14b8a6',
+                light: '#2dd4bf',
+                dark: '#0d9488',
               },
             },
             animation: {
@@ -130,13 +170,20 @@
               'lg': '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
               'xl': '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
               '2xl': '0 25px 50px -12px rgb(0 0 0 / 0.25)',
-              // Emerald glow shadows
-              'emerald-sm': '0 2px 8px -2px rgb(16 185 129 / 0.3)',
-              'emerald-md': '0 4px 14px -3px rgb(16 185 129 / 0.35)',
-              'emerald-lg': '0 8px 24px -4px rgb(16 185 129 / 0.4)',
-              // Legacy teal glow (maps to emerald)
-              'teal-glow': '0 4px 14px rgba(16, 185, 129, 0.25)',
-              'teal-glow-lg': '0 8px 24px rgba(16, 185, 129, 0.3)',
+              // Violet glow shadows (Primary)
+              'violet-sm': '0 2px 8px -2px rgb(124 58 237 / 0.3)',
+              'violet-md': '0 4px 14px -3px rgb(124 58 237 / 0.35)',
+              'violet-lg': '0 8px 24px -4px rgb(124 58 237 / 0.4)',
+              // Teal glow shadows (Primary)
+              'teal-sm': '0 2px 8px -2px rgb(20 184 166 / 0.3)',
+              'teal-md': '0 4px 14px -3px rgb(20 184 166 / 0.35)',
+              'teal-lg': '0 8px 24px -4px rgb(20 184 166 / 0.4)',
+              // Legacy emerald glow (maps to teal)
+              'emerald-sm': '0 2px 8px -2px rgb(20 184 166 / 0.3)',
+              'emerald-md': '0 4px 14px -3px rgb(20 184 166 / 0.35)',
+              'emerald-lg': '0 8px 24px -4px rgb(20 184 166 / 0.4)',
+              'teal-glow': '0 4px 14px rgba(20, 184, 166, 0.25)',
+              'teal-glow-lg': '0 8px 24px rgba(20, 184, 166, 0.3)',
               // Soft shadows
               'soft': '0 2px 8px rgba(0, 0, 0, 0.08)',
               'soft-md': '0 4px 12px rgba(0, 0, 0, 0.1)',
@@ -156,7 +203,7 @@
       }
     </script>
     <style>
-      /* CSS Custom Properties - Slate/Emerald Theme */
+      /* CSS Custom Properties - Clean Light Theme with Teal */
       :root {
         /* Surfaces */
         --surface-primary: #ffffff;
@@ -176,16 +223,16 @@
         --border-subtle: #f1f5f9;
         --border-default: #e2e8f0;
         --border-strong: #cbd5e1;
-        --border-focus: #10b981;
+        --border-focus: #14b8a6;
 
-        /* Accent */
-        --accent: #10b981;
-        --accent-light: #34d399;
-        --accent-dark: #059669;
+        /* Accent - Teal */
+        --accent: #14b8a6;
+        --accent-light: #2dd4bf;
+        --accent-dark: #0d9488;
 
         /* Status */
-        --success: #10b981;
-        --success-soft: #ecfdf5;
+        --success: #14b8a6;
+        --success-soft: #f0fdfa;
         --warning: #f59e0b;
         --warning-soft: #fffbeb;
         --error: #ef4444;
@@ -288,9 +335,9 @@
         background-size: 1000px 100%;
       }
 
-      /* Gradient text utility - Emerald */
+      /* Gradient text utility - Teal */
       .text-gradient {
-        background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
+        background: linear-gradient(135deg, #2dd4bf 0%, #14b8a6 50%, #0d9488 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -303,12 +350,12 @@
         -webkit-backdrop-filter: blur(12px);
       }
 
-      /* Button hover effects */
+      /* Button hover effects - Teal */
       .btn-primary {
         transition: all 0.2s ease;
       }
       .btn-primary:hover {
-        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+        box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
         transform: translateY(-1px);
       }
 
@@ -316,7 +363,7 @@
         transition: all 0.2s ease;
       }
       .btn-glow:hover {
-        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+        box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
         transform: translateY(-1px);
       }
 
@@ -330,23 +377,23 @@
         border-color: var(--accent);
       }
 
-      /* Focus ring utility */
+      /* Focus ring utility - Teal */
       .focus-ring {
         outline: none;
       }
       .focus-ring:focus {
-        box-shadow: 0 0 0 3px rgb(16 185 129 / 0.2);
+        box-shadow: 0 0 0 3px rgb(20 184 166 / 0.2);
         border-color: var(--accent);
       }
 
-      /* Legacy shadow utilities */
-      .shadow-glow { box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25); }
-      .shadow-glow-sm { box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2); }
-      .shadow-glow-success { box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); }
+      /* Legacy shadow utilities - Teal */
+      .shadow-glow { box-shadow: 0 4px 14px rgba(20, 184, 166, 0.25); }
+      .shadow-glow-sm { box-shadow: 0 2px 8px rgba(20, 184, 166, 0.2); }
+      .shadow-glow-success { box-shadow: 0 2px 8px rgba(20, 184, 166, 0.3); }
 
-      /* Display font utility */
+      /* Display font utility - Playfair Display for serif headings */
       .font-display {
-        font-family: 'General Sans', 'DM Sans', system-ui, sans-serif;
+        font-family: 'Playfair Display', Georgia, serif;
       }
 
       /* Print styles */

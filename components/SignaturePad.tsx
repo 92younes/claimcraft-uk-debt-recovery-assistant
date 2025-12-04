@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Eraser, Check } from 'lucide-react';
 
 interface SignaturePadProps {
@@ -8,8 +8,42 @@ interface SignaturePadProps {
 
 export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasContent, setHasContent] = useState(false);
+
+  // Resize canvas to match display size and handle high-DPI displays
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const resizeCanvas = () => {
+      const rect = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+
+      // Set actual canvas size in memory (scaled for DPR)
+      canvas.width = rect.width * dpr;
+      canvas.height = 150 * dpr;
+
+      // Scale context to match DPR
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.scale(dpr, dpr);
+        // Reset drawing styles after context scale
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#000';
+      }
+    };
+
+    resizeCanvas();
+
+    const observer = new ResizeObserver(resizeCanvas);
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  }, []);
 
   const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
@@ -80,12 +114,11 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
   return (
     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm w-full max-w-lg">
        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Sign Here</h3>
-       <div className="relative border border-slate-300 rounded-lg bg-slate-50 touch-none overflow-hidden">
+       <div ref={containerRef} className="relative border border-slate-300 rounded-lg bg-slate-50 touch-none overflow-hidden">
           <canvas
             ref={canvasRef}
-            width={400}
-            height={150}
-            className="w-full h-[150px] cursor-crosshair"
+            className="w-full cursor-crosshair"
+            style={{ width: '100%', height: '150px' }}
             onMouseDown={startDraw}
             onMouseMove={draw}
             onMouseUp={endDraw}
@@ -110,7 +143,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
           <button
             onClick={handleSave}
             disabled={!hasContent}
-            className="bg-emerald-600 text-white hover:bg-emerald-700 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:bg-slate-300 transition-colors duration-200 shadow-sm"
+            className="bg-teal-600 text-white hover:bg-teal-700 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:bg-slate-300 transition-colors duration-200 shadow-sm"
           >
              <Check className="w-4 h-4" /> Apply Signature
           </button>

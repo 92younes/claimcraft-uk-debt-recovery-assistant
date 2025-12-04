@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ClaimState, DocumentType } from '../types';
-import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown } from 'lucide-react';
+import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown, RefreshCw } from 'lucide-react';
 import { SignaturePad } from './SignaturePad';
 import { FinalReviewModal } from './FinalReviewModal';
+import { ConfirmModal } from './ConfirmModal';
 import { generateN1PDF, generateN225PDF, generateN225APDF, generateN180PDF } from '../services/pdfGenerator';
 
 interface DocumentPreviewProps {
@@ -11,6 +12,7 @@ interface DocumentPreviewProps {
   isFinalized: boolean;
   onConfirm: () => void;
   onUpdateSignature: (sig: string) => void;
+  onUpdateContent: (content: string) => void;
 }
 
 // A4 Page Wrapper with optional Watermark and Overflow Handling
@@ -28,7 +30,7 @@ const Page = ({ children, className = "", watermark = false }: { children?: Reac
   </div>
 );
 
-export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, isFinalized, onConfirm, onUpdateSignature }) => {
+export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, isFinalized, onConfirm, onUpdateSignature, onUpdateContent }) => {
   const [viewMode, setViewMode] = useState<'letter' | 'reply-form' | 'info-sheet' | 'n1-form'>('letter');
   const [isSigning, setIsSigning] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -37,20 +39,40 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [showFinalReview, setShowFinalReview] = useState(false);
+  const [showOverrideConfirm, setShowOverrideConfirm] = useState(false);
+  const [cachedPdfBlob, setCachedPdfBlob] = useState<Blob | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  // Content editing state
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showSavedFeedback, setShowSavedFeedback] = useState(false);
+
+  // N1 Particulars editing modal state
+  const [showParticularsModal, setShowParticularsModal] = useState(false);
+  const [editedParticulars, setEditedParticulars] = useState('');
+
   const review = data.generated?.review;
+
+  // Forms that require final review checklist (all court forms with Statement of Truth)
+  const formsRequiringReview = [
+    DocumentType.FORM_N1,
+    DocumentType.DEFAULT_JUDGMENT,
+    DocumentType.ADMISSION,
+    DocumentType.DIRECTIONS_QUESTIONNAIRE
+  ];
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleDownloadPDF = async () => {
-    // Show Final Review Modal for Form N1 before download
-    if (data.selectedDocType === DocumentType.FORM_N1) {
+    // Show Final Review Modal for all court forms before download
+    if (formsRequiringReview.includes(data.selectedDocType)) {
       setShowFinalReview(true);
       return;
     }
 
-    // For other documents, proceed directly
+    // For other documents (letters), proceed directly
     await performDownload();
   };
 
@@ -65,43 +87,54 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
 
     if (pdfFormTypes.includes(data.selectedDocType)) {
       setIsGeneratingPdf(true);
+      setPdfError(null);
       try {
-        let pdfBytes: Uint8Array;
+        let blob: Blob;
         let filename: string;
 
-        switch (data.selectedDocType) {
-          case DocumentType.FORM_N1:
-            pdfBytes = await generateN1PDF(data);
-            filename = `N1_Claim_Form_${data.invoice.invoiceNumber}.pdf`;
-            break;
-          case DocumentType.DEFAULT_JUDGMENT:
-            pdfBytes = await generateN225PDF(data);
-            filename = `N225_Default_Judgment_${data.invoice.invoiceNumber}.pdf`;
-            break;
-          case DocumentType.ADMISSION:
-            pdfBytes = await generateN225APDF(data);
-            filename = `N225A_Admission_${data.invoice.invoiceNumber}.pdf`;
-            break;
-          case DocumentType.DIRECTIONS_QUESTIONNAIRE:
-            pdfBytes = await generateN180PDF(data);
-            filename = `N180_Directions_Questionnaire_${data.invoice.invoiceNumber}.pdf`;
-            break;
-          default:
-            throw new Error('Unsupported PDF form type');
+        // Use cached blob for N1 if available, otherwise generate
+        if (data.selectedDocType === DocumentType.FORM_N1 && cachedPdfBlob) {
+          blob = cachedPdfBlob;
+          filename = `N1_Claim_Form_${data.invoice.invoiceNumber}.pdf`;
+        } else {
+          let pdfBytes: Uint8Array;
+
+          switch (data.selectedDocType) {
+            case DocumentType.FORM_N1:
+              pdfBytes = await generateN1PDF(data);
+              filename = `N1_Claim_Form_${data.invoice.invoiceNumber}.pdf`;
+              break;
+            case DocumentType.DEFAULT_JUDGMENT:
+              pdfBytes = await generateN225PDF(data);
+              filename = `N225_Default_Judgment_${data.invoice.invoiceNumber}.pdf`;
+              break;
+            case DocumentType.ADMISSION:
+              pdfBytes = await generateN225APDF(data);
+              filename = `N225A_Admission_${data.invoice.invoiceNumber}.pdf`;
+              break;
+            case DocumentType.DIRECTIONS_QUESTIONNAIRE:
+              pdfBytes = await generateN180PDF(data);
+              filename = `N180_Directions_Questionnaire_${data.invoice.invoiceNumber}.pdf`;
+              break;
+            default:
+              throw new Error('Unsupported PDF form type');
+          }
+
+          blob = new Blob([pdfBytes], { type: 'application/pdf' });
         }
 
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = filename;
+        link.download = filename!;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       } catch (error) {
         console.error("Failed to generate PDF", error);
-        alert(`Unable to generate the official PDF file. Ensure the template PDF is in the public folder, or use the 'Print' button to save as PDF.\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setPdfError(error instanceof Error ? error.message : 'Unknown error');
+        throw error; // Re-throw so FinalReviewModal knows it failed
       } finally {
         setIsGeneratingPdf(false);
       }
@@ -127,7 +160,10 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   const legalCosts = 0; // Standard assumption for small claims
   const totalAmount = (claimAmount + totalInterest + compensation + courtFee + legalCosts).toFixed(2);
 
-  const isLetter = data.generated?.documentType === DocumentType.LBA;
+  const isLetter = data.generated?.documentType === DocumentType.LBA || 
+                   data.generated?.documentType === DocumentType.POLITE_CHASER ||
+                   data.generated?.documentType === DocumentType.PART_36_OFFER ||
+                   data.generated?.documentType === DocumentType.INSTALLMENT_AGREEMENT;
 
   // Initial load effect to set correct mode
   React.useEffect(() => {
@@ -136,15 +172,41 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
 
   // Generate PDF preview for N1 forms (regenerates when data changes)
   React.useEffect(() => {
-    if (data.selectedDocType !== DocumentType.FORM_N1) {
+    const pdfFormTypes = [
+      DocumentType.FORM_N1,
+      DocumentType.DEFAULT_JUDGMENT,
+      DocumentType.ADMISSION,
+      DocumentType.DIRECTIONS_QUESTIONNAIRE
+    ];
+
+    if (!pdfFormTypes.includes(data.selectedDocType)) {
       return;
     }
 
     let cancelled = false;
     setIsLoadingPreview(true);
+    setPdfError(null);
 
-    generateN1PDF(data)
-      .then(pdfBytes => {
+    const generatePdf = async () => {
+      try {
+        let pdfBytes: Uint8Array;
+        switch (data.selectedDocType) {
+          case DocumentType.FORM_N1:
+            pdfBytes = await generateN1PDF(data);
+            break;
+          case DocumentType.DEFAULT_JUDGMENT:
+            pdfBytes = await generateN225PDF(data);
+            break;
+          case DocumentType.ADMISSION:
+            pdfBytes = await generateN225APDF(data);
+            break;
+          case DocumentType.DIRECTIONS_QUESTIONNAIRE:
+            pdfBytes = await generateN180PDF(data);
+            break;
+          default:
+            return;
+        }
+
         if (cancelled) return;
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
@@ -152,17 +214,19 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
           if (prev) URL.revokeObjectURL(prev);
           return url;
         });
-      })
-      .catch(error => {
+      } catch (error) {
         if (!cancelled) {
           console.error('Failed to generate PDF preview:', error);
+          setPdfError(error instanceof Error ? error.message : 'Unknown error');
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setIsLoadingPreview(false);
         }
-      });
+      }
+    };
+
+    generatePdf();
 
     return () => {
       cancelled = true;
@@ -180,7 +244,11 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
 
   // Reset preview URL when switching away from N1
   React.useEffect(() => {
-    if (data.selectedDocType !== DocumentType.FORM_N1 && pdfPreviewUrl) {
+    if (data.selectedDocType !== DocumentType.FORM_N1 && 
+        data.selectedDocType !== DocumentType.DEFAULT_JUDGMENT &&
+        data.selectedDocType !== DocumentType.ADMISSION &&
+        data.selectedDocType !== DocumentType.DIRECTIONS_QUESTIONNAIRE && 
+        pdfPreviewUrl) {
       setPdfPreviewUrl(null);
     }
   }, [data.selectedDocType, pdfPreviewUrl]);
@@ -275,7 +343,14 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                     Back & Edit Data
                  </button>
                  <button
-                    onClick={onConfirm}
+                    onClick={() => {
+                      // If review failed, show confirmation dialog before approving
+                      if (!review.isPass) {
+                        setShowOverrideConfirm(true);
+                      } else {
+                        onConfirm();
+                      }
+                    }}
                     className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all duration-200 transform hover:-translate-y-0.5 ${review.isPass ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
                  >
                     <CheckCircle className="w-4 h-4" /> {review.isPass ? "Approve & Finalize" : "Override & Approve"}
@@ -376,6 +451,20 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
             <>
                {viewMode === 'letter' && (
                   <Page watermark={!isFinalized} className="!shadow-none !m-0 !mb-0">
+                    {/* Saved/Unsaved indicator */}
+                    {!isFinalized && (
+                      <div className="absolute top-2 right-2 no-print z-10">
+                        {showSavedFeedback ? (
+                          <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-200 animate-fade-in">
+                            <CheckCircle className="w-3 h-3" /> Saved
+                          </span>
+                        ) : hasUnsavedChanges ? (
+                          <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full border border-amber-200">
+                            <AlertTriangle className="w-3 h-3" /> Unsaved
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
                     <div className="font-serif max-w-[90%] mx-auto pt-10">
                       <div className="text-right mb-12 leading-relaxed">
                         <p className="font-bold text-lg">{data.claimant.name}</p>
@@ -397,10 +486,27 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                         <p className="font-bold mt-2">Re: Outstanding Balance of £{(data.invoice.totalAmount + data.interest.totalInterest + data.compensation).toFixed(2)}</p>
                       </div>
 
-                      <div 
-                        className="whitespace-pre-wrap text-justify leading-relaxed mb-12 text-[11pt]"
+                      <div
+                        className={`whitespace-pre-wrap text-justify leading-relaxed mb-12 text-[11pt] transition-all duration-200 ${
+                          !isFinalized
+                            ? 'hover:outline-2 hover:outline-dashed hover:outline-slate-300 hover:outline-offset-4 focus:outline-2 focus:outline-solid focus:outline-teal-500 focus:outline-offset-4 cursor-text rounded'
+                            : ''
+                        }`}
                         contentEditable={!isFinalized}
                         suppressContentEditableWarning
+                        title={!isFinalized ? 'Click to edit this content' : undefined}
+                        onInput={() => setHasUnsavedChanges(true)}
+                        onBlur={(e) => {
+                          if (!isFinalized) {
+                            const newText = e.currentTarget.innerText;
+                            if (newText !== data.generated?.content) {
+                              onUpdateContent(newText);
+                              setHasUnsavedChanges(false);
+                              setShowSavedFeedback(true);
+                              setTimeout(() => setShowSavedFeedback(false), 2000);
+                            }
+                          }
+                        }}
                       >
                         {data.generated?.content}
                       </div>
@@ -588,6 +694,19 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                         </div>
                       </div>
                     </div>
+                    {/* Edit Particulars button for N1 forms */}
+                    {!isFinalized && (
+                      <button
+                        onClick={() => {
+                          setEditedParticulars(data.generated?.content || '');
+                          setShowParticularsModal(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium mb-4 transition-colors duration-200 no-print"
+                      >
+                        <PenTool className="w-4 h-4" />
+                        Edit Particulars of Claim
+                      </button>
+                    )}
                     <iframe
                       src={pdfPreviewUrl}
                       className="w-full h-[1200px] border-2 border-slate-300 rounded-lg shadow-xl bg-white"
@@ -598,9 +717,37 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                   <div className="w-full min-h-[800px] flex flex-col items-center justify-center bg-red-50 rounded-lg border-2 border-red-200 p-8">
                     <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
                     <p className="text-red-700 font-bold mb-2">Failed to generate PDF preview</p>
-                    <p className="text-red-600 text-sm mb-4">Please ensure N1.pdf template is in the public/ directory</p>
+                    {pdfError && (
+                      <p className="text-red-600 text-sm mb-2 font-mono bg-red-100 px-3 py-1 rounded">{pdfError}</p>
+                    )}
+                    <p className="text-red-600 text-sm mb-4">Please ensure the PDF template is in the public/ directory</p>
+                    <button
+                      onClick={() => {
+                        setPdfError(null);
+                        setIsLoadingPreview(true);
+                        generateN1PDF(data)
+                          .then(pdfBytes => {
+                            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                            setCachedPdfBlob(blob);
+                            const url = URL.createObjectURL(blob);
+                            setPdfPreviewUrl(prev => {
+                              if (prev) URL.revokeObjectURL(prev);
+                              return url;
+                            });
+                          })
+                          .catch(error => {
+                            console.error('Retry failed:', error);
+                            setPdfError(error instanceof Error ? error.message : 'Unknown error');
+                          })
+                          .finally(() => setIsLoadingPreview(false));
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors duration-200 mb-4"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Try Again
+                    </button>
                     <p className="text-red-500 text-xs max-w-lg text-center">
-                      You can still download the form using the "Download PDF" button above.
+                      You can also use the "Print" button above to save as PDF.
                     </p>
                   </div>
                )}
@@ -680,10 +827,15 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                {/* Page 2: Particulars & Signature */}
                <Page watermark={!isFinalized} className="!p-[15mm] !shadow-none !m-0 !mb-0">
                   <h2 className="font-bold text-lg mb-4 uppercase border-b border-black pb-2">Particulars of Claim</h2>
-                  <div 
-                      className="whitespace-pre-wrap text-justify leading-relaxed mb-12 text-sm min-h-[400px]"
+                  <div
+                      className={`whitespace-pre-wrap text-justify leading-relaxed mb-12 text-sm min-h-[400px] transition-all duration-200 ${
+                        !isFinalized
+                          ? 'hover:outline-2 hover:outline-dashed hover:outline-slate-300 hover:outline-offset-4 focus:outline-2 focus:outline-solid focus:outline-teal-500 focus:outline-offset-4 cursor-text rounded'
+                          : ''
+                      }`}
                       contentEditable={!isFinalized}
                       suppressContentEditableWarning
+                      title={!isFinalized ? 'Click to edit this content' : undefined}
                   >
                       {data.generated?.content}
                   </div>
@@ -729,7 +881,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
         </div>
       </div>
 
-      {/* Final Review Modal for N1 */}
+      {/* Final Review Modal for all court forms */}
       <FinalReviewModal
         isOpen={showFinalReview}
         onClose={() => setShowFinalReview(false)}
@@ -743,10 +895,75 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
           invoiceNumber: data.invoice.invoiceNumber,
           invoiceAmount: data.invoice.totalAmount,
           interest: data.interest.totalInterest,
+          compensation: data.compensation,
           courtFee: data.courtFee,
           totalClaim: data.invoice.totalAmount + data.interest.totalInterest + data.compensation + data.courtFee
         }}
       />
+
+      {/* Override Confirmation Dialog */}
+      <ConfirmModal
+        isOpen={showOverrideConfirm}
+        onClose={() => setShowOverrideConfirm(false)}
+        onConfirm={() => {
+          setShowOverrideConfirm(false);
+          onConfirm();
+        }}
+        title="Override Compliance Check?"
+        message="The compliance check found potential issues with your document. Proceeding despite these warnings could result in errors that may affect your legal claim. Are you sure you want to continue?"
+        confirmText="Yes, Override & Approve"
+        variant="danger"
+      />
+
+      {/* Edit Particulars Modal for N1 forms */}
+      {showParticularsModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
+            <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-lg text-slate-900">Edit Particulars of Claim</h3>
+                <p className="text-sm text-slate-500 mt-1">Make corrections to the text that will appear on your N1 form</p>
+              </div>
+              <button
+                onClick={() => setShowParticularsModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <XCircle className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+            <div className="p-4 flex-1 overflow-auto">
+              <textarea
+                value={editedParticulars}
+                onChange={(e) => setEditedParticulars(e.target.value)}
+                className="w-full h-80 p-4 border border-slate-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none"
+                placeholder="Enter the particulars of claim..."
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                This text will be used in the "Particulars of Claim" section of your N1 form.
+                The PDF will regenerate automatically after saving.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-200 flex justify-end gap-3 bg-slate-50 rounded-b-xl">
+              <button
+                onClick={() => setShowParticularsModal(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onUpdateContent(editedParticulars);
+                  setShowParticularsModal(false);
+                }}
+                className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold transition-colors flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

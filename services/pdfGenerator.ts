@@ -2,262 +2,200 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { ClaimState, PartyType } from '../types';
 
 // ============================================================================
-// PDF FORM SCHEMA DEFINITION
+// N1 FORM FILLABLE FIELD MAPPING
+// ============================================================================
+// Field IDs extracted from N1.pdf (version 12.24) using pypdf
+// These are the actual AcroForm field names in the PDF
 // ============================================================================
 
-interface FieldConfig {
-  page: number; // 0-indexed page number
-  x: number;
-  y: number;
-  size?: number;
-  maxWidth?: number;
-  lineHeight?: number;
-  isBold?: boolean;
-  align?: 'left' | 'right' | 'center';
-  getValue: (data: ClaimState) => string | undefined;
+interface FillableFieldConfig {
+  fieldId: string;
+  getValue: (data: ClaimState) => string;
 }
 
-interface CheckboxConfig {
-  page: number;
-  x: number;
-  y: number;
-  size?: number;
+interface CheckboxFieldConfig {
+  fieldId: string;
   condition: (data: ClaimState) => boolean;
 }
 
-interface ImageConfig {
-  page: number;
-  x: number;
-  y: number;
-  maxWidth: number;
-  maxHeight: number;
-  getData: (data: ClaimState) => string | null;
-}
-
-// ----------------------------------------------------------------------------
-// 1. TEXT FIELDS MAPPING
-// ----------------------------------------------------------------------------
-const TEXT_FIELDS: Record<string, FieldConfig> = {
-  // --- PAGE 1: Claim Form ---
-  
-  // Header Info
-  courtName: {
-    page: 0, x: 375, y: 792, size: 10, isBold: true,
-    getValue: (d) => "County Court Business Centre" // Centralized processing usually
+// Text field mappings - fieldId matches the actual PDF form field name
+const N1_TEXT_FIELDS: FillableFieldConfig[] = [
+  // Page 1: Claim Form
+  {
+    fieldId: 'Text35', // "In the" court name
+    getValue: () => 'County Court Business Centre'
   },
-
-  // Claimant Details (Top Left Box)
-  claimantName: {
-    page: 0, x: 45, y: 700, size: 10, isBold: true,
-    getValue: (d) => d.claimant.name
-  },
-  claimantAddress: {
-    page: 0, x: 45, y: 686, size: 10,
-    getValue: (d) => d.claimant.address
-  },
-  claimantCity: {
-    page: 0, x: 45, y: 672, size: 10,
-    getValue: (d) => d.claimant.city
-  },
-  claimantCounty: {
-    page: 0, x: 45, y: 658, size: 10,
-    getValue: (d) => d.claimant.county
-  },
-  claimantPostcode: {
-    page: 0, x: 45, y: 644, size: 10,
-    getValue: (d) => d.claimant.postcode
-  },
-
-  // Defendant Details (Middle Left Box)
-  defendantName: {
-    page: 0, x: 45, y: 555, size: 10, isBold: true,
-    getValue: (d) => d.defendant.name
-  },
-  defendantAddress: {
-    page: 0, x: 45, y: 541, size: 10,
-    getValue: (d) => d.defendant.address
-  },
-  defendantCity: {
-    page: 0, x: 45, y: 527, size: 10,
-    getValue: (d) => d.defendant.city
-  },
-  defendantCounty: {
-    page: 0, x: 45, y: 513, size: 10,
-    getValue: (d) => d.defendant.county
-  },
-  defendantPostcode: {
-    page: 0, x: 45, y: 499, size: 10,
-    getValue: (d) => d.defendant.postcode
-  },
-
-  // Brief Details (Right Column)
-  briefDetails: {
-    page: 0, x: 310, y: 680, size: 10, maxWidth: 230, lineHeight: 14,
-    getValue: (d) => d.generated?.briefDetails || `Claim for payment of outstanding invoices (Ref: ${d.invoice.invoiceNumber}) regarding provided services/goods.`
-  },
-
-  // Value (Bottom Left Text Area)
-  valueDescription: {
-    page: 0, x: 45, y: 410, size: 10, maxWidth: 230,
+  {
+    fieldId: 'Text21', // Claimant details box
     getValue: (d) => {
-       const total = d.invoice.totalAmount + d.interest.totalInterest + d.compensation;
-       return `The claimant expects to recover £${(total + d.courtFee).toFixed(2)}`;
+      const parts = [d.claimant.name];
+      if (d.claimant.address) parts.push(d.claimant.address);
+      if (d.claimant.city) parts.push(d.claimant.city);
+      if (d.claimant.county) parts.push(d.claimant.county);
+      if (d.claimant.postcode) parts.push(d.claimant.postcode);
+      return parts.join('\n');
     }
   },
-
-  // Defendant Service Box (Bottom Left Box)
-  defServiceBoxName: {
-    page: 0, x: 45, y: 280, size: 10,
-    getValue: (d) => d.defendant.name
+  {
+    fieldId: 'Text22', // Defendant details box
+    getValue: (d) => {
+      const parts = [d.defendant.name];
+      if (d.defendant.address) parts.push(d.defendant.address);
+      if (d.defendant.city) parts.push(d.defendant.city);
+      if (d.defendant.county) parts.push(d.defendant.county);
+      if (d.defendant.postcode) parts.push(d.defendant.postcode);
+      return parts.join('\n');
+    }
   },
-  defServiceBoxAddress: {
-    page: 0, x: 45, y: 265, size: 10,
-    getValue: (d) => d.defendant.address
+  {
+    fieldId: 'Text23', // Brief details of claim
+    getValue: (d) => d.generated?.briefDetails ||
+      `Claim for payment of outstanding invoices (Ref: ${d.invoice.invoiceNumber}) regarding provided services/goods.`
   },
-  defServiceBoxPostcode: {
-    page: 0, x: 45, y: 220, size: 10,
-    getValue: (d) => d.defendant.postcode
+  {
+    fieldId: 'Text24', // Value box
+    getValue: (d) => {
+      const total = d.invoice.totalAmount + d.interest.totalInterest + d.compensation;
+      return `The claimant expects to recover £${(total + d.courtFee).toFixed(2)}`;
+    }
   },
-
-  // Financial Totals (Bottom Right Table)
-  // Coordinates based on typical PDF grid
-  amountClaimed: {
-    page: 0, x: 530, y: 260, size: 11, align: 'right',
+  {
+    fieldId: 'Text25', // Amount claimed
     getValue: (d) => (d.invoice.totalAmount + d.interest.totalInterest + d.compensation).toFixed(2)
   },
-  courtFee: {
-    page: 0, x: 530, y: 238, size: 11, align: 'right',
+  {
+    fieldId: 'Text26', // Court fee
     getValue: (d) => d.courtFee.toFixed(2)
   },
-  legalCosts: {
-    page: 0, x: 530, y: 216, size: 11, align: 'right',
-    getValue: (d) => "0.00"
+  {
+    fieldId: 'Text27', // Legal representative's costs
+    getValue: () => '0.00'
   },
-  totalAmount: {
-    page: 0, x: 530, y: 194, size: 11, align: 'right', isBold: true,
+  {
+    fieldId: 'Text28', // Total amount
     getValue: (d) => {
-       const total = d.invoice.totalAmount + d.interest.totalInterest + d.compensation + d.courtFee;
-       return total.toFixed(2);
+      const total = d.invoice.totalAmount + d.interest.totalInterest + d.compensation + d.courtFee;
+      return total.toFixed(2);
+    }
+  },
+  {
+    fieldId: 'Text Field 48', // Defendant's service address box
+    getValue: (d) => {
+      const parts = [d.defendant.name];
+      if (d.defendant.address) parts.push(d.defendant.address);
+      if (d.defendant.city) parts.push(d.defendant.city);
+      if (d.defendant.postcode) parts.push(d.defendant.postcode);
+      return parts.join('\n');
     }
   },
 
-  // --- PAGE 2: Hearing Info ---
-  hearingCentre: {
-    page: 1, x: 80, y: 735, size: 11,
-    getValue: (d) => d.claimant.city ? `${d.claimant.city} County Court` : ''
+  // Page 2: Hearing Centre & Questions
+  {
+    fieldId: 'Text Field 28', // Preferred County Court Hearing Centre
+    getValue: (d) => d.claimant.city ? `${d.claimant.city} County Court` : 'County Court Business Centre'
   },
 
-  // --- PAGE 3: Particulars of Claim ---
-  // The large text box
-  particulars: {
-    page: 2, x: 75, y: 730, size: 10, maxWidth: 460, lineHeight: 14,
-    getValue: (d) => d.generated?.content || "Particulars of claim are attached."
+  // Page 3: Particulars of Claim
+  {
+    fieldId: 'Text30', // Particulars of claim text area
+    getValue: (d) => d.generated?.content || 'Particulars of claim are attached.'
   },
 
-  // --- PAGE 4: Statement of Truth ---
-  // Signed Date
-  dateDay: {
-    page: 3, x: 110, y: 440, size: 11,
+  // Page 4: Statement of Truth
+  {
+    fieldId: 'Text31', // Day
     getValue: () => new Date().getDate().toString().padStart(2, '0')
   },
-  dateMonth: {
-    page: 3, x: 160, y: 440, size: 11,
+  {
+    fieldId: 'Text32', // Month
     getValue: () => (new Date().getMonth() + 1).toString().padStart(2, '0')
   },
-  dateYear: {
-    page: 3, x: 210, y: 440, size: 11,
+  {
+    fieldId: 'Text33', // Year
     getValue: () => new Date().getFullYear().toString()
   },
-  
-  // Signer Details
-  signerName: {
-    page: 3, x: 95, y: 405, size: 11,
+  {
+    fieldId: 'Text Field 46', // Full name
     getValue: (d) => d.claimant.name
   },
-  signerRole: {
-    page: 3, x: 95, y: 280, size: 11,
-    getValue: (d) => d.claimant.type === PartyType.BUSINESS ? "Director / Authorised Signatory" : ""
+  {
+    fieldId: 'Text Field 44', // Position/office held
+    getValue: (d) => d.claimant.type === PartyType.BUSINESS ? 'Director / Authorised Signatory' : ''
   },
 
-  // --- PAGE 5: Service Address ---
-  // If applicable (usually filled with Claimant details)
-  serviceBuilding: {
-    page: 4, x: 95, y: 690, size: 11,
-    getValue: (d) => d.claimant.address.split(',')[0]
+  // Page 5: Claimant's Service Address
+  {
+    fieldId: 'Text Field 10', // Building and street
+    getValue: (d) => d.claimant.address?.split(',')[0] || d.claimant.address || ''
   },
-  serviceStreet: {
-    page: 4, x: 95, y: 660, size: 11,
-    getValue: (d) => d.claimant.address.split(',').slice(1).join(', ')
+  {
+    fieldId: 'Text Field 9', // Second line of address
+    getValue: (d) => {
+      const parts = d.claimant.address?.split(',');
+      return parts && parts.length > 1 ? parts.slice(1).join(', ').trim() : '';
+    }
   },
-  serviceCity: {
-    page: 4, x: 95, y: 630, size: 11,
-    getValue: (d) => d.claimant.city
+  {
+    fieldId: 'Text Field 8', // Town or city
+    getValue: (d) => d.claimant.city || ''
   },
-  serviceCounty: {
-    page: 4, x: 95, y: 600, size: 11,
-    getValue: (d) => d.claimant.county
+  {
+    fieldId: 'Text Field 7', // County
+    getValue: (d) => d.claimant.county || ''
   },
-  servicePostcode: {
-    page: 4, x: 98, y: 550, size: 14,
-    getValue: (d) => d.claimant.postcode.split('').join('  ') // Spaced
+  {
+    fieldId: 'Text34', // Postcode
+    getValue: (d) => d.claimant.postcode || ''
   },
-  servicePhone: {
-    page: 4, x: 250, y: 485, size: 11,
-    getValue: (d) => d.claimant.phone || ""
+  {
+    fieldId: 'Text Field 6', // Phone number
+    getValue: (d) => d.claimant.phone || ''
   },
-  serviceRef: {
-    page: 4, x: 250, y: 415, size: 11,
-    getValue: (d) => d.invoice.invoiceNumber || ""
+  {
+    fieldId: 'Text Field 3', // Your Ref
+    getValue: (d) => d.invoice.invoiceNumber || ''
   },
-  serviceEmail: {
-    page: 4, x: 250, y: 380, size: 11,
-    getValue: (d) => d.claimant.email || ""
+  {
+    fieldId: 'Text Field 2', // Email
+    getValue: (d) => d.claimant.email || ''
   }
-};
+];
 
-// ----------------------------------------------------------------------------
-// 2. CHECKBOX MAPPING
-// ----------------------------------------------------------------------------
-const CHECKBOX_FIELDS: Record<string, CheckboxConfig> = {
-  vulnerableNo: {
-    page: 1, x: 132, y: 535, size: 14,
-    condition: () => true
+// Checkbox field mappings
+const N1_CHECKBOX_FIELDS: CheckboxFieldConfig[] = [
+  // Page 2: Vulnerability & Human Rights
+  {
+    fieldId: 'Check Box40', // Vulnerability - No
+    condition: () => true // Default to No
   },
-  humanRightsNo: {
-    page: 1, x: 132, y: 440, size: 14,
-    condition: () => true
+  {
+    fieldId: 'Check Box42', // Human Rights - No
+    condition: () => true // Default to No
   },
-  // Statement of Truth Checkboxes (Page 4)
-  // "I believe" (Top box)
-  statementTruthIndividual: {
-    page: 3, x: 95, y: 672, size: 14,
+
+  // Page 3: Particulars of Claim
+  {
+    fieldId: 'Check Box43', // Attached checkbox
+    condition: (d) => !!(d.generated?.content)
+  },
+
+  // Page 4: Statement of Truth
+  {
+    fieldId: 'Check Box45', // "I believe" (individual)
     condition: (d) => d.claimant.type === PartyType.INDIVIDUAL
   },
-  // "The claimant believes" (Bottom box)
-  statementTruthBusiness: {
-    page: 3, x: 95, y: 625, size: 14,
+  {
+    fieldId: 'Check Box46', // "The claimant believes" (business/authorised)
     condition: (d) => d.claimant.type !== PartyType.INDIVIDUAL
   },
-  // Signer Role Checkbox: "Claimant" (Page 4)
-  signerIsClaimant: {
-    page: 3, x: 95, y: 495, size: 14,
-    condition: () => true
+  {
+    fieldId: 'Check Box47', // Claimant checkbox
+    condition: (d) => d.claimant.type === PartyType.INDIVIDUAL
   }
-};
-
-// ----------------------------------------------------------------------------
-// 3. IMAGE MAPPING (Signature)
-// ----------------------------------------------------------------------------
-const IMAGE_FIELDS: Record<string, ImageConfig> = {
-  signature: {
-    page: 3, x: 100, y: 520, maxWidth: 150, maxHeight: 50,
-    getData: (d) => d.signature
-  }
-};
-
+];
 
 // ============================================================================
-// PDF GENERATION LOGIC
+// PDF GENERATION LOGIC - Using Fillable Form Fields
 // ============================================================================
 
 export const generateN1PDF = async (data: ClaimState): Promise<Uint8Array> => {
@@ -265,104 +203,83 @@ export const generateN1PDF = async (data: ClaimState): Promise<Uint8Array> => {
   let existingPdfBytes: ArrayBuffer;
   try {
     const res = await fetch('/N1.pdf');
-    if (!res.ok) throw new Error("Template file not found");
+    if (!res.ok) throw new Error('Template file not found');
     existingPdfBytes = await res.arrayBuffer();
   } catch (e) {
-    console.error("PDF Load Error:", e);
-    throw new Error("Official N1 Form Template (N1.pdf) is missing. Please add it to the public directory.");
+    console.error('PDF Load Error:', e);
+    throw new Error('Official N1 Form Template (N1.pdf) is missing. Please add it to the public directory.');
   }
 
   const pdfDoc = await PDFDocument.load(existingPdfBytes);
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const form = pdfDoc.getForm();
   const pages = pdfDoc.getPages();
 
-  // 2. Process Text Fields
-  for (const key in TEXT_FIELDS) {
-    const field = TEXT_FIELDS[key];
-    const text = field.getValue(data);
-    
-    if (!text) continue;
-    if (field.page >= pages.length) continue;
+  console.log(`📄 N1 PDF has ${pages.length} pages`);
 
-    const fontToUse = field.isBold ? boldFont : font;
-    const fontSize = field.size || 10;
-    let xPos = field.x;
-
-    // Handle Right Alignment (calculate width and shift left)
-    if (field.align === 'right') {
-      const textWidth = fontToUse.widthOfTextAtSize(text, fontSize);
-      xPos = field.x - textWidth;
-    }
-
-    pages[field.page].drawText(text, {
-      x: xPos,
-      y: field.y,
-      size: fontSize,
-      font: fontToUse,
-      maxWidth: field.maxWidth,
-      lineHeight: field.lineHeight,
-      color: rgb(0, 0, 0)
-    });
-  }
-
-  // 3. Process Checkboxes
-  for (const key in CHECKBOX_FIELDS) {
-    const box = CHECKBOX_FIELDS[key];
-    if (box.condition(data) && box.page < pages.length) {
-      pages[box.page].drawText('X', {
-        x: box.x,
-        y: box.y,
-        size: box.size || 14,
-        font: boldFont,
-        color: rgb(0, 0, 0)
-      });
-    }
-  }
-
-  // 4. Process Images (Signatures)
-  for (const key in IMAGE_FIELDS) {
-    const imgConfig = IMAGE_FIELDS[key];
-    const rawData = imgConfig.getData(data);
-    
-    if (rawData && imgConfig.page < pages.length) {
-      try {
-        // Handle Data URI scheme (e.g., "data:image/png;base64,...")
-        let base64Data = rawData;
-        if (rawData.includes('base64,')) {
-          base64Data = rawData.split('base64,')[1];
-        }
-
-        const image = await pdfDoc.embedPng(base64Data);
-        const dims = image.scaleToFit(imgConfig.maxWidth, imgConfig.maxHeight);
-        
-        pages[imgConfig.page].drawImage(image, {
-          x: imgConfig.x,
-          y: imgConfig.y,
-          width: dims.width,
-          height: dims.height
-        });
-      } catch (e) {
-        console.warn(`Failed to embed image for ${key}`, e);
+  // 2. Fill text fields using AcroForm field names
+  for (const fieldConfig of N1_TEXT_FIELDS) {
+    try {
+      const field = form.getTextField(fieldConfig.fieldId);
+      const value = fieldConfig.getValue(data);
+      if (value) {
+        field.setText(value);
+        console.log(`✅ N1 Field '${fieldConfig.fieldId}' filled`);
       }
+    } catch (e) {
+      console.warn(`⚠️ N1 Field '${fieldConfig.fieldId}' not found or error:`, e);
     }
   }
+
+  // 3. Fill checkbox fields
+  for (const checkConfig of N1_CHECKBOX_FIELDS) {
+    try {
+      const field = form.getCheckBox(checkConfig.fieldId);
+      if (checkConfig.condition(data)) {
+        field.check();
+        console.log(`✅ N1 Checkbox '${checkConfig.fieldId}' checked`);
+      } else {
+        field.uncheck();
+      }
+    } catch (e) {
+      console.warn(`⚠️ N1 Checkbox '${checkConfig.fieldId}' not found or error:`, e);
+    }
+  }
+
+  // 4. Handle signature image (draw on page since it's not a form field)
+  if (data.signature && pages.length >= 4) {
+    try {
+      let base64Data = data.signature;
+      if (data.signature.includes('base64,')) {
+        base64Data = data.signature.split('base64,')[1];
+      }
+
+      const image = await pdfDoc.embedPng(base64Data);
+      const dims = image.scaleToFit(180, 45);
+
+      // Signature box is on page 4 (index 3), field "Text Field 47" area
+      // rect: [54.5669, 517.485, 309.685, 562.839]
+      pages[3].drawImage(image, {
+        x: 60,
+        y: 520,
+        width: dims.width,
+        height: dims.height
+      });
+      console.log('✅ N1 Signature image embedded');
+    } catch (e) {
+      console.warn('Failed to embed signature image:', e);
+    }
+  }
+
+  // 5. Flatten the form to prevent further editing (optional)
+  // form.flatten(); // Uncomment if you want to lock the form
 
   return await pdfDoc.save();
 };
 
+
 // ============================================================================
 // FORM N225 - DEFAULT JUDGMENT PDF GENERATOR
 // ============================================================================
-
-/**
- * IMPORTANT: Coordinates below are ESTIMATED and need fine-tuning through testing.
- * To adjust:
- * 1. Generate a test PDF
- * 2. Open in Acrobat/Preview and measure field positions
- * 3. Update x/y coordinates accordingly
- * 4. PDF coordinate system: origin (0,0) is bottom-left
- */
 
 interface N225FieldConfig {
   page: number;
@@ -374,11 +291,19 @@ interface N225FieldConfig {
   getValue: (data: ClaimState) => string;
 }
 
+interface CheckboxConfig {
+  page: number;
+  x: number;
+  y: number;
+  size?: number;
+  condition: (data: ClaimState) => boolean;
+}
+
 const N225_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Page 1 - Header
   claimNumber: {
     page: 0, x: 400, y: 770, size: 11, isBold: true,
-    getValue: () => '[TO BE ALLOCATED]' // Claim number assigned by court
+    getValue: () => '[TO BE ALLOCATED]'
   },
 
   // Claimant Details
@@ -449,11 +374,11 @@ export const generateN225PDF = async (data: ClaimState): Promise<Uint8Array> => 
   let existingPdfBytes: ArrayBuffer;
   try {
     const res = await fetch('/N225.pdf');
-    if (!res.ok) throw new Error("N225 template not found");
+    if (!res.ok) throw new Error('N225 template not found');
     existingPdfBytes = await res.arrayBuffer();
   } catch (e) {
-    console.error("N225 PDF Load Error:", e);
-    throw new Error("Official N225 Form Template (N225.pdf) is missing.");
+    console.error('N225 PDF Load Error:', e);
+    throw new Error('Official N225 Form Template (N225.pdf) is missing.');
   }
 
   const pdfDoc = await PDFDocument.load(existingPdfBytes);
@@ -514,6 +439,7 @@ export const generateN225PDF = async (data: ClaimState): Promise<Uint8Array> => 
   return await pdfDoc.save();
 };
 
+
 // ============================================================================
 // FORM N225A - ADMISSION JUDGMENT PDF GENERATOR
 // ============================================================================
@@ -522,7 +448,7 @@ const N225A_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Header
   claimNumber: {
     page: 0, x: 400, y: 770, size: 11, isBold: true,
-    getValue: () => '[TO BE ALLOCATED]' // Claim number assigned by court
+    getValue: () => '[TO BE ALLOCATED]'
   },
 
   // Parties
@@ -538,7 +464,7 @@ const N225A_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Admission Details
   admissionDate: {
     page: 0, x: 250, y: 600, size: 10,
-    getValue: () => '[DATE DEFENDANT ADMITTED]' // User to fill
+    getValue: () => '[DATE DEFENDANT ADMITTED]'
   },
   amountAdmitted: {
     page: 0, x: 250, y: 580, size: 11,
@@ -546,7 +472,7 @@ const N225A_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   },
   defendantProposal: {
     page: 0, x: 100, y: 545, size: 10, maxWidth: 400,
-    getValue: () => '[DEFENDANT\'S PROPOSED PAYMENT TERMS]' // User to fill
+    getValue: () => '[DEFENDANT\'S PROPOSED PAYMENT TERMS]'
   },
 
   // Claimant's Position
@@ -558,7 +484,7 @@ const N225A_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Claimant's Proposal
   claimantPaymentTerms: {
     page: 0, x: 100, y: 420, size: 10, maxWidth: 400,
-    getValue: (d) => `Payment in full within 14 days, or monthly installments of £[AMOUNT] (to be determined based on defendant's means)`
+    getValue: () => 'Payment in full within 14 days, or monthly installments of £[AMOUNT] (to be determined based on defendant\'s means)'
   },
 
   // Total Amount
@@ -589,11 +515,11 @@ export const generateN225APDF = async (data: ClaimState): Promise<Uint8Array> =>
   let existingPdfBytes: ArrayBuffer;
   try {
     const res = await fetch('/N225A.pdf');
-    if (!res.ok) throw new Error("N225A template not found");
+    if (!res.ok) throw new Error('N225A template not found');
     existingPdfBytes = await res.arrayBuffer();
   } catch (e) {
-    console.error("N225A PDF Load Error:", e);
-    throw new Error("Official N225A Form Template (N225A.pdf) is missing.");
+    console.error('N225A PDF Load Error:', e);
+    throw new Error('Official N225A Form Template (N225A.pdf) is missing.');
   }
 
   const pdfDoc = await PDFDocument.load(existingPdfBytes);
@@ -654,6 +580,7 @@ export const generateN225APDF = async (data: ClaimState): Promise<Uint8Array> =>
   return await pdfDoc.save();
 };
 
+
 // ============================================================================
 // FORM N180 - DIRECTIONS QUESTIONNAIRE PDF GENERATOR
 // ============================================================================
@@ -662,7 +589,7 @@ const N180_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Header
   claimNumber: {
     page: 0, x: 400, y: 770, size: 11, isBold: true,
-    getValue: () => '[TO BE ALLOCATED]' // Claim number assigned by court
+    getValue: () => '[TO BE ALLOCATED]'
   },
   claimantName: {
     page: 0, x: 100, y: 735, size: 11, isBold: true,
@@ -682,7 +609,7 @@ const N180_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Witnesses
   witnessCount: {
     page: 0, x: 450, y: 560, size: 11,
-    getValue: () => '1' // Usually just the claimant
+    getValue: () => '1'
   },
   witnessName1: {
     page: 0, x: 120, y: 535, size: 10,
@@ -692,7 +619,7 @@ const N180_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Hearing
   hearingDuration: {
     page: 0, x: 350, y: 460, size: 11,
-    getValue: () => '1' // 1 hour typical for small claims
+    getValue: () => '1'
   },
   unavailableDates: {
     page: 0, x: 100, y: 430, size: 10, maxWidth: 400,
@@ -720,11 +647,11 @@ const N180_CHECKBOXES: Record<string, CheckboxConfig> = {
   // Section A - Settlement
   settlementStayYes: {
     page: 0, x: 420, y: 680, size: 12,
-    condition: () => true // Default to YES for settlement attempt
+    condition: () => true
   },
   mediationYes: {
     page: 0, x: 420, y: 660, size: 12,
-    condition: () => true // Default to YES for mediation
+    condition: () => true
   },
 
   // Section B - Track
@@ -736,19 +663,19 @@ const N180_CHECKBOXES: Record<string, CheckboxConfig> = {
   // Section D - Experts
   expertsNo: {
     page: 0, x: 180, y: 500, size: 12,
-    condition: () => true // Usually NO for small claims
+    condition: () => true
   },
 
   // Section E - Special Requirements
   disabilityNo: {
     page: 0, x: 180, y: 405, size: 12,
-    condition: () => true // Default to NO
+    condition: () => true
   },
 
   // Section G - Costs
   lossOfEarningsNo: {
     page: 0, x: 180, y: 310, size: 12,
-    condition: () => true // Default to NO
+    condition: () => true
   },
 
   // Statement of Truth
@@ -762,11 +689,11 @@ export const generateN180PDF = async (data: ClaimState): Promise<Uint8Array> => 
   let existingPdfBytes: ArrayBuffer;
   try {
     const res = await fetch('/N180.pdf');
-    if (!res.ok) throw new Error("N180 template not found");
+    if (!res.ok) throw new Error('N180 template not found');
     existingPdfBytes = await res.arrayBuffer();
   } catch (e) {
-    console.error("N180 PDF Load Error:", e);
-    throw new Error("Official N180 Form Template (N180.pdf) is missing.");
+    console.error('N180 PDF Load Error:', e);
+    throw new Error('Official N180 Form Template (N180.pdf) is missing.');
   }
 
   const pdfDoc = await PDFDocument.load(existingPdfBytes);

@@ -120,3 +120,68 @@ export const getCountyFromPostcode = (postcode: string): string => {
 
   return '';
 };
+
+// ==========================================
+// Onboarding Constants
+// ==========================================
+
+export const BUSINESS_TYPES = [
+  { value: 'Sole trader', label: 'Sole trader', description: 'A self-employed individual running their own business' },
+  { value: 'Limited company', label: 'Limited company', description: 'Registered limited company (Ltd or PLC)' },
+  { value: 'Limited Liability Partnership', label: 'Limited Liability Partnership', description: 'Registered limited liability partnership (LLP)' },
+  { value: 'Partnership', label: 'Partnership', description: 'Unincorporated business or partnership' },
+  { value: 'Other', label: 'Other', description: 'Other business structure' }
+];
+
+export const REFERRAL_SOURCES = [
+  { value: 'search_engine', label: 'Search Engine (Google, Bing)' },
+  { value: 'social_media', label: 'Social Media' },
+  { value: 'word_of_mouth', label: 'Word of Mouth' },
+  { value: 'professional_referral', label: 'Professional Referral (Accountant, Solicitor)' },
+  { value: 'advertisement', label: 'Advertisement' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'other', label: 'Other' }
+];
+
+export const ONBOARDING_STEPS = [
+  {
+    id: 1,
+    key: 'account' as const,
+    title: 'Account type',
+    description: 'Choose your account type',
+    estimatedTime: '~1 minute',
+    icon: 'User'
+  },
+  {
+    id: 2,
+    key: 'business' as const,
+    title: 'Business details',
+    description: 'Tell us about your business',
+    estimatedTime: '~2 minutes',
+    icon: 'Building2'
+  },
+  {
+    id: 3,
+    key: 'address' as const,
+    title: 'Address',
+    description: 'Where is your office located',
+    estimatedTime: '~30 seconds',
+    icon: 'MapPin'
+  },
+  {
+    id: 4,
+    key: 'declarations' as const,
+    title: 'Declarations',
+    description: 'Provide your declarations',
+    estimatedTime: '~10 seconds',
+    icon: 'FileCheck'
+  },
+  {
+    id: 5,
+    key: 'verification' as const,
+    title: 'Identity verification',
+    description: 'Verify your identity',
+    estimatedTime: '~4 minutes',
+    icon: 'ShieldCheck'
+  }
+];

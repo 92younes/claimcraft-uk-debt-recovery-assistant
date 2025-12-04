@@ -30,7 +30,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
               <div className="bg-blue-100 p-3 rounded-xl">
                 <Shield className="w-6 h-6 text-blue-600" />
               </div>
-              <h1 className="text-4xl font-bold text-slate-900 font-serif">Privacy Policy</h1>
+              <h1 className="text-4xl font-bold text-slate-900 font-display">Privacy Policy</h1>
             </div>
             <p className="text-slate-600 text-lg">
               Last updated: <strong>23 November 2025</strong>

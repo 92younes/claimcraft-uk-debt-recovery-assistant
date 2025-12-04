@@ -103,7 +103,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
       case 'service_delivered': return <Truck className="w-4 h-4 text-purple-500"/>;
       case 'invoice': return <FileText className="w-4 h-4 text-green-500"/>;
       case 'payment_due': return <PoundSterling className="w-4 h-4 text-red-500"/>;
-      case 'part_payment': return <CreditCard className="w-4 h-4 text-emerald-500"/>;
+      case 'part_payment': return <CreditCard className="w-4 h-4 text-teal-500"/>;
       case 'chaser': return <Mail className="w-4 h-4 text-amber-500"/>;
       case 'lba_sent': return <Scale className="w-4 h-4 text-red-500"/>;
       case 'acknowledgment': return <CheckCircle className="w-4 h-4 text-teal-500"/>;
@@ -116,8 +116,8 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 bg-emerald-100 rounded-xl">
-            <Calendar className="w-6 h-6 text-emerald-600" />
+          <div className="p-2 bg-teal-100 rounded-xl">
+            <Calendar className="w-6 h-6 text-teal-600" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-slate-900 font-display">Chronology of Events</h2>
@@ -127,12 +127,12 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
 
        {/* Quick Actions */}
        {isValidInvoiceDate ? (
-         <div className="mb-6 mt-6 bg-emerald-50 p-5 rounded-xl border border-emerald-200">
+         <div className="mb-6 mt-6 bg-teal-50 p-5 rounded-xl border border-teal-200">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-2">
+              <p className="text-xs font-bold text-teal-700 uppercase tracking-wider flex items-center gap-2">
                   <Zap className="w-4 h-4" /> Quick Add Timeline Events
               </p>
-              <span className="text-xs text-emerald-600 bg-white px-2 py-1 rounded-lg border border-emerald-200 font-mono">
+              <span className="text-xs text-teal-600 bg-white px-2 py-1 rounded-lg border border-teal-200 font-mono">
                 Invoice: {new Date(invoiceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
             </div>
@@ -230,7 +230,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
             type="date"
             value={newEvent.date}
             onChange={e => setNewEvent({...newEvent, date: e.target.value})}
-            className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:outline-none transition-colors"
+            className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none transition-colors"
           />
         </div>
         <div className="md:col-span-3">
@@ -238,7 +238,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
            <select
              value={newEvent.type}
              onChange={e => setNewEvent({...newEvent, type: e.target.value as any})}
-             className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:outline-none transition-colors"
+             className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none transition-colors"
            >
              <option value="contract">Contract Signed</option>
              <option value="service_delivered">Service/Goods Delivered</option>
@@ -258,14 +258,14 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
              placeholder="e.g. Called debtor, they promised payment by Friday"
              value={newEvent.description}
              onChange={e => setNewEvent({...newEvent, description: e.target.value})}
-             className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:outline-none transition-colors"
+             className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none transition-colors"
            />
         </div>
         <div className="md:col-span-1">
           <button
             onClick={addEvent}
             disabled={!newEvent.date || !newEvent.description}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:bg-slate-300 shadow-sm"
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white p-2.5 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:bg-slate-300 shadow-sm"
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -296,8 +296,8 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
 
         {events.map((ev, idx) => (
           <div key={idx} className="relative pl-8 group animate-fade-in" style={{ animationDelay: `${idx * 50}ms` }}>
-            <div className="absolute -left-[9px] top-4 w-4 h-4 bg-white border-2 border-slate-300 rounded-full group-hover:border-emerald-500 group-hover:scale-110 transition-all duration-200 z-10"></div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all duration-200 flex justify-between items-start shadow-sm">
+            <div className="absolute -left-[9px] top-4 w-4 h-4 bg-white border-2 border-slate-300 rounded-full group-hover:border-teal-500 group-hover:scale-110 transition-all duration-200 z-10"></div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all duration-200 flex justify-between items-start shadow-sm">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <div className="p-1 bg-slate-100 rounded-lg">

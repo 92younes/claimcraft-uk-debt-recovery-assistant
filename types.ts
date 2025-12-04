@@ -115,6 +115,28 @@ export interface ChatMessage {
   role: 'user' | 'ai';
   content: string;
   timestamp: number;
+  readyToProceed?: boolean; // AI signals when enough information has been collected
+  collected?: {
+    claimantName: boolean;
+    claimantAddress: boolean;
+    defendantName: boolean;
+    defendantAddress: boolean;
+    invoiceDetails: boolean;
+    timelineEvents: boolean;
+  };
+}
+
+export interface ChatResponse {
+  message: string;
+  readyToProceed: boolean;
+  collected?: {
+    claimantName: boolean;
+    claimantAddress: boolean;
+    defendantName: boolean;
+    defendantAddress: boolean;
+    invoiceDetails: boolean;
+    timelineEvents: boolean;
+  };
 }
 
 export type ClaimStatus = 'draft' | 'review' | 'sent' | 'paid';
@@ -207,6 +229,85 @@ export interface XeroContact {
     PhoneNumber?: string;
   }[];
 }
+
+// ==========================================
+// User Profile & Onboarding Types
+// ==========================================
+
+export enum BusinessType {
+  SOLE_TRADER = 'Sole trader',
+  LIMITED_COMPANY = 'Limited company',
+  LLP = 'Limited Liability Partnership',
+  PARTNERSHIP = 'Partnership',
+  OTHER = 'Other'
+}
+
+export interface UserAddress {
+  line1: string;
+  line2?: string;
+  city: string;
+  county: string;
+  postcode: string;
+  country: string;
+}
+
+export interface UserProfile {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Step 1: Account Type
+  hasAuthority: boolean;
+  referralSource: string;
+  tosAcceptedAt: string;
+  disclaimerAcceptedAt: string;
+
+  // Step 2: Business Details
+  businessType: BusinessType;
+  businessName: string;
+  businessDescription?: string;
+  companyNumber?: string;
+
+  // Step 3: Address
+  businessAddress: UserAddress;
+  tradingAddressSame: boolean;
+
+  // Step 4: Declarations
+  isPEP: boolean;
+  jurisdictionConfirmed: boolean;
+
+  // Step 5: Identity Verification
+  kycStatus: 'pending' | 'verified' | 'not_required';
+
+  // Contact
+  email?: string;
+  phone?: string;
+}
+
+export const INITIAL_USER_ADDRESS: UserAddress = {
+  line1: '',
+  city: '',
+  county: '',
+  postcode: '',
+  country: 'United Kingdom'
+};
+
+export const INITIAL_USER_PROFILE: UserProfile = {
+  id: '',
+  createdAt: '',
+  updatedAt: '',
+  hasAuthority: false,
+  referralSource: '',
+  tosAcceptedAt: '',
+  disclaimerAcceptedAt: '',
+  businessType: BusinessType.LIMITED_COMPANY,
+  businessName: '',
+  businessAddress: { ...INITIAL_USER_ADDRESS },
+  tradingAddressSame: true,
+  isPEP: false,
+  jurisdictionConfirmed: false,
+  kycStatus: 'not_required'
+};
 
 export const INITIAL_PARTY: Party = {
   type: PartyType.BUSINESS,

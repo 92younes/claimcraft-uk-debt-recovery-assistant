@@ -40,8 +40,8 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
                 <div
                   className={`
                     relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300
-                    ${completed ? 'bg-emerald-600 border-emerald-600 shadow-emerald-sm' :
-                      current ? 'bg-emerald-600 border-emerald-600 shadow-emerald-md' :
+                    ${completed ? 'bg-teal-600 border-teal-600 shadow-teal-sm' :
+                      current ? 'bg-teal-600 border-teal-600 shadow-teal-md' :
                       'bg-slate-100 border-slate-300'}
                   `}
                   aria-current={current ? 'step' : undefined}
@@ -59,7 +59,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
                 <span
                   className={`
                     mt-2 text-xs font-medium text-center
-                    ${completed ? 'text-emerald-600' : current ? 'text-slate-900' : 'text-slate-500'}
+                    ${completed ? 'text-teal-600' : current ? 'text-slate-900' : 'text-slate-500'}
                   `}
                 >
                   {step.label}
@@ -78,7 +78,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
                 <div
                   className={`
                     absolute top-5 left-[calc(50%+20px)] w-[calc(100%-40px)] h-0.5 -translate-y-1/2
-                    ${completed ? 'bg-emerald-500' : 'bg-slate-200'}
+                    ${completed ? 'bg-teal-500' : 'bg-slate-200'}
                   `}
                   aria-hidden="true"
                 />
@@ -115,7 +115,7 @@ export const ProgressStepsCompact: React.FC<ProgressStepsProps> = ({
       {/* Progress Bar */}
       <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
         <div
-          className="bg-emerald-500 h-full transition-all duration-300 ease-out"
+          className="bg-teal-500 h-full transition-all duration-300 ease-out"
           style={{ width: `${progress}%` }}
           role="progressbar"
           aria-valuenow={progress}
@@ -126,7 +126,7 @@ export const ProgressStepsCompact: React.FC<ProgressStepsProps> = ({
       </div>
 
       {currentStepData && (
-        <p className="mt-2 text-xs text-emerald-600 font-medium">
+        <p className="mt-2 text-xs text-teal-600 font-medium">
           {currentStepData.label}
         </p>
       )}

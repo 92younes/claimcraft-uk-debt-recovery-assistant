@@ -62,16 +62,16 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
               <Percent className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold">Interest Rate Confirmation</h2>
+              <h2 className="text-2xl font-bold font-display">Interest Rate Confirmation</h2>
               <p className="text-blue-100 text-sm mt-0.5">Verify Before Proceeding</p>
             </div>
           </div>
@@ -255,14 +255,14 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
         <div className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-200 p-6 rounded-b-2xl flex gap-3">
           <button
             onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
+            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition-colors duration-200"
           >
             {!rateIsCorrect ? 'Back - Fix Party Types' : 'Cancel - Review Party Types'}
           </button>
           <button
             onClick={handleConfirm}
             disabled={!canProceed}
-            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 shadow-md disabled:shadow-none"
+            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors duration-200 shadow-sm disabled:shadow-none"
           >
             {!rateIsCorrect ? 'Cannot Proceed - Rate Incorrect' : hasVerified ? 'Confirm & Proceed' : 'Complete Verification Above'}
           </button>

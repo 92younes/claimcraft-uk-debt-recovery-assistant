@@ -66,12 +66,12 @@ export const ViabilityBlockModal: React.FC<ViabilityBlockModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden animate-slide-up border border-slate-200">
         {/* Header */}
-        <div className="bg-red-600 text-white p-6 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-red-600 to-red-500 text-white p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5" />
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-xl font-bold font-display">Claim Viability Warning</h2>
+            <h2 className="text-2xl font-bold font-display">Claim Viability Warning</h2>
           </div>
           <button
             onClick={handleClose}

@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType, ClaimStrength, ExtractedClaimData, TimelineEvent } from "../types";
+import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType, ClaimStrength, ExtractedClaimData, TimelineEvent, ChatResponse } from "../types";
+import { formatCurrency, formatTotalDebt, formatGrandTotal } from "../utils/calculations";
 
 const getClient = () => {
   const apiKey = import.meta.env.VITE_API_KEY;
@@ -7,12 +8,6 @@ const getClient = () => {
     throw new Error("API_KEY (Gemini) is not defined. Please set VITE_API_KEY in your .env file.");
   }
   return new GoogleGenAI({ apiKey });
-};
-
-// Helper to safely format currency
-const formatCurrency = (val: number | undefined) => {
-  if (val === undefined || val === null || isNaN(val)) return '0.00';
-  return val.toFixed(2);
 };
 
 // Helper to convert numeric score to strength tier
@@ -140,10 +135,11 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
 
   const prompt = `
     Act as an Expert Legal Assistant for UK Small Claims.
-    Assess the "Winnability" (Probability of Success) of this claim based on the available evidence, timeline, and clarifications.
+    Assess the "Winnability" (Probability of Success) of this claim on the **Balance of Probabilities** (Civil Standard >50%).
 
     CLAIMANT: ${data.claimant.name}
     DEFENDANT: ${data.defendant.name}
+    DEFENDANT SOLVENCY: ${data.defendant.solvencyStatus || 'Unknown'}
     AMOUNT: £${data.invoice.totalAmount}
 
     TIMELINE OF EVENTS:
@@ -156,14 +152,19 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
     ${data.chatHistory.filter(m => m.role === 'user').map(m => `- Client: ${m.content}`).join('\n')}
 
     JUDGMENT CRITERIA:
-    1. **Contract**: Is there a signed contract or clear written agreement? (High impact)
-    2. **Proof**: Is there proof of delivery/service performance?
-    3. **Admissions**: Did the defendant admit the debt in emails/chats?
-    4. **Procedure**: Did the claimant send chasers/warnings?
+    1. **Contract Formation**: Is there a signed contract OR clear evidence of agreement (emails, texts, conduct)?
+    2. **Performance**: Is there proof the service/goods were delivered?
+    3. **Admissions**: Did the defendant admit the debt? (Strongest evidence)
+    4. **Solvency Risk**: Is the defendant active/solvent? (Crucial for recovery)
     5. **Disputes**: Is there a valid counterclaim or dispute mentioned in the chat?
 
+    SCORING LOGIC:
+    - 75-100: Clear agreement + Proof of delivery + No valid dispute.
+    - 50-74: Verbal agreement but good email trail OR minor dispute.
+    - 0-49: No evidence OR Defendant is insolvent OR valid counterclaim.
+
     Return JSON:
-    - score: number (0-100, where 75+ = strong case, 50-74 = moderate, <50 = weak)
+    - score: number (0-100)
     - analysis: string (Concise summary of the case strength)
     - weaknesses: string[] (List specific gaps, e.g., "Missing signed contract", "No proof of delivery", "Debt relies on verbal agreement")
   `;
@@ -217,7 +218,7 @@ export const startClarificationChat = async (data: ClaimState): Promise<string> 
   const principal = data.invoice.totalAmount || 0;
   const interest = data.interest.totalInterest || 0;
   const comp = data.compensation || 0;
-  const totalDebt = (principal + interest + comp).toFixed(2);
+  const totalDebt = formatTotalDebt(principal, interest, comp);
 
   // Identify critical missing data
   const missingAddressFields: string[] = [];
@@ -261,7 +262,7 @@ export const startClarificationChat = async (data: ClaimState): Promise<string> 
   return response.text || "Hello, I'm your AI legal assistant. To assess your case strength, do you have a written contract signed by the defendant?";
 };
 
-export const sendChatMessage = async (history: ChatMessage[], userMessage: string, data: ClaimState): Promise<string> => {
+export const sendChatMessage = async (history: ChatMessage[], userMessage: string, data: ClaimState): Promise<ChatResponse> => {
   const ai = getClient();
 
   // Inject calculated financials so the AI understands the full claim value
@@ -270,8 +271,8 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
   const comp = data.compensation || 0;
   const fee = data.courtFee || 0;
 
-  const totalDebt = (principal + interest + comp).toFixed(2);
-  const grandTotal = (principal + interest + comp + fee).toFixed(2);
+  const totalDebt = formatTotalDebt(principal, interest, comp);
+  const grandTotal = formatGrandTotal(principal, interest, comp, fee);
 
   // Identify missing required fields
   const missingFields: string[] = [];
@@ -306,6 +307,12 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
     ))
   );
 
+  // Check if we have minimum required info for readiness
+  const hasClaimantName = !!data.claimant.name?.trim();
+  const hasDefendantName = !!data.defendant.name?.trim();
+  const hasInvoiceAmount = data.invoice.totalAmount > 0;
+  const hasMinExchanges = history.filter(m => m.role === 'user').length >= 2;
+
   const systemInstruction = `
     You are an AI Legal Assistant for UK Small Claims.
     You are NOT a solicitor and cannot provide legal advice. You provide "Legal Information" and procedural guidance based on the Civil Procedure Rules (CPR).
@@ -336,11 +343,13 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
     YOUR GOAL: Gather enough information to recommend the RIGHT document for their situation.
 
     DOCUMENT DETERMINATION QUESTIONS (ask these to determine the right document):
-    1. "Have you sent any payment reminders or chaser emails to the debtor?" → If NO, suggest starting with a Polite Reminder
-    2. "Have you sent a formal Letter Before Action (LBA) giving them 30 days to pay?" → Critical for court claim eligibility
-    3. "If you sent an LBA, when was it sent? Has 30 days passed?" → If YES to both, they can file Form N1
-    4. "Has the debtor acknowledged the debt or responded to your communications?" → Affects case strength
-    5. "Would you prefer to negotiate a settlement or proceed to court?" → If settlement, suggest Part 36 Offer
+    1. "Have you already started a court claim (filed Form N1)?" → If YES, ask if they need to request judgment or respond to a defence.
+    2. "If you have a judgment, do you need to enforce it?" → Not yet supported, but good context.
+    3. "Have you sent any payment reminders or chaser emails to the debtor?" → If NO, suggest starting with a Polite Reminder
+    4. "Have you sent a formal Letter Before Action (LBA) giving them 30 days to pay?" → Critical for court claim eligibility
+    5. "If you sent an LBA, when was it sent? Has 30 days passed?" → If YES to both, they can file Form N1
+    6. "Has the debtor acknowledged the debt or responded to your communications?" → Affects case strength
+    7. "Would you prefer to negotiate a settlement or proceed to court?" → If settlement, suggest Part 36 Offer
 
     COMMUNICATION PROTOCOL:
     1. **PRIORITY:** If addresses are MISSING, ask for them FIRST (including UK county).
@@ -349,11 +358,38 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
     4. **ACKNOWLEDGMENT:** Briefly acknowledge the user's answer before asking the next question.
     5. **NO REPETITION:** Do NOT ask the same question twice. Track what you've learned.
     6. **CLOSING:** When you have enough info, conclude with your recommendation:
-       - If NO LBA sent: "Based on our conversation, I recommend starting with a Letter Before Action. This is required before court proceedings. Click 'Continue' to review the details."
-       - If LBA sent 30+ days ago: "Since you've already sent an LBA and 30 days have passed, you're ready to file a court claim (Form N1). Click 'Continue' to review the details."
-       - If user wants settlement: "Given your preference to settle, I recommend a Part 36 Settlement Offer. Click 'Continue' to review the details."
+       - If NO LBA sent: "Based on our conversation, I recommend starting with a **Letter Before Action**. This is required before court proceedings. Click 'Continue' to review the details."
+       - If LBA sent 30+ days ago: "Since you've already sent an LBA and 30 days have passed, you're ready to file a **court claim (Form N1)**. Click 'Continue' to review the details."
+       - If already filed claim (no response): "If the defendant hasn't responded within 14 days of service, you can request a **Default Judgment (Form N225)**. Click 'Continue' to proceed."
+       - If already filed claim (admission): "If the defendant admitted the debt, you can request **Judgment on Admission (Form N225A)**. Click 'Continue' to proceed."
+       - If user wants settlement: "Given your preference to settle, I recommend a **Part 36 Settlement Offer**. Click 'Continue' to review the details."
     7. **DISCLAIMER:** If asked for legal advice, state: "I'm a legal assistant, not a solicitor. This is procedural guidance, not legal advice."
-    8. **TONE:** Professional but friendly. Be helpful, not interrogating.
+    8. **TONE:** Professional, concise, and goal-oriented. Use bullet points for lists and **bold** for key terms. Explain *why* you need specific data (e.g., "The court requires this for valid service").
+
+    RESPONSE FORMAT:
+    You MUST respond with a JSON object containing:
+    {
+      "message": "Your conversational response here",
+      "readyToProceed": true/false,
+      "collected": {
+         "claimantName": true/false,
+         "claimantAddress": true/false,
+         "defendantName": true/false,
+         "defendantAddress": true/false,
+         "invoiceDetails": true/false,
+         "timelineEvents": true/false
+      }
+    }
+
+    Set "collected" fields to TRUE if you have successfully gathered that information or if it was already provided in the context.
+
+    Set readyToProceed to TRUE only when ALL of these conditions are met:
+    1. You have confirmed the key claim details (claimant, defendant, amount)
+    2. You have asked about LBA status and got a clear answer
+    3. You have enough information to recommend a specific document
+    4. You are concluding the consultation with a recommendation
+
+    Set readyToProceed to FALSE if you still need to gather more information.
   `;
 
   const sdkHistory = history.slice(0, -1).map(msg => ({
@@ -365,13 +401,47 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
     model: 'gemini-2.5-flash',
     config: {
       systemInstruction: systemInstruction,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          message: { type: Type.STRING, description: "The conversational response to the user" },
+          readyToProceed: { type: Type.BOOLEAN, description: "Whether enough information has been collected to proceed" },
+          collected: {
+             type: Type.OBJECT,
+             properties: {
+                 claimantName: { type: Type.BOOLEAN },
+                 claimantAddress: { type: Type.BOOLEAN },
+                 defendantName: { type: Type.BOOLEAN },
+                 defendantAddress: { type: Type.BOOLEAN },
+                 invoiceDetails: { type: Type.BOOLEAN },
+                 timelineEvents: { type: Type.BOOLEAN }
+             }
+          }
+        },
+        required: ['message', 'readyToProceed']
+      }
     },
     history: sdkHistory
   });
 
   const result = await chat.sendMessage({ message: userMessage });
+  const responseText = result.text || '{"message": "Please clarify.", "readyToProceed": false}';
 
-  return result.text || "Please clarify.";
+  try {
+    const parsed = JSON.parse(cleanJson(responseText));
+    return {
+      message: parsed.message || "Please clarify.",
+      readyToProceed: parsed.readyToProceed === true,
+      collected: parsed.collected
+    };
+  } catch (e) {
+    console.warn('Could not parse structured response, falling back to plain text');
+    return {
+      message: responseText,
+      readyToProceed: false
+    };
+  }
 };
 
 /**

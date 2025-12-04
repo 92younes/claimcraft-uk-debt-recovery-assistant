@@ -1,9 +1,10 @@
 
-import { ClaimState } from '../types';
+import { ClaimState, UserProfile } from '../types';
 
 const DB_NAME = 'claimcraft_db';
-const STORE_NAME = 'claims';
-const DB_VERSION = 1;
+const CLAIMS_STORE = 'claims';
+const USER_PROFILE_STORE = 'user_profile';
+const DB_VERSION = 2; // Bumped for user_profile store
 
 const openDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -13,11 +14,18 @@ const openDB = (): Promise<IDBDatabase> => {
     }
 
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    
+
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+
+      // Claims store (existing)
+      if (!db.objectStoreNames.contains(CLAIMS_STORE)) {
+        db.createObjectStore(CLAIMS_STORE, { keyPath: 'id' });
+      }
+
+      // User profile store (new in v2)
+      if (!db.objectStoreNames.contains(USER_PROFILE_STORE)) {
+        db.createObjectStore(USER_PROFILE_STORE, { keyPath: 'id' });
       }
     };
 
@@ -35,8 +43,8 @@ export const getStoredClaims = async (): Promise<ClaimState[]> => {
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = db.transaction(CLAIMS_STORE, 'readonly');
+      const store = transaction.objectStore(CLAIMS_STORE);
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result || []);
@@ -52,8 +60,8 @@ export const saveClaimToStorage = async (claim: ClaimState): Promise<boolean> =>
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = db.transaction(CLAIMS_STORE, 'readwrite');
+      const store = transaction.objectStore(CLAIMS_STORE);
       const request = store.put(claim); // put handles both add and update if keyPath exists
 
       request.onsuccess = () => resolve(true);
@@ -69,8 +77,8 @@ export const deleteClaimFromStorage = async (id: string): Promise<void> => {
     try {
         const db = await openDB();
         return new Promise((resolve, reject) => {
-          const transaction = db.transaction(STORE_NAME, 'readwrite');
-          const store = transaction.objectStore(STORE_NAME);
+          const transaction = db.transaction(CLAIMS_STORE, 'readwrite');
+          const store = transaction.objectStore(CLAIMS_STORE);
           const request = store.delete(id);
 
           request.onsuccess = () => resolve();
@@ -82,13 +90,84 @@ export const deleteClaimFromStorage = async (id: string): Promise<void> => {
     }
 }
 
+// ==========================================
+// User Profile Functions
+// ==========================================
+
+export const getUserProfile = async (): Promise<UserProfile | null> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(USER_PROFILE_STORE, 'readonly');
+            const store = transaction.objectStore(USER_PROFILE_STORE);
+            const request = store.get('current'); // Single profile with fixed ID
+
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to load user profile from DB", e);
+        return null;
+    }
+};
+
+export const saveUserProfile = async (profile: UserProfile): Promise<boolean> => {
+    try {
+        const db = await openDB();
+        const profileWithId = {
+            ...profile,
+            id: 'current', // Fixed ID for single profile
+            updatedAt: new Date().toISOString()
+        };
+
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(USER_PROFILE_STORE, 'readwrite');
+            const store = transaction.objectStore(USER_PROFILE_STORE);
+            const request = store.put(profileWithId);
+
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(false);
+        });
+    } catch (e) {
+        console.error("Failed to save user profile to DB", e);
+        return false;
+    }
+};
+
+export const hasCompletedOnboarding = async (): Promise<boolean> => {
+    const profile = await getUserProfile();
+    return profile !== null && profile.jurisdictionConfirmed;
+};
+
+export const deleteUserProfile = async (): Promise<void> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(USER_PROFILE_STORE, 'readwrite');
+            const store = transaction.objectStore(USER_PROFILE_STORE);
+            const request = store.delete('current');
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to delete user profile from DB", e);
+        throw e;
+    }
+};
+
+// ==========================================
+// GDPR Functions
+// ==========================================
+
 /**
  * Export all user data as JSON (GDPR Article 20 - Data Portability)
- * Includes claims, settings, and connection metadata (not sensitive tokens)
+ * Includes claims, user profile, settings, and connection metadata (not sensitive tokens)
  */
 export const exportAllUserData = async (): Promise<Blob> => {
     try {
         const allClaims = await getStoredClaims();
+        const userProfile = await getUserProfile();
 
         // Get application settings from localStorage
         const settings = localStorage.getItem('appSettings');
@@ -97,9 +176,10 @@ export const exportAllUserData = async (): Promise<Blob> => {
 
         // Build export object
         const exportData = {
-            version: '1.0',
+            version: '2.0',
             exportDate: new Date().toISOString(),
             application: 'ClaimCraft UK',
+            userProfile: userProfile,
             claims: allClaims,
             settings: settings ? JSON.parse(settings) : null,
             connections: {
@@ -126,9 +206,19 @@ export const deleteAllUserData = async (): Promise<void> => {
         // 1. Delete all claims from IndexedDB (batch operation)
         const db = await openDB();
         await new Promise<void>((resolve, reject) => {
-            const transaction = db.transaction(STORE_NAME, 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
+            const transaction = db.transaction(CLAIMS_STORE, 'readwrite');
+            const store = transaction.objectStore(CLAIMS_STORE);
             const request = store.clear(); // Clears all records at once
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+
+        // 1b. Delete user profile from IndexedDB
+        await new Promise<void>((resolve, reject) => {
+            const transaction = db.transaction(USER_PROFILE_STORE, 'readwrite');
+            const store = transaction.objectStore(USER_PROFILE_STORE);
+            const request = store.clear();
 
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);

@@ -65,7 +65,7 @@ Yours faithfully,
 [CLAIMANT_NAME]
 
 ---
-IMPORTANT NOTICE: This is not legal advice. If you dispute this claim, you should seek independent legal advice immediately.
+IMPORTANT: If you dispute this claim, you should seek independent legal advice immediately.
 `;
 
 /**

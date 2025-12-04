@@ -30,7 +30,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
               <div className="bg-blue-100 p-3 rounded-xl">
                 <Scale className="w-6 h-6 text-blue-600" />
               </div>
-              <h1 className="text-4xl font-bold text-slate-900 font-serif">Terms of Service</h1>
+              <h1 className="text-4xl font-bold text-slate-900 font-display">Terms of Service</h1>
             </div>
             <p className="text-slate-600 text-lg">
               Last updated: <strong>23 November 2025</strong>

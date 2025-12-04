@@ -13,7 +13,7 @@
  */
 
 import React, { useState } from 'react';
-import { CheckCircle, AlertTriangle, FileCheck, X, Eye } from 'lucide-react';
+import { CheckCircle, AlertTriangle, FileCheck, X, Eye, Loader2, Scale, CheckSquare } from 'lucide-react';
 
 interface ChecklistItem {
   id: string;
@@ -25,13 +25,14 @@ interface ChecklistItem {
 interface FinalReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
   claimData: {
     claimantName: string;
     debtorName: string;
     invoiceNumber: string;
     invoiceAmount: number;
     interest: number;
+    compensation: number;
     courtFee: number;
     totalClaim: number;
   };
@@ -77,7 +78,7 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
   {
     id: 'interest',
     label: 'Verified Interest Rate',
-    description: 'Interest rate matches party types (12.75% B2B, 8% B2C)',
+    description: 'Interest rate matches party types (8% + BoE base rate for B2B, 8% for B2C)',
     critical: true
   },
   {
@@ -123,12 +124,22 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
     setCheckedItems(newChecked);
   };
 
-  const handleConfirm = () => {
-    if (canProceed) {
-      onConfirm();
-      // Only reset after successful confirmation
-      setCheckedItems(new Set());
-      setAcknowledgesConsequences(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleConfirm = async () => {
+    if (canProceed && !isSubmitting) {
+      setIsSubmitting(true);
+      try {
+        await onConfirm();
+        // Only reset after successful confirmation
+        setCheckedItems(new Set());
+        setAcknowledgesConsequences(false);
+      } catch (error) {
+        // Keep state on failure so user can retry
+        console.error('Download failed:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -143,14 +154,14 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
               <FileCheck className="w-8 h-8 text-white" />
             </div>
             <div>
               <h2 className="text-2xl font-bold font-display">Final Review Checklist</h2>
-              <p className="text-emerald-100 text-sm mt-0.5 leading-relaxed">Last Check Before Filing</p>
+              <p className="text-teal-100 text-sm mt-0.5 leading-relaxed">Last Check Before Filing</p>
             </div>
           </div>
           <button
@@ -166,7 +177,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
           {/* Claim Summary */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
             <h3 className="font-bold text-slate-900 text-lg mb-4 flex items-center gap-2">
-              <Eye className="w-5 h-5 text-emerald-500" />
+              <Eye className="w-5 h-5 text-teal-500" />
               Claim Summary
             </h3>
             <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -190,6 +201,12 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
                 <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Interest</p>
                 <p className="font-medium text-slate-900 font-mono">£{claimData.interest.toFixed(2)}</p>
               </div>
+              {claimData.compensation > 0 && (
+                <div>
+                  <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Late Payment Compensation</p>
+                  <p className="font-medium text-slate-900 font-mono">£{claimData.compensation.toFixed(2)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-slate-500 text-xs uppercase font-bold mb-1 tracking-wider">Court Fee</p>
                 <p className="font-medium text-slate-900 font-mono">£{claimData.courtFee.toFixed(2)}</p>
@@ -198,7 +215,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
             <div className="mt-4 pt-4 border-t border-slate-200">
               <div className="flex justify-between items-center">
                 <p className="font-bold text-slate-700">Total Claim Amount:</p>
-                <p className="font-bold text-2xl text-emerald-600 font-mono">£{claimData.totalClaim.toFixed(2)}</p>
+                <p className="font-bold text-2xl text-teal-600 font-mono">£{claimData.totalClaim.toFixed(2)}</p>
               </div>
             </div>
           </div>
@@ -223,58 +240,219 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
             </div>
           </div>
 
+          {/* Solicitor Recommendation - Moved higher for prominence */}
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 flex items-start gap-3">
+            <Scale className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-teal-900 text-sm mb-1">Recommended: Professional Review</p>
+              <p className="text-sm text-teal-800">
+                Have a solicitor review your Form before filing. Even a brief consultation (£100-£300) can identify
+                critical errors and save you thousands in potential costs if your claim is struck out.
+              </p>
+            </div>
+          </div>
+
           {/* Pre-Filing Checklist */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
-            <h3 className="font-bold text-slate-900 text-lg mb-4">Pre-Filing Checklist</h3>
-            <p className="text-sm text-slate-600 mb-4">
-              Please confirm you have completed ALL critical items below. Non-critical items are recommended but optional.
-            </p>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-lg">Pre-Filing Checklist</h3>
+                <p className="text-sm text-slate-600 mt-1">
+                  Confirm ALL critical items below. Non-critical items are recommended but optional.
+                </p>
+              </div>
+              {!allCriticalChecked && (
+                <button
+                  onClick={() => {
+                    const newChecked = new Set(checkedItems);
+                    criticalItems.forEach(item => newChecked.add(item.id));
+                    setCheckedItems(newChecked);
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-teal-700 bg-teal-100 hover:bg-teal-200 rounded-lg transition-colors duration-200"
+                  title="Check all required items"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  Check All Required
+                </button>
+              )}
+            </div>
 
-            <div className="space-y-3">
-              {CHECKLIST_ITEMS.map((item) => {
-                const isChecked = checkedItems.has(item.id);
-                return (
-                  <label
-                    key={item.id}
-                    className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
-                      isChecked
-                        ? 'bg-emerald-50 border-emerald-300'
-                        : item.critical
-                        ? 'bg-white border-red-200 hover:border-red-300'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => toggleItem(item.id)}
-                      className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-emerald-500 focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-bold text-sm ${isChecked ? 'text-emerald-700' : 'text-slate-900'}`}>
-                          {item.label}
-                        </span>
-                        {item.critical && !isChecked && (
-                          <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded">
-                            REQUIRED
-                          </span>
+            {/* Grouped Checklist Items */}
+            <div className="space-y-5">
+              {/* Document Accuracy Group */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Document Accuracy</h4>
+                <div className="space-y-2">
+                  {CHECKLIST_ITEMS.filter(item => ['amounts', 'names', 'particulars', 'timeline'].includes(item.id)).map((item) => {
+                    const isChecked = checkedItems.has(item.id);
+                    return (
+                      <label
+                        key={item.id}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === ' ' || e.key === 'Enter') {
+                            e.preventDefault();
+                            toggleItem(item.id);
+                          }
+                        }}
+                        role="checkbox"
+                        aria-checked={isChecked}
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50 ${
+                          isChecked
+                            ? 'bg-teal-50 border-teal-300'
+                            : item.critical
+                            ? 'bg-white border-red-200 hover:border-red-300'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleItem(item.id)}
+                          tabIndex={-1}
+                          className="mt-0.5 w-4 h-4 rounded border-slate-300 bg-white text-teal-500 focus:ring-0 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-medium text-sm ${isChecked ? 'text-teal-700' : 'text-slate-900'}`}>
+                              {item.label}
+                            </span>
+                            {item.critical && !isChecked && (
+                              <span className="text-[9px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded">
+                                REQUIRED
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-xs mt-0.5 ${isChecked ? 'text-teal-600' : 'text-slate-500'}`}>
+                            {item.description}
+                          </p>
+                        </div>
+                        {isChecked && (
+                          <CheckCircle className="w-4 h-4 text-teal-500 shrink-0 mt-0.5" />
                         )}
-                      </div>
-                      <p className={`text-xs ${isChecked ? 'text-emerald-600' : 'text-slate-500'}`}>
-                        {item.description}
-                      </p>
-                    </div>
-                    {isChecked && (
-                      <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                    )}
-                  </label>
-                );
-              })}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Legal Compliance Group */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Legal Compliance</h4>
+                <div className="space-y-2">
+                  {CHECKLIST_ITEMS.filter(item => ['lba', 'interest', 'jurisdiction'].includes(item.id)).map((item) => {
+                    const isChecked = checkedItems.has(item.id);
+                    return (
+                      <label
+                        key={item.id}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === ' ' || e.key === 'Enter') {
+                            e.preventDefault();
+                            toggleItem(item.id);
+                          }
+                        }}
+                        role="checkbox"
+                        aria-checked={isChecked}
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50 ${
+                          isChecked
+                            ? 'bg-teal-50 border-teal-300'
+                            : item.critical
+                            ? 'bg-white border-red-200 hover:border-red-300'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleItem(item.id)}
+                          tabIndex={-1}
+                          className="mt-0.5 w-4 h-4 rounded border-slate-300 bg-white text-teal-500 focus:ring-0 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-medium text-sm ${isChecked ? 'text-teal-700' : 'text-slate-900'}`}>
+                              {item.label}
+                            </span>
+                            {item.critical && !isChecked && (
+                              <span className="text-[9px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded">
+                                REQUIRED
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-xs mt-0.5 ${isChecked ? 'text-teal-600' : 'text-slate-500'}`}>
+                            {item.description}
+                          </p>
+                        </div>
+                        {isChecked && (
+                          <CheckCircle className="w-4 h-4 text-teal-500 shrink-0 mt-0.5" />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Evidence & Preparation Group */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Evidence & Preparation</h4>
+                <div className="space-y-2">
+                  {CHECKLIST_ITEMS.filter(item => ['addresses', 'evidence', 'legal_advice'].includes(item.id)).map((item) => {
+                    const isChecked = checkedItems.has(item.id);
+                    return (
+                      <label
+                        key={item.id}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === ' ' || e.key === 'Enter') {
+                            e.preventDefault();
+                            toggleItem(item.id);
+                          }
+                        }}
+                        role="checkbox"
+                        aria-checked={isChecked}
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50 ${
+                          isChecked
+                            ? 'bg-teal-50 border-teal-300'
+                            : item.critical
+                            ? 'bg-white border-red-200 hover:border-red-300'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleItem(item.id)}
+                          tabIndex={-1}
+                          className="mt-0.5 w-4 h-4 rounded border-slate-300 bg-white text-teal-500 focus:ring-0 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-medium text-sm ${isChecked ? 'text-teal-700' : 'text-slate-900'}`}>
+                              {item.label}
+                            </span>
+                            {item.critical && !isChecked && (
+                              <span className="text-[9px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded">
+                                REQUIRED
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-xs mt-0.5 ${isChecked ? 'text-teal-600' : 'text-slate-500'}`}>
+                            {item.description}
+                          </p>
+                        </div>
+                        {isChecked && (
+                          <CheckCircle className="w-4 h-4 text-teal-500 shrink-0 mt-0.5" />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Progress Indicator */}
-            <div className="mt-4 pt-4 border-t border-slate-200">
+            <div className="mt-5 pt-4 border-t border-slate-200">
               <div className="flex justify-between items-center text-sm mb-2">
                 <span className="text-slate-600">
                   Critical Items: {criticalItems.filter(i => checkedItems.has(i.id)).length} / {criticalItems.length}
@@ -285,8 +463,8 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
               </div>
               <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-200 ${
-                    allCriticalChecked ? 'bg-emerald-500' : 'bg-red-500'
+                  className={`h-full transition-all duration-300 ease-out ${
+                    allCriticalChecked ? 'bg-teal-500' : 'bg-red-500'
                   }`}
                   style={{
                     width: `${(criticalItems.filter(i => checkedItems.has(i.id)).length / criticalItems.length) * 100}%`
@@ -303,7 +481,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
                 type="checkbox"
                 checked={acknowledgesConsequences}
                 onChange={(e) => setAcknowledgesConsequences(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-emerald-500 focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
+                className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-teal-500 focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
               />
               <span className="text-sm text-slate-700 group-hover:text-slate-900">
                 <span className="font-bold text-slate-900">I confirm that:</span>
@@ -323,19 +501,10 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
               <p className="text-sm text-amber-700">
                 <span className="font-bold text-amber-800">Not Ready to Proceed:</span> Please complete all critical checklist items
-                and read the final acknowledgment above before downloading Form N1.
+                and the final acknowledgment above before downloading.
               </p>
             </div>
           )}
-
-          {/* Solicitor Recommendation */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-            <p className="text-sm text-emerald-800">
-              <span className="font-bold text-emerald-900">Final Recommendation:</span> Have a solicitor review your Form N1 before filing.
-              Even a brief consultation (£100-£300) can identify critical errors and save you thousands in potential
-              costs if your claim is struck out.
-            </p>
-          </div>
         </div>
 
         {/* Footer - Action Buttons */}
@@ -348,10 +517,19 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!canProceed}
-            className="flex-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all duration-200 shadow-sm disabled:shadow-none"
+            disabled={!canProceed || isSubmitting}
+            className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all duration-200 shadow-sm disabled:shadow-none flex items-center justify-center gap-2"
           >
-            {canProceed ? 'Download Form N1' : `Complete ${criticalItems.length - criticalItems.filter(i => checkedItems.has(i.id)).length} Critical Items`}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating PDF...
+              </>
+            ) : canProceed ? (
+              'Download Form'
+            ) : (
+              `Complete ${criticalItems.length - criticalItems.filter(i => checkedItems.has(i.id)).length} Critical Items`
+            )}
           </button>
         </div>
       </div>

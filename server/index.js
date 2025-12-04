@@ -151,6 +151,107 @@ app.get('/api/nango/connections/:userId', async (req, res) => {
 });
 
 /**
+ * Find an existing connection by tenant ID
+ * GET /api/nango/connections/find-by-tenant/:provider/:tenantId
+ *
+ * This allows multiple users to share the same Xero connection
+ * by looking up existing connections for the same organization.
+ */
+app.get('/api/nango/connections/find-by-tenant/:provider/:tenantId', async (req, res) => {
+  try {
+    const { provider, tenantId } = req.params;
+
+    console.log(`🔍 Looking for existing connection: ${provider} tenant ${tenantId}`);
+
+    // List all connections for this provider
+    const result = await nango.listConnections();
+    const connections = result.connections || [];
+
+    // Find a connection that matches this provider and tenant
+    for (const conn of connections) {
+      if (conn.provider_config_key === provider) {
+        try {
+          // Get full connection details including tenant_id
+          const details = await nango.getConnection(provider, conn.connection_id);
+          const connTenantId = details.connection_config?.tenant_id;
+
+          if (connTenantId === tenantId) {
+            console.log(`✅ Found existing connection for tenant ${tenantId}: ${conn.connection_id}`);
+            return res.json({
+              found: true,
+              connectionId: conn.connection_id,
+              tenantId: connTenantId,
+              organizationName: details.metadata?.organization_name || 'Unknown'
+            });
+          }
+        } catch (detailError) {
+          // Connection might be invalid, continue searching
+          console.warn(`⚠️ Could not get details for connection ${conn.connection_id}:`, detailError.message);
+        }
+      }
+    }
+
+    console.log(`ℹ️ No existing connection found for tenant ${tenantId}`);
+    res.json({ found: false });
+
+  } catch (error) {
+    console.error('❌ Failed to find connection by tenant:', error);
+    res.status(500).json({
+      error: 'Failed to find connection',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * List all connections for a provider (for sharing purposes)
+ * GET /api/nango/connections/provider/:provider
+ */
+app.get('/api/nango/connections/provider/:provider', async (req, res) => {
+  try {
+    const { provider } = req.params;
+
+    console.log(`📋 Listing all connections for provider: ${provider}`);
+
+    const result = await nango.listConnections();
+    const connections = result.connections || [];
+
+    // Filter by provider
+    const providerConnections = connections.filter(
+      conn => conn.provider_config_key === provider
+    );
+
+    // Get details for each connection
+    const detailedConnections = await Promise.all(
+      providerConnections.map(async (conn) => {
+        try {
+          const details = await nango.getConnection(provider, conn.connection_id);
+          return {
+            connectionId: conn.connection_id,
+            tenantId: details.connection_config?.tenant_id,
+            organizationName: details.metadata?.organization_name || 'Unknown',
+            createdAt: conn.created_at
+          };
+        } catch (error) {
+          return null;
+        }
+      })
+    );
+
+    res.json({
+      connections: detailedConnections.filter(c => c !== null)
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to list provider connections:', error);
+    res.status(500).json({
+      error: 'Failed to list connections',
+      message: error.message
+    });
+  }
+});
+
+/**
  * Get connection details including metadata (tenant_id for Xero)
  * GET /api/nango/connections/:provider/:connectionId
  */
@@ -338,6 +439,114 @@ app.post('/api/anthropic/messages', async (req, res) => {
 // Increase request body size limit for document generation (templates can be large)
 app.use(express.json({ limit: '1mb' }));
 
+/**
+ * Proxy Companies House API calls
+ * GET /api/companies-house/search?q=query
+ * GET /api/companies-house/company/:companyNumber
+ *
+ * This keeps the API key secure and avoids CORS issues.
+ */
+const companiesHouseApiKey = process.env.COMPANIES_HOUSE_API_KEY || process.env.VITE_COMPANIES_HOUSE_API_KEY;
+
+if (companiesHouseApiKey) {
+  console.log('✅ Companies House API configured');
+} else {
+  console.warn('⚠️ COMPANIES_HOUSE_API_KEY not set - company lookup will use mock data');
+}
+
+app.get('/api/companies-house/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        error: 'Missing query parameter',
+        message: 'Please provide a search query with ?q=company_name'
+      });
+    }
+
+    if (!companiesHouseApiKey) {
+      return res.status(503).json({
+        error: 'Companies House API not configured',
+        message: 'Please set COMPANIES_HOUSE_API_KEY in your .env file'
+      });
+    }
+
+    console.log(`🔍 Companies House search: ${q}`);
+
+    const searchUrl = `https://api.company-information.service.gov.uk/search/companies?q=${encodeURIComponent(q)}&items_per_page=5`;
+
+    const response = await fetch(searchUrl, {
+      headers: {
+        'Authorization': `Basic ${Buffer.from(companiesHouseApiKey + ':').toString('base64')}`
+      }
+    });
+
+    if (!response.ok) {
+      console.error(`❌ Companies House API error: ${response.status}`);
+      return res.status(response.status).json({
+        error: 'Companies House API error',
+        message: `API returned status ${response.status}`
+      });
+    }
+
+    const data = await response.json();
+    console.log(`✅ Companies House search returned ${data.items?.length || 0} results`);
+
+    res.json(data);
+
+  } catch (error) {
+    console.error('❌ Companies House search failed:', error);
+    res.status(500).json({
+      error: 'Companies House search failed',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/companies-house/company/:companyNumber', async (req, res) => {
+  try {
+    const { companyNumber } = req.params;
+
+    if (!companiesHouseApiKey) {
+      return res.status(503).json({
+        error: 'Companies House API not configured',
+        message: 'Please set COMPANIES_HOUSE_API_KEY in your .env file'
+      });
+    }
+
+    console.log(`📋 Companies House profile: ${companyNumber}`);
+
+    const profileUrl = `https://api.company-information.service.gov.uk/company/${companyNumber}`;
+
+    const response = await fetch(profileUrl, {
+      headers: {
+        'Authorization': `Basic ${Buffer.from(companiesHouseApiKey + ':').toString('base64')}`
+      }
+    });
+
+    if (!response.ok) {
+      console.error(`❌ Companies House API error: ${response.status}`);
+      return res.status(response.status).json({
+        error: 'Companies House API error',
+        message: `API returned status ${response.status}`
+      });
+    }
+
+    const data = await response.json();
+    console.log(`✅ Companies House profile retrieved: ${data.company_name}`);
+
+    res.json(data);
+
+  } catch (error) {
+    console.error('❌ Companies House profile failed:', error);
+    res.status(500).json({
+      error: 'Companies House profile failed',
+      message: error.message
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`
@@ -348,14 +557,17 @@ app.listen(PORT, () => {
 ║  Port: ${PORT}                                                 ║
 ║  Nango: Connected                                           ║
 ║  Anthropic: ${anthropic ? 'Connected' : 'Not Configured'}                                    ║
+║  Companies House: ${companiesHouseApiKey ? 'Connected' : 'Not Configured'}                                ║
 ╠════════════════════════════════════════════════════════════╣
 ║  Endpoints:                                                 ║
-║  • GET  /api/health              - Health check             ║
-║  • POST /api/nango/session       - Create session token     ║
-║  • POST /api/nango/proxy         - Proxy API calls          ║
-║  • GET  /api/nango/connections   - List connections         ║
-║  • DELETE /api/nango/connections - Delete connection        ║
-║  • POST /api/anthropic/messages  - Claude AI proxy          ║
+║  • GET  /api/health                - Health check           ║
+║  • POST /api/nango/session         - Create session token   ║
+║  • POST /api/nango/proxy           - Proxy API calls        ║
+║  • GET  /api/nango/connections     - List connections       ║
+║  • DELETE /api/nango/connections   - Delete connection      ║
+║  • POST /api/anthropic/messages    - Claude AI proxy        ║
+║  • GET  /api/companies-house/search - Company search        ║
+║  • GET  /api/companies-house/company/:num - Company profile ║
 ╚════════════════════════════════════════════════════════════╝
   `);
 });

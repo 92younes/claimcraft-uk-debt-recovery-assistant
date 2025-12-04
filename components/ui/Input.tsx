@@ -49,7 +49,7 @@ export const Input: React.FC<InputProps> = ({
           className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
         >
           {label}
-          {required && <span className="text-emerald-600" aria-label="required">*</span>}
+          {required && <span className="text-teal-500" aria-label="required">*</span>}
         </label>
 
         {/* Character Count */}
@@ -82,9 +82,9 @@ export const Input: React.FC<InputProps> = ({
             disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
             ${icon ? 'pl-11' : ''}
             ${hasError ? 'border-red-300 focus:ring-red-500/30 focus:border-red-500 pr-11' :
-              hasSuccess ? 'border-emerald-300 focus:ring-emerald-500/30 focus:border-emerald-500 pr-11' :
-              isFocused ? 'border-emerald-400 focus:ring-emerald-500/30' :
-              'border-slate-200 hover:border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}
+              hasSuccess ? 'border-teal-300 focus:ring-teal-500/30 focus:border-teal-500 pr-11' :
+              isFocused ? 'border-teal-400 focus:ring-teal-500/30' :
+              'border-slate-200 hover:border-slate-300 focus:ring-teal-500/30 focus:border-teal-500'}
             ${className}
           `}
           value={value}
@@ -104,7 +104,7 @@ export const Input: React.FC<InputProps> = ({
 
         {/* Success Icon */}
         {hasSuccess && (
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500 pointer-events-none">
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-teal-500 pointer-events-none">
             <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
           </div>
         )}
@@ -134,7 +134,7 @@ export const Input: React.FC<InputProps> = ({
 
       {/* Success Message */}
       {success && !error && (
-        <p id={successId} className="text-xs text-emerald-600 flex items-center gap-1">
+        <p id={successId} className="text-xs text-teal-600 flex items-center gap-1">
           <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
           {success}
         </p>
@@ -171,14 +171,14 @@ export const Select: React.FC<SelectProps> = ({
         className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
       >
         {label}
-        {required && <span className="text-emerald-600" aria-label="required">*</span>}
+        {required && <span className="text-teal-500" aria-label="required">*</span>}
       </label>
       <select
         id={selectId}
         className={`
           px-4 py-3 bg-white border rounded-xl transition-all duration-200
           text-base text-slate-900
-          focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500
+          focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
           disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
           ${hasError ? 'border-red-300 focus:ring-red-500/30' : 'border-slate-200 hover:border-slate-300'}
           ${className}
@@ -249,7 +249,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
           className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
         >
           {label}
-          {required && <span className="text-emerald-600" aria-label="required">*</span>}
+          {required && <span className="text-teal-500" aria-label="required">*</span>}
         </label>
 
         {showCharacterCount && maxLength && (
@@ -270,8 +270,8 @@ export const TextArea: React.FC<TextAreaProps> = ({
           focus:outline-none focus:ring-2 focus:ring-offset-0
           disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
           ${hasError ? 'border-red-300 focus:ring-red-500/30 focus:border-red-500' :
-            hasSuccess ? 'border-emerald-300 focus:ring-emerald-500/30 focus:border-emerald-500' :
-            'border-slate-200 hover:border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}
+            hasSuccess ? 'border-teal-300 focus:ring-teal-500/30 focus:border-teal-500' :
+            'border-slate-200 hover:border-slate-300 focus:ring-teal-500/30 focus:border-teal-500'}
           ${className}
         `}
         rows={5}
@@ -302,7 +302,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
       )}
 
       {success && !error && (
-        <p id={successId} className="text-xs text-emerald-600 flex items-center gap-1">
+        <p id={successId} className="text-xs text-teal-600 flex items-center gap-1">
           <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
           {success}
         </p>

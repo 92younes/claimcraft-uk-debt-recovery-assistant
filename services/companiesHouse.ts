@@ -5,23 +5,26 @@ import { Party, PartyType } from "../types";
  *
  * Searches UK Companies House registry for company information and solvency status.
  *
+ * IMPORTANT: API calls are routed through the backend proxy to avoid CORS issues
+ * and keep the API key secure. Make sure the backend server is running.
+ *
  * Setup Instructions:
  * 1. Get FREE API key at: https://developer.company-information.service.gov.uk/
- * 2. Add to .env: VITE_COMPANIES_HOUSE_API_KEY=your_key_here
- * 3. Restart dev server
+ * 2. Add to .env: COMPANIES_HOUSE_API_KEY=your_key_here (server-side)
+ * 3. Run backend: npm run server
  *
  * Features:
  * - Company name, number, address lookup
  * - Solvency status (Active, Dissolved, Liquidation, etc.)
  * - SIC codes (business type)
- * - Fallback to mock data if API key not configured
+ * - Fallback to mock data if backend unavailable
  *
  * API Docs: https://developer-specs.company-information.service.gov.uk/
  * Rate Limit: 600 requests per 5 minutes
  */
 
-const COMPANIES_HOUSE_API = 'https://api.company-information.service.gov.uk';
-const API_KEY = import.meta.env.VITE_COMPANIES_HOUSE_API_KEY;
+// Backend proxy URL (avoids CORS and keeps API key secure)
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 // Mock data for development/testing when API key not available
 const MOCK_DB: Record<string, Partial<Party>> = {
@@ -94,23 +97,20 @@ const parseAddress = (address: any): { address: string; city: string; county: st
 
 /**
  * Search Companies House for company by name or number
+ * Routes through backend proxy to avoid CORS issues
  */
 export const searchCompaniesHouse = async (query: string): Promise<Partial<Party> | null> => {
-  // If no API key, use mock data
-  if (!API_KEY) {
-    console.warn('⚠️ Companies House API key not configured. Using mock data. See services/companiesHouse.ts for setup instructions.');
-    return searchMockData(query);
-  }
-
   try {
-    // Search endpoint - finds companies by name
-    const searchUrl = `${COMPANIES_HOUSE_API}/search/companies?q=${encodeURIComponent(query)}&items_per_page=5`;
+    // Use backend proxy to search Companies House
+    const searchUrl = `${BACKEND_URL}/api/companies-house/search?q=${encodeURIComponent(query)}`;
 
-    const response = await fetch(searchUrl, {
-      headers: {
-        'Authorization': `Basic ${btoa(API_KEY + ':')}`
-      }
-    });
+    const response = await fetch(searchUrl);
+
+    // If backend returns 503, API key not configured - use mock data
+    if (response.status === 503) {
+      console.warn('⚠️ Companies House API not configured on backend. Using mock data.');
+      return searchMockData(query);
+    }
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -128,12 +128,8 @@ export const searchCompaniesHouse = async (query: string): Promise<Partial<Party
       const company = data.items[0];
 
       // Fetch full company profile for more details
-      const profileUrl = `${COMPANIES_HOUSE_API}/company/${company.company_number}`;
-      const profileResponse = await fetch(profileUrl, {
-        headers: {
-          'Authorization': `Basic ${btoa(API_KEY + ':')}`
-        }
-      });
+      const profileUrl = `${BACKEND_URL}/api/companies-house/company/${company.company_number}`;
+      const profileResponse = await fetch(profileUrl);
 
       if (profileResponse.ok) {
         const profile = await profileResponse.json();
@@ -164,8 +160,8 @@ export const searchCompaniesHouse = async (query: string): Promise<Partial<Party
   } catch (error) {
     console.error('❌ Companies House API error:', error);
 
-    // Fallback to mock data on error
-    console.warn('⚠️ Falling back to mock data due to API error');
+    // Fallback to mock data on error (e.g., backend not running)
+    console.warn('⚠️ Falling back to mock data due to API error. Make sure backend server is running: npm run server');
     return searchMockData(query);
   }
 };

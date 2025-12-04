@@ -192,14 +192,21 @@ export class DocumentBuilder {
 
 TASK: Complete the template below by filling in ONLY the bracketed sections. These sections require professional legal writing based on the context provided.
 
+IMPORTANT CLAIM FACTS (DO NOT MODIFY):
+- Claimant: ${data.claimant.name} (${data.claimant.type === PartyType.BUSINESS ? 'Business' : 'Individual'})
+- Defendant: ${data.defendant.name} (${data.defendant.type === PartyType.BUSINESS ? 'Business' : 'Individual'})
+- Invoice Number: ${data.invoice.invoiceNumber}
+- Invoice Amount: £${data.invoice.totalAmount.toFixed(2)}
+- Invoice Date: ${data.invoice.dateIssued}
+
 BRACKETED SECTIONS TO FILL:
-- [CLAIMANT_DESCRIPTION] - Brief description of the claimant (e.g., "a sole trader operating a plumbing business" or "an individual")
-- [DEFENDANT_DESCRIPTION] - Brief description of the defendant
-- [CONTRACT_DESCRIPTION] - Description of the contract/agreement (1-3 sentences)
-- [LEGAL_BASIS_PARAGRAPH] - Explain the legal basis for the claim (reference the contract, invoice, and applicable law)
-- [BREACH_DETAILS] - Additional details about the breach if relevant from the chat
-- [CLOSING_PARAGRAPH] - Professional closing (1-2 sentences)
-- [ADDITIONAL_PARAGRAPHS] - Only add if there's unique information from the chat (e.g., partial payments, disputes, etc.). Otherwise leave this section empty.
+- [CLAIMANT_DESCRIPTION] - Brief description (e.g., "${data.claimant.type === PartyType.BUSINESS ? 'a limited company trading as [business type]' : 'an individual'}")
+- [DEFENDANT_DESCRIPTION] - Brief description of the defendant (e.g., "${data.defendant.type === PartyType.BUSINESS ? 'a company' : 'an individual'}")
+- [CONTRACT_DESCRIPTION] - Describe the contract/agreement in 1-2 sentences. Be specific about goods/services if mentioned in context.
+- [LEGAL_BASIS_PARAGRAPH] - One sentence: "The Defendant is liable for the sum claimed under the contract for [goods/services provided]."
+- [BREACH_DETAILS] - If there are specific breach details from the chat (e.g., "The Defendant acknowledged the debt on [date]" or "A partial payment of £X was made"), include them. Otherwise write: "The Defendant has failed to make payment despite demands."
+- [CLOSING_PARAGRAPH] - Leave empty (this is for letters, not N1 forms)
+- [ADDITIONAL_PARAGRAPHS] - Only add if there's genuinely unique information (partial payment, dispute, admission). Otherwise leave empty.
 
 CONTEXT FROM CLIENT CONSULTATION:
 ${chatContext}
@@ -208,19 +215,19 @@ EVIDENCE AVAILABLE:
 ${evidenceList}
 
 STRICT RULES:
-1. DO NOT invent facts not present in the context or timeline
-2. DO NOT cite case law unless it was explicitly mentioned by the user
+1. DO NOT invent facts - only use information from the context above
+2. DO NOT cite case law unless explicitly mentioned by the user
 3. DO NOT change any amounts, dates, names, or legal citations already in the template
-4. Use formal legal language appropriate for UK County Court
-5. Keep descriptions concise - this is a Small Claims case, not High Court
-6. DO NOT include uncertain language like "allegedly", "may have", "possibly"
-7. For [ADDITIONAL_PARAGRAPHS], only add content if truly necessary (e.g., there was a partial payment, a dispute was raised, etc.)
-8. If a bracketed section is not applicable, replace it with an empty line
+4. Use formal but concise legal language - Small Claims Track, not High Court
+5. Keep each bracketed section to 1-2 sentences maximum
+6. DO NOT include uncertain language like "allegedly", "may have", "possibly", "appears"
+7. [ADDITIONAL_PARAGRAPHS] should usually be empty unless there are special circumstances
+8. If a bracketed section is not applicable or has no info, replace it with a simple factual statement
 
 TEMPLATE TO COMPLETE:
 ${filledTemplate}
 
-OUTPUT: Return ONLY the completed template with all brackets filled. No commentary, explanations, or markdown formatting.`;
+OUTPUT: Return ONLY the completed template with all brackets filled. No commentary, explanations, markdown, or code blocks.`;
 
     try {
       // Use backend proxy to call Anthropic API (keeps API key secure)
@@ -528,7 +535,11 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       const filledTemplate = this.fillTemplate(template, data);
 
       // Step 3: Refine customizable sections with AI
-      const refinedDocument = await this.refineWithAI(filledTemplate, data);
+      // OPTIMIZATION: Skip AI for Polite Chaser as it has no AI placeholders
+      let refinedDocument = filledTemplate;
+      if (data.selectedDocType !== DocumentType.POLITE_CHASER) {
+        refinedDocument = await this.refineWithAI(filledTemplate, data);
+      }
 
       // Step 4: Validate the output
       const validation = this.validate(refinedDocument, data);

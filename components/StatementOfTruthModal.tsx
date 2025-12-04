@@ -73,7 +73,7 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
           {/* What You're About to Sign */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
             <div className="flex items-start gap-3 mb-3">
-              <Scale className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" />
+              <Scale className="w-6 h-6 text-teal-500 shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-bold text-slate-900 text-lg">You are about to sign: {documentType}</h3>
                 <p className="text-sm text-slate-600 mt-1">
@@ -113,27 +113,27 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
           </div>
 
           {/* What This Means */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
-            <h3 className="font-bold text-emerald-800 text-lg mb-3">What this means:</h3>
-            <ul className="space-y-2 text-sm text-emerald-700">
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-5">
+            <h3 className="font-bold text-teal-800 text-lg mb-3">What this means:</h3>
+            <ul className="space-y-2 text-sm text-teal-700">
               <li className="flex items-start gap-2">
-                <span className="font-bold shrink-0 text-emerald-600">✓</span>
+                <span className="font-bold shrink-0 text-teal-600">✓</span>
                 <span>You must have an <span className="font-bold text-slate-900">honest belief</span> that every fact in this document is true</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="font-bold shrink-0 text-emerald-600">✓</span>
+                <span className="font-bold shrink-0 text-teal-600">✓</span>
                 <span>You must have <span className="font-bold text-slate-900">checked all amounts</span> (invoice total, interest, court fees)</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="font-bold shrink-0 text-emerald-600">✓</span>
+                <span className="font-bold shrink-0 text-teal-600">✓</span>
                 <span>You must have <span className="font-bold text-slate-900">verified all addresses</span> are correct and suitable for legal service</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="font-bold shrink-0 text-emerald-600">✓</span>
+                <span className="font-bold shrink-0 text-teal-600">✓</span>
                 <span>You must have <span className="font-bold text-slate-900">reviewed all timeline events</span> for accuracy</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="font-bold shrink-0 text-emerald-600">✓</span>
+                <span className="font-bold shrink-0 text-teal-600">✓</span>
                 <span>You understand you are <span className="font-bold text-slate-900">personally liable</span> for false statements, even if made by mistake</span>
               </li>
             </ul>
@@ -159,7 +159,7 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
                 type="checkbox"
                 checked={hasReadWarning}
                 onChange={(e) => setHasReadWarning(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-emerald-500 focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
+                className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-teal-500 focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
               />
               <span className="text-sm text-slate-700 group-hover:text-slate-900">
                 <span className="font-bold text-slate-900">I have read and understand</span> the criminal offence warning above
@@ -171,7 +171,7 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
                 type="checkbox"
                 checked={confirmsTruth}
                 onChange={(e) => setConfirmsTruth(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-emerald-500 focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
+                className="mt-1 w-5 h-5 rounded border-slate-300 bg-white text-teal-500 focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
               />
               <span className="text-sm text-slate-700 group-hover:text-slate-900">
                 <span className="font-bold text-slate-900">I confirm that I have an honest belief</span> that all information in this document is true and accurate
@@ -180,9 +180,9 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
           </div>
 
           {/* Solicitor Recommendation */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-            <p className="text-sm text-emerald-800">
-              <span className="font-bold text-emerald-900">Not sure?</span> We recommend consulting a solicitor before signing court documents.
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 text-center">
+            <p className="text-sm text-teal-800">
+              <span className="font-bold text-teal-900">Not sure?</span> We recommend consulting a solicitor before signing court documents.
               This software is a tool to assist you, not a replacement for legal advice.
             </p>
           </div>
@@ -199,7 +199,7 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
           <button
             onClick={handleConfirm}
             disabled={!hasReadWarning || !confirmsTruth}
-            className="flex-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all duration-200 shadow-sm disabled:shadow-none"
+            className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all duration-200 shadow-sm disabled:shadow-none"
           >
             {hasReadWarning && confirmsTruth ? 'Proceed to Sign' : 'Complete Confirmations Above'}
           </button>

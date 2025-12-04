@@ -262,29 +262,29 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200">
 
-        <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 p-5 flex justify-between items-center text-white">
+        <div className="bg-gradient-to-r from-teal-600 to-teal-500 p-5 flex justify-between items-center text-white">
             <div className="flex items-center gap-3">
                 <div className="bg-white/20 p-2 rounded-xl">
                     <FileSpreadsheet className="w-6 h-6 text-white" />
                 </div>
                 <div>
                     <h2 className="font-bold text-xl font-display">Import Claims (CSV)</h2>
-                    <p className="text-xs text-emerald-100">Bulk create drafts from spreadsheet</p>
+                    <p className="text-xs text-teal-100">Bulk create drafts from spreadsheet</p>
                 </div>
             </div>
             <button onClick={onClose} className="text-white/70 hover:text-white"><X className="w-6 h-6" /></button>
         </div>
 
-        <div className="p-8 overflow-y-auto">
+        <div className="p-6 md:p-8 overflow-y-auto">
             {!parsedClaims.length ? (
                 <>
                     <div
-                        className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200 mb-6 ${isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400 hover:bg-slate-50'}`}
+                        className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200 mb-6 ${isDragging ? 'border-teal-500 bg-teal-50' : 'border-slate-300 hover:border-teal-400 hover:bg-slate-50'}`}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
                     >
-                        <div className="w-16 h-16 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-4 text-emerald-500">
+                        <div className="w-16 h-16 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4 text-teal-500">
                             {parsing ? <Loader2 className="w-8 h-8 animate-spin" /> : <Upload className="w-8 h-8" />}
                         </div>
                         <p className="text-lg font-bold text-slate-900 mb-1">
@@ -302,7 +302,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={parsing}
-                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-all duration-200 shadow-sm"
+                            className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-sm transition-all duration-200 shadow-sm"
                         >
                             Select File
                         </button>
@@ -317,17 +317,17 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
 
                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                         <h3 className="font-bold text-sm text-slate-900 mb-2 flex items-center gap-2">
-                            <Download className="w-4 h-4 text-emerald-500" /> Need a template?
+                            <Download className="w-4 h-4 text-teal-500" /> Need a template?
                         </h3>
                         <p className="text-xs text-slate-500 mb-3">Download our standard CSV template to ensure your columns are mapped correctly.</p>
-                        <button onClick={downloadTemplate} className="text-emerald-600 text-xs font-bold hover:text-emerald-700 transition-colors">
+                        <button onClick={downloadTemplate} className="text-teal-600 text-xs font-bold hover:text-teal-700 transition-colors">
                             Download Template.csv
                         </button>
                     </div>
                 </>
             ) : (
                 <div className="text-center">
-                    <div className="w-16 h-16 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-4 text-emerald-500">
+                    <div className="w-16 h-16 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4 text-teal-500">
                         <Check className="w-8 h-8" />
                     </div>
                     <h3 className="text-2xl font-bold text-slate-900 mb-2">Ready to Import</h3>
@@ -396,7 +396,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                                             </span>
                                           )}
                                         </td>
-                                        <td className="py-2 text-right pr-2 font-bold text-emerald-600 font-mono">£{p.claim.invoice.totalAmount.toFixed(2)}</td>
+                                        <td className="py-2 text-right pr-2 font-bold text-teal-600 font-mono">£{p.claim.invoice.totalAmount.toFixed(2)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -413,7 +413,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                         <button
                             onClick={handleFinalize}
                             disabled={parsedClaims.length === 0}
-                            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Import {parsedClaims.length} Claim{parsedClaims.length !== 1 ? 's' : ''}
                         </button>

@@ -35,6 +35,12 @@ interface AccountingIntegrationProps {
   onConnectionChange?: (connection: AccountingConnection | null) => void;
 }
 
+interface SharedConnection {
+  connectionId: string;
+  tenantId: string;
+  organizationName: string;
+}
+
 export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
   isOpen,
   onClose,
@@ -46,13 +52,25 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
   const [disconnectingProvider, setDisconnectingProvider] = useState<AccountingProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [sharedConnections, setSharedConnections] = useState<SharedConnection[]>([]);
+  const [showSharedOptions, setShowSharedOptions] = useState(false);
 
   // Load all connections on mount
   useEffect(() => {
     if (isOpen) {
       loadAllConnections();
+      loadSharedConnections();
     }
   }, [isOpen]);
+
+  const loadSharedConnections = async () => {
+    try {
+      const available = await NangoClient.getAvailableConnections('xero');
+      setSharedConnections(available);
+    } catch (err) {
+      console.warn('Could not load shared connections:', err);
+    }
+  };
 
   const loadAllConnections = async () => {
     const newConnections = new Map<AccountingProvider, AccountingConnection | null>();
@@ -108,7 +126,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
     try {
       await NangoClient.disconnect(provider);
       setConnections(prev => new Map(prev).set(provider, null));
-      setSuccess(`✅ Disconnected from ${providerName}`);
+      setSuccess(`Disconnected from ${providerName}`);
 
       // Notify parent (backward compatibility - only for Xero)
       if (onConnectionChange && provider === 'xero') {
@@ -121,6 +139,30 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
       setError(err instanceof Error ? err.message : 'Failed to disconnect');
     } finally {
       setDisconnectingProvider(null);
+    }
+  };
+
+  const handleUseSharedConnection = async (shared: SharedConnection) => {
+    setConnectingProvider('xero');
+    setError(null);
+    setShowSharedOptions(false);
+
+    try {
+      await NangoClient.useSharedConnection('xero', shared.connectionId, shared.tenantId, shared.organizationName);
+      const newConnection = NangoClient.getConnection('xero');
+
+      setConnections(prev => new Map(prev).set('xero', newConnection));
+      setSuccess(`Connected to ${shared.organizationName}!`);
+
+      if (onConnectionChange && newConnection) {
+        onConnectionChange(newConnection);
+      }
+
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to use shared connection');
+    } finally {
+      setConnectingProvider(null);
     }
   };
 
@@ -174,9 +216,9 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
           )}
 
           {success && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
-              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <p className="font-medium text-emerald-900">{success}</p>
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
+              <CheckCircle className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
+              <p className="font-medium text-teal-900">{success}</p>
             </div>
           )}
 
@@ -192,7 +234,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                 <div
                   key={provider.id}
                   className={`border-2 rounded-xl p-5 transition-all duration-200 ${
-                    isConnected ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'
+                    isConnected ? 'border-teal-300 bg-teal-50' : 'border-slate-200 bg-white'
                   }`}
                 >
                   <div className="flex items-start justify-between mb-3">
@@ -210,11 +252,11 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                     {/* Status Badge */}
                     <div className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
                       isConnected
-                        ? 'bg-emerald-100 text-emerald-700'
+                        ? 'bg-teal-100 text-teal-700'
                         : 'bg-slate-100 text-slate-600'
                     }`}>
                       <div className={`w-3 h-3 rounded-full ${
-                        isConnected ? 'bg-emerald-500' : 'bg-slate-400'
+                        isConnected ? 'bg-teal-500' : 'bg-slate-400'
                       }`} />
                       {isConnected ? 'Connected' : 'Not Connected'}
                     </div>
@@ -222,7 +264,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
 
                   {/* Connection Details (if connected) */}
                   {connection && (
-                    <div className="mb-3 p-3 bg-white rounded-xl border border-emerald-200 space-y-1.5">
+                    <div className="mb-3 p-3 bg-white rounded-xl border border-teal-200 space-y-1.5">
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-600">Organization:</span>
                         <span className="font-medium text-slate-900">{connection.organizationName}</span>
@@ -250,7 +292,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                       <>
                         <button
                           onClick={() => handleImport(provider.id)}
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-sm"
+                          className="flex-1 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-sm"
                         >
                           <Download className="w-4 h-4" />
                           Import
@@ -268,23 +310,52 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                         </button>
                       </>
                     ) : (
-                      <button
-                        onClick={() => handleConnect(provider.id)}
-                        disabled={isConnecting}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isConnecting ? (
+                      <div className="space-y-2 w-full">
+                        <button
+                          onClick={() => handleConnect(provider.id)}
+                          disabled={isConnecting}
+                          className="w-full bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isConnecting ? (
+                            <>
+                              <Loader className="w-4 h-4 animate-spin" />
+                              Connecting...
+                            </>
+                          ) : (
+                            <>
+                              <LinkIcon className="w-4 h-4" />
+                              Connect New Account
+                            </>
+                          )}
+                        </button>
+
+                        {/* Show shared connection options for Xero */}
+                        {provider.id === 'xero' && sharedConnections.length > 0 && (
                           <>
-                            <Loader className="w-4 h-4 animate-spin" />
-                            Connecting...
-                          </>
-                        ) : (
-                          <>
-                            <LinkIcon className="w-4 h-4" />
-                            Connect
+                            <button
+                              onClick={() => setShowSharedOptions(!showSharedOptions)}
+                              className="w-full text-teal-600 hover:text-teal-700 text-xs font-medium py-1"
+                            >
+                              {showSharedOptions ? 'Hide' : 'Or use existing connection'} ({sharedConnections.length} available)
+                            </button>
+
+                            {showSharedOptions && (
+                              <div className="space-y-1 animate-fade-in">
+                                {sharedConnections.map(shared => (
+                                  <button
+                                    key={shared.connectionId}
+                                    onClick={() => handleUseSharedConnection(shared)}
+                                    className="w-full p-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-left text-xs transition-colors"
+                                  >
+                                    <span className="font-medium text-blue-900">{shared.organizationName}</span>
+                                    <span className="text-blue-600 ml-2">(Use shared)</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </>
                         )}
-                      </button>
+                      </div>
                     )}
                   </div>
 
@@ -300,13 +371,13 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
           </div>
 
           {/* Setup Instructions */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-            <h4 className="text-sm font-bold text-emerald-900 mb-2">⚙️ Setup Instructions</h4>
-            <ul className="space-y-1 text-xs text-emerald-800">
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-4">
+            <h4 className="text-sm font-bold text-teal-900 mb-2">⚙️ Setup Instructions</h4>
+            <ul className="space-y-1 text-xs text-teal-800">
               <li>• <strong>Step 1:</strong> Get your Nango secret key from <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a></li>
-              <li>• <strong>Step 2:</strong> Add <code className="bg-emerald-100 px-1 rounded">NANGO_SECRET_KEY=your_key</code> to your .env file</li>
-              <li>• <strong>Step 3:</strong> Run <code className="bg-emerald-100 px-1 rounded">npm run dev:full</code> (starts backend + frontend)</li>
-              <li>• Configure the Xero integration in Nango dashboard with ID: <code className="bg-emerald-100 px-1 rounded">xero</code></li>
+              <li>• <strong>Step 2:</strong> Add <code className="bg-teal-100 px-1 rounded">NANGO_SECRET_KEY=your_key</code> to your .env file</li>
+              <li>• <strong>Step 3:</strong> Run <code className="bg-teal-100 px-1 rounded">npm run dev:full</code> (starts backend + frontend)</li>
+              <li>• Configure the Xero integration in Nango dashboard with ID: <code className="bg-teal-100 px-1 rounded">xero</code></li>
             </ul>
           </div>
 

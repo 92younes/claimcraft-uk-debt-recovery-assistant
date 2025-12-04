@@ -113,11 +113,11 @@ export class ErrorBoundary extends Component<Props, State> {
             )}
 
             {/* Help Text */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">
-              <p className="text-sm text-emerald-900 mb-2">
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-6">
+              <p className="text-sm text-teal-900 mb-2">
                 <span className="font-bold">What to try:</span>
               </p>
-              <ul className="text-sm text-emerald-800 space-y-1 ml-4 list-disc">
+              <ul className="text-sm text-teal-800 space-y-1 ml-4 list-disc">
                 <li>Click "Try Again" to retry the current page</li>
                 <li>Return to the home page and start fresh</li>
                 <li>If the problem persists, try clearing your browser cache</li>
@@ -129,7 +129,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex gap-3">
               <button
                 onClick={this.handleReset}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition-colors duration-200 shadow-sm"
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium transition-colors duration-200 shadow-sm"
               >
                 <RefreshCw className="w-5 h-5" />
                 Try Again

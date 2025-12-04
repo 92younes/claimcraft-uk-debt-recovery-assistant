@@ -8,11 +8,10 @@ import {
   MessageSquareText,
   FileSignature,
   CheckCircle2,
-  ShieldAlert,
+  ShieldCheck,
   FolderOpen,
   X,
-  Sparkles,
-  FileCheck
+  ChevronRight
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,120 +25,141 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReached, onDashboardClick, onCloseMobile, onStepSelect }) => {
 
-  // Step IDs must match App.tsx Step enum values (ASSESSMENT=3 is skipped in flow)
   const steps = [
-    { id: 1, label: 'Evidence Source', icon: Upload },            // Step.SOURCE
-    { id: 2, label: 'Details & Analysis', icon: SearchCheck },    // Step.DETAILS
-    { id: 4, label: 'Timeline', icon: CalendarClock },            // Step.TIMELINE (3 is skipped)
-    { id: 5, label: 'AI Consultation', icon: MessageSquareText }, // Step.QUESTIONS
-    { id: 6, label: 'Review Data', icon: FileCheck },             // Step.DATA_REVIEW
-    { id: 7, label: 'Strategy', icon: Scale },                    // Step.RECOMMENDATION
-    { id: 8, label: 'Document Draft', icon: FileSignature },      // Step.DRAFT
-    { id: 9, label: 'Final Review', icon: CheckCircle2 },         // Step.PREVIEW
+    { id: 1, displayNum: 1, label: 'Evidence Source', sublabel: 'Import your data', icon: Upload },
+    { id: 2, displayNum: 2, label: 'Details & Analysis', sublabel: 'Review claim details', icon: SearchCheck },
+    { id: 4, displayNum: 3, label: 'Legal Viability', sublabel: 'Check requirements', icon: Scale },
+    { id: 5, displayNum: 4, label: 'Timeline', sublabel: 'Build chronology', icon: CalendarClock },
+    { id: 6, displayNum: 5, label: 'Clarification', sublabel: 'AI consultation', icon: MessageSquareText },
+    { id: 7, displayNum: 6, label: 'Final Review', sublabel: 'Verify all data', icon: CheckCircle2 },
+    { id: 8, displayNum: 7, label: 'Drafting', sublabel: 'Generate documents', icon: FileSignature },
   ];
 
   return (
     <aside className="w-full h-full bg-white text-slate-900 flex flex-col border-r border-slate-200 no-print">
       {/* Logo Area */}
-      <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200 bg-white flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="bg-emerald-600 p-2 rounded-xl shadow-emerald-sm">
-             <Scale className="w-5 h-5 text-white" />
+      <div className="px-6 pt-6 pb-4 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-teal-500 p-2.5 rounded-xl shadow-teal-sm">
+               <Scale className="w-5 h-5 text-white" />
+            </div>
+            <div>
+               <h1 className="text-lg font-bold font-display tracking-tight text-slate-900">ClaimCraft</h1>
+               <span className="text-[10px] text-slate-400 uppercase tracking-widest font-medium">UK Debt Recovery</span>
+            </div>
           </div>
-          <div>
-             <h1 className="text-xl font-bold font-display tracking-tight text-slate-900">ClaimCraft</h1>
-             <span className="text-[10px] text-slate-500 uppercase tracking-widest font-medium">Legal Assistant</span>
-          </div>
+          {onCloseMobile && (
+            <button onClick={onCloseMobile} className="md:hidden text-slate-400 hover:text-slate-900 transition-colors duration-200 p-2 hover:bg-slate-100 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
-        {onCloseMobile && (
-          <button onClick={onCloseMobile} className="md:hidden text-slate-400 hover:text-slate-900 transition-colors duration-200 p-2 hover:bg-slate-100 rounded-lg">
-            <X className="w-6 h-6" />
-          </button>
-        )}
       </div>
 
-      {/* User Profile Snippet */}
-      <div className="px-5 py-5 flex-shrink-0">
-         <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-emerald-300 transition-all duration-300 group">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ring-emerald-100">
+      {/* User Profile */}
+      <div className="px-5 pb-5 flex-shrink-0">
+         <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+            <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">
                G
             </div>
             <div className="overflow-hidden flex-1">
-               <p className="text-sm font-semibold truncate text-slate-900">Guest User</p>
-               <p className="text-xs text-slate-500 truncate">Local Session</p>
+               <p className="text-sm font-medium text-slate-900">Guest User</p>
+               <p className="text-xs text-slate-400">Local Session</p>
             </div>
-            <Sparkles className="w-4 h-4 text-emerald-500 group-hover:text-emerald-600 transition-colors" />
          </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-2 overflow-y-auto space-y-1">
+      <nav className="flex-1 px-4 overflow-y-auto">
          {view === 'dashboard' ? (
              <>
-                <p className="px-3 text-xs font-semibold text-slate-400 uppercase mb-3 tracking-wider">Main Menu</p>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-600 text-white shadow-emerald-md cursor-pointer">
-                    <LayoutDashboard className="w-4 h-4 text-white" />
+                <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-3 tracking-wider">Main Menu</p>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-teal-50 text-teal-700 border-l-4 border-teal-500 cursor-pointer">
+                    <LayoutDashboard className="w-4 h-4 text-teal-500" />
                     <span className="text-sm font-semibold">Dashboard</span>
                 </div>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 cursor-pointer transition-all duration-200">
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 cursor-pointer transition-all duration-200 mt-1">
                     <FolderOpen className="w-4 h-4" />
                     <span className="text-sm font-medium">Archived Claims</span>
                 </div>
              </>
          ) : (
              <>
+               {/* Back to Dashboard */}
                <div
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer transition-all duration-200 mb-6 border border-dashed border-slate-300 hover:border-emerald-400"
+                  className="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 cursor-pointer transition-all duration-200 mb-6"
                >
                    <LayoutDashboard className="w-4 h-4" />
                    <span className="text-sm font-medium">Back to Dashboard</span>
                </div>
 
-               <p className="px-3 text-xs font-semibold text-slate-400 uppercase mb-3 tracking-wider">Current Workflow</p>
-               {steps.map((step) => {
-                  const Icon = step.icon;
-                  const isActive = currentStep === step.id;
-                  const effectiveMax = maxStepReached ?? currentStep;
-                  const isCompleted = step.id < effectiveMax;
-                  // Allow navigation to any step up to and including maxStepReached
-                  const canClick = step.id <= effectiveMax;
+               {/* Workflow Steps */}
+               <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-4 tracking-wider">Workflow Steps</p>
+               <div className="space-y-1">
+                 {steps.map((step) => {
+                    const isActive = currentStep === step.id;
+                    const effectiveMax = maxStepReached ?? currentStep;
+                    const isCompleted = step.id < effectiveMax;
+                    const canClick = step.id <= effectiveMax;
 
-                  return (
-                     <div
-                       key={step.id}
-                       onClick={() => {
-                           if (canClick && onStepSelect) {
-                               onStepSelect(step.id);
-                               onCloseMobile?.();
-                           }
-                       }}
-                       className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                          isActive
-                            ? 'bg-emerald-600 text-white shadow-emerald-md'
-                            : canClick
-                              ? 'text-slate-700 hover:bg-slate-50 cursor-pointer hover:text-slate-900'
-                              : 'text-slate-400 opacity-60 cursor-not-allowed'
-                       }`}
-                     >
-                        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : isCompleted ? 'text-emerald-600' : 'text-slate-400'}`} />
-                        <span className={`text-sm ${isActive ? 'font-semibold' : 'font-medium'}`}>{step.label}</span>
-                        {isCompleted && (
-                          <div className="ml-auto">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    return (
+                       <div
+                         key={step.id}
+                         onClick={() => {
+                             if (canClick && onStepSelect) {
+                                 onStepSelect(step.id);
+                                 onCloseMobile?.();
+                             }
+                         }}
+                         className={`flex items-center gap-3 px-4 py-3 rounded-r-xl transition-all duration-200 relative ${
+                            isActive
+                              ? 'bg-teal-50 border-l-4 border-teal-500'
+                              : canClick
+                                ? 'hover:bg-slate-50 cursor-pointer border-l-4 border-transparent'
+                                : 'opacity-50 cursor-not-allowed border-l-4 border-transparent'
+                         }`}
+                       >
+                          {/* Step Number */}
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${
+                            isActive
+                              ? 'bg-teal-500 text-white'
+                              : isCompleted
+                                ? 'bg-teal-100 text-teal-700'
+                                : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : step.displayNum}
                           </div>
-                        )}
-                     </div>
-                  );
-               })}
+
+                          {/* Label */}
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-sm block ${
+                              isActive ? 'font-semibold text-teal-700' : 'font-medium text-slate-700'
+                            }`}>
+                              {step.label}
+                            </span>
+                            {isActive && (
+                              <span className="text-xs text-teal-600">{step.sublabel}</span>
+                            )}
+                          </div>
+
+                          {/* Arrow for active */}
+                          {isActive && (
+                            <ChevronRight className="w-4 h-4 text-teal-500 flex-shrink-0" />
+                          )}
+                       </div>
+                    );
+                 })}
+               </div>
              </>
          )}
       </nav>
 
-      {/* Bottom Actions */}
-      <div className="p-4 border-t border-slate-200 bg-slate-50 flex-shrink-0">
-         <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-200">
-            <ShieldAlert className="w-4 h-4" />
+      {/* Legal Disclaimer */}
+      <div className="p-4 flex-shrink-0">
+         <button className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all duration-200">
+            <ShieldCheck className="w-4 h-4" />
             <span>Legal Disclaimer</span>
          </button>
       </div>

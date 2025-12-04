@@ -36,9 +36,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
       button: 'bg-amber-500 hover:bg-amber-600'
     },
     info: {
-      header: 'bg-emerald-600',
-      icon: 'bg-emerald-100 text-emerald-600',
-      button: 'bg-emerald-600 hover:bg-emerald-700'
+      header: 'bg-teal-600',
+      icon: 'bg-teal-100 text-teal-600',
+      button: 'bg-teal-600 hover:bg-teal-700'
     }
   };
 
@@ -55,10 +55,10 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         {/* Header */}
         <div className={`${styles.header} text-white p-6 flex items-center justify-between`}>
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 ${styles.icon} rounded-xl flex items-center justify-center`}>
-              <AlertTriangle className="w-5 h-5" />
+            <div className={`w-12 h-12 ${styles.icon} rounded-xl flex items-center justify-center`}>
+              <AlertTriangle className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-bold font-display">{title}</h2>
+            <h2 className="text-2xl font-bold font-display">{title}</h2>
           </div>
           <button
             onClick={onClose}

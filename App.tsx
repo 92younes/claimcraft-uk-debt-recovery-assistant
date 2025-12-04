@@ -13,6 +13,7 @@ import { TimelineBuilder } from './components/TimelineBuilder';
 import { EvidenceUpload } from './components/EvidenceUpload';
 import { ChatInterface } from './components/ChatInterface';
 import { OnboardingModal } from './components/OnboardingModal';
+import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
 import { StatementOfTruthModal } from './components/StatementOfTruthModal';
 import { InterestRateConfirmModal } from './components/InterestRateConfirmModal';
 import { LitigantInPersonModal } from './components/LitigantInPersonModal';
@@ -26,8 +27,9 @@ import { DocumentBuilder } from './services/documentBuilder';
 import { NangoClient } from './services/nangoClient';
 import { searchCompaniesHouse } from './services/companiesHouse';
 import { assessClaimViability, calculateCourtFee, calculateCompensation } from './services/legalRules';
-import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData } from './services/storageService';
-import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection, ExtractedClaimData } from './types';
+import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData, getUserProfile, saveUserProfile } from './services/storageService';
+import { profileToClaimantParty } from './services/userProfileService';
+import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection, ExtractedClaimData, UserProfile } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS, getCountyFromPostcode } from './constants';
 import { validateDateRelationship, validateInterestCalculation, validateUniqueInvoice } from './utils/validation';
 import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, ChevronUp, ChevronDown, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent } from 'lucide-react';
@@ -63,7 +65,9 @@ const App: React.FC = () => {
   // High Level State
   const [view, setView] = useState<ViewState>('landing');
   const [dashboardClaims, setDashboardClaims] = useState<ClaimState[]>([]);
-  const [showOnboarding, setShowOnboarding] = useState(false); // Combined disclaimer + eligibility
+  const [showOnboarding, setShowOnboarding] = useState(false); // Combined disclaimer + eligibility (legacy)
+  const [showOnboardingFlow, setShowOnboardingFlow] = useState(false); // New multi-step onboarding
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Wizard State
@@ -92,6 +96,9 @@ const App: React.FC = () => {
   const [showInterestModal, setShowInterestModal] = useState(false);
   const [showLiPModal, setShowLiPModal] = useState(false);
   const [showAdvancedDocs, setShowAdvancedDocs] = useState(false);
+
+  // Chat readiness state (AI determines when enough info is collected)
+  const [canProceed, setCanProceed] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // Phase 2: Inline interest verification (replaces InterestRateConfirmModal)
@@ -112,6 +119,7 @@ const App: React.FC = () => {
   const [hasAcknowledgedLbaWarning, setHasAcknowledgedLbaWarning] = useState(false);
   const [lbaAlreadySent, setLbaAlreadySent] = useState(false); // Manual override: user confirms they already sent an LBA
   const [lbaSentDate, setLbaSentDate] = useState<string>(''); // Date when LBA was sent (for 30-day warning)
+  const [chatError, setChatError] = useState<string | null>(null);
 
   // Initialize Nango on mount
   useEffect(() => {
@@ -135,17 +143,21 @@ const App: React.FC = () => {
 
   // Load data on mount
   useEffect(() => {
-    // Load local claims async
-    const loadClaims = async () => {
+    // Load local claims and user profile async
+    const loadData = async () => {
         const storedClaims = await getStoredClaims();
         setDashboardClaims(storedClaims);
+
+        // Load user profile
+        const profile = await getUserProfile();
+        setUserProfile(profile);
 
         // If we have claims, auto-direct to dashboard for better UX
         if (storedClaims.length > 0) {
             setView('dashboard');
         }
     };
-    loadClaims();
+    loadData();
   }, []);
 
   // Validate API keys on mount
@@ -296,12 +308,48 @@ const App: React.FC = () => {
   };
 
   // --- Navigation Handlers ---
-  const handleStartNewClaim = () => {
-    // Phase 2: Show combined onboarding modal (disclaimer + eligibility)
-    setShowOnboarding(true);
+  const handleStartNewClaim = async () => {
+    // Check if user has completed onboarding
+    const profile = userProfile || await getUserProfile();
+
+    if (!profile) {
+      // First-time user: show full onboarding flow
+      setShowOnboardingFlow(true);
+    } else {
+      // Returning user: pre-fill claimant from profile and go to wizard
+      const claimantFromProfile = profileToClaimantParty(profile);
+      setClaimData({
+        ...INITIAL_STATE,
+        id: Math.random().toString(36).substr(2, 9),
+        claimant: claimantFromProfile
+      });
+      setStep(Step.SOURCE);
+      setMaxStepReached(Step.SOURCE);
+      setIsEditingAnalysis(false);
+      setView('wizard');
+    }
   };
 
-  // Phase 2: Combined onboarding handlers (replaces disclaimer + eligibility flow)
+  // New onboarding flow complete handler
+  const handleOnboardingFlowComplete = async (profile: UserProfile) => {
+    await saveUserProfile(profile);
+    setUserProfile(profile);
+    setShowOnboardingFlow(false);
+
+    // Start claim with pre-filled claimant
+    const claimantFromProfile = profileToClaimantParty(profile);
+    setClaimData({
+      ...INITIAL_STATE,
+      id: Math.random().toString(36).substr(2, 9),
+      claimant: claimantFromProfile
+    });
+    setStep(Step.SOURCE);
+    setMaxStepReached(Step.SOURCE);
+    setIsEditingAnalysis(false);
+    setView('wizard');
+  };
+
+  // Phase 2: Combined onboarding handlers (replaces disclaimer + eligibility flow) - LEGACY
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
     // Reset Wizard and Enter
@@ -397,6 +445,7 @@ const App: React.FC = () => {
       await deleteAllUserData();
       setDashboardClaims([]);
       setAccountingConnection(null);
+      setUserProfile(null); // Reset user profile
       setView('landing');
       alert('✅ All data has been permanently deleted. You will be redirected to the landing page.');
     } catch (error) {
@@ -721,15 +770,9 @@ const App: React.FC = () => {
     // 1. Basic Rules Assessment
     const assessment = assessClaimViability(claimData);
 
-    // 2. AI Strength Assessment
-    try {
-       const aiStrength = await getClaimStrengthAssessment(claimData);
-       assessment.strength = aiStrength.strength; // HIGH/MEDIUM/LOW
-       assessment.strengthAnalysis = aiStrength.analysis;
-       assessment.weaknesses = aiStrength.weaknesses;
-    } catch (e) {
-       console.error("AI Assessment failed", e);
-    }
+    // AI Assessment removed from here - moved to post-chat (handleContinueFromChat)
+    // We only init the structure here so the UI doesn't break
+    assessment.strengthAnalysis = "Pending AI consultation..."; 
 
     setClaimData(prev => ({ ...prev, assessment }));
     setIsProcessing(false);
@@ -781,8 +824,10 @@ const App: React.FC = () => {
   const handleStartChat = async () => {
     setIsProcessing(true);
     setProcessingText("Initializing Legal Assistant...");
+    setCanProceed(false); // Reset proceed state when starting new chat
+    setChatError(null);
     handleStepChange(Step.QUESTIONS);
-    
+
     // If chat is empty, seed it with the initial analysis
     if (claimData.chatHistory.length === 0) {
         try {
@@ -801,23 +846,59 @@ const App: React.FC = () => {
     setIsProcessing(false);
   };
 
+  // Skip AI consultation and go directly to Data Review with manual defaults
+  const handleSkipAIConsultation = () => {
+    // Set defaults for data that AI would have extracted
+    setExtractedData(null);
+    setRecommendationReason('Manual entry - AI consultation skipped');
+    setExtractedFields([]);
+
+    // Determine document type based on LBA status
+    const timelineHasLBA = claimData.timeline.some(e =>
+      e.type === 'lba_sent' ||
+      (e.type === 'chaser' &&
+        (e.description.toLowerCase().includes('letter before action') ||
+         e.description.toLowerCase().includes('lba') ||
+         e.description.toLowerCase().includes('formal demand')))
+    );
+    const hasLBA = timelineHasLBA || lbaAlreadySent;
+
+    // Set default document type based on LBA status
+    setClaimData(prev => ({
+      ...prev,
+      selectedDocType: hasLBA ? DocumentType.FORM_N1 : DocumentType.LBA
+    }));
+
+    // Skip to Data Review
+    handleStepChange(Step.DATA_REVIEW);
+  };
+
   const handleSendMessage = async (text: string) => {
+      setChatError(null);
       const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: Date.now() };
       const updatedHistory = [...claimData.chatHistory, userMsg];
       setClaimData(prev => ({ ...prev, chatHistory: updatedHistory }));
-      
+
       setIsProcessing(true);
       try {
-         const aiResponse = await sendChatMessage(updatedHistory, text, claimData);
+         const response = await sendChatMessage(updatedHistory, text, claimData);
          const aiMsg: ChatMessage = {
              id: (Date.now() + 1).toString(),
              role: 'ai',
-             content: aiResponse,
-             timestamp: Date.now()
+             content: response.message,
+             timestamp: Date.now(),
+             readyToProceed: response.readyToProceed,
+             collected: response.collected
          };
          setClaimData(prev => ({ ...prev, chatHistory: [...updatedHistory, aiMsg] }));
+
+         // Update canProceed based on AI's signal
+         if (response.readyToProceed) {
+           setCanProceed(true);
+         }
       } catch (e) {
          console.error(e);
+         setChatError("Failed to get a response. Please check your connection and try again.");
       } finally {
          setIsProcessing(false);
       }
@@ -889,6 +970,22 @@ const App: React.FC = () => {
 
         return merged;
       });
+
+      // 2. AI Strength Assessment (MOVED HERE from before chat)
+      try {
+         const aiStrength = await getClaimStrengthAssessment(claimData);
+         setClaimData(prev => ({
+            ...prev,
+            assessment: {
+                ...prev.assessment!, // Keep existing rules-based checks
+                strength: aiStrength.strength, // Update AI opinion
+                strengthAnalysis: aiStrength.analysis,
+                weaknesses: aiStrength.weaknesses
+            }
+         }));
+      } catch (e) {
+         console.error("AI Assessment failed", e);
+      }
 
       handleStepChange(Step.DATA_REVIEW);
     } catch (error) {
@@ -1078,37 +1175,56 @@ const App: React.FC = () => {
       switch (step) {
       case Step.SOURCE:
         return (
-          <div className="max-w-4xl mx-auto animate-fade-in py-10">
-             <div className="mb-10">
-                <h2 className="text-4xl font-bold text-slate-900 font-serif mb-4">New Claim</h2>
-                <p className="text-slate-600 text-lg">Import your claim data or enter manually.</p>
+          <div className="max-w-3xl mx-auto animate-fade-in py-8">
+             {/* Header */}
+             <div className="mb-8">
+                <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">New Claim</h2>
+                <p className="text-slate-500">Import your claim data or enter manually.</p>
              </div>
-             <div className="grid md:grid-cols-3 gap-6 mb-12">
-                <button onClick={handleOpenAccountingModal} className={`p-6 border-2 rounded-2xl transition-all flex flex-col items-center gap-4 shadow-sm hover:shadow-xl hover:-translate-y-1 ${accountingConnection ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' : 'bg-white border-slate-100 hover:border-blue-200'}`}>
-                    <div className="w-14 h-14 bg-[#13b5ea]/10 rounded-full flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-[#13b5ea]"/>
+
+             {/* Option Cards - matching mockup */}
+             <div className="grid md:grid-cols-2 gap-4 mb-8">
+                <button
+                  onClick={handleOpenAccountingModal}
+                  className={`p-6 rounded-xl transition-all flex flex-col items-center gap-3 border hover:shadow-md hover:border-teal-300 ${
+                    accountingConnection ? 'bg-teal-50 border-teal-200' : 'bg-white border-slate-200'
+                  }`}
+                >
+                    <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-teal-500"/>
                     </div>
                     <div className="text-center">
-                       <span className="block font-bold text-slate-900 text-lg">{accountingConnection ? "Import from " + accountingConnection.provider : "Connect Accounting"}</span>
-                       <span className="text-xs text-slate-500 mt-1 block">{accountingConnection ? `${accountingConnection.organizationName}` : "Xero, QuickBooks & more"}</span>
+                       <span className="block font-semibold text-slate-900">{accountingConnection ? "Import from " + accountingConnection.provider : "Connect Accounting"}</span>
+                       <span className="text-sm text-slate-500 mt-1 block">{accountingConnection ? `${accountingConnection.organizationName}` : "Xero, QuickBooks & more"}</span>
                     </div>
                 </button>
 
-                <button onClick={handleManualEntry} className="p-6 border-2 border-slate-100 hover:border-slate-300 bg-white rounded-2xl transition-all flex flex-col items-center gap-4 shadow-sm hover:shadow-xl hover:-translate-y-1">
-                    <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center">
-                        <Keyboard className="w-6 h-6 text-slate-600"/>
+                <button
+                  onClick={handleManualEntry}
+                  className="p-6 bg-white border border-slate-200 hover:border-teal-300 rounded-xl transition-all flex flex-col items-center gap-3 hover:shadow-md"
+                >
+                    <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
+                        <Keyboard className="w-5 h-5 text-slate-600"/>
                     </div>
                     <div className="text-center">
-                       <span className="block font-bold text-slate-900 text-lg">Manual Entry</span>
-                       <span className="text-xs text-slate-500 mt-1 block">Type in claim details</span>
+                       <span className="block font-semibold text-slate-900">Manual Entry</span>
+                       <span className="text-sm text-slate-500 mt-1 block">Type in claim details</span>
                     </div>
                 </button>
+             </div>
 
-                <div className="md:col-span-3 md:mt-6">
-                   <div className="p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 flex flex-col items-center justify-center text-center relative overflow-hidden">
-                      <EvidenceUpload files={claimData.evidence} onAddFiles={(newFiles) => setClaimData(prev => ({...prev, evidence: [...prev.evidence, ...newFiles]}))} onRemoveFile={(idx) => setClaimData(prev => ({...prev, evidence: prev.evidence.filter((_, i) => i !== idx)}))} onAnalyze={handleEvidenceAnalysis} isProcessing={isProcessing} />
-                   </div>
-                </div>
+             {/* Evidence Locker Section - matching mockup */}
+             <div className="bg-white rounded-xl border border-slate-200 p-6">
+                <h3 className="text-xl font-semibold text-slate-900 text-center mb-2">Evidence Locker</h3>
+                <p className="text-slate-500 text-center text-sm mb-6">Upload your Invoices, Contracts, and Emails (PDFs or Images).<br/>Gemini will analyze the entire bundle.</p>
+
+                <EvidenceUpload
+                  files={claimData.evidence}
+                  onAddFiles={(newFiles) => setClaimData(prev => ({...prev, evidence: [...prev.evidence, ...newFiles]}))}
+                  onRemoveFile={(idx) => setClaimData(prev => ({...prev, evidence: prev.evidence.filter((_, i) => i !== idx)}))}
+                  onAnalyze={handleEvidenceAnalysis}
+                  isProcessing={isProcessing}
+                />
              </div>
           </div>
         );
@@ -1118,7 +1234,7 @@ const App: React.FC = () => {
         // Otherwise show Analysis Summary.
         if (claimData.source === 'manual' || isEditingAnalysis) {
             return (
-                <div className="space-y-8 animate-fade-in py-10 max-w-5xl mx-auto">
+                <div className="space-y-8 animate-fade-in py-10 max-w-5xl mx-auto pb-32">
                     <button
                       onClick={() => handleStepChange(Step.SOURCE)}
                       className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
@@ -1127,7 +1243,7 @@ const App: React.FC = () => {
                       Back to Data Source
                     </button>
                     <div className="text-center mb-8">
-                        <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Claim Details</h2>
+                        <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Claim Details</h2>
                         <p className="text-slate-500">Please ensure all details are correct before legal assessment.</p>
                     </div>
                     <div className="grid xl:grid-cols-2 gap-8">
@@ -1136,7 +1252,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100">
-                            <h2 className="text-xl font-bold text-slate-800 font-serif">Claim Financials</h2>
+                            <h2 className="text-xl font-bold text-slate-800 font-display">Claim Financials</h2>
                             <Tooltip content="Enter the invoice amount and dates to calculate statutory interest and court fees automatically">
                               <div className="cursor-help">
                                 <HelpCircle className="w-4 h-4 text-slate-400 hover:text-blue-600" />
@@ -1151,7 +1267,7 @@ const App: React.FC = () => {
                               value={claimData.invoice.totalAmount}
                               onChange={(e) => updateInvoice('totalAmount', parseFloat(e.target.value))}
                               required
-                              helpText="The original unpaid invoice amount"
+                              helpText="The original unpaid invoice amount (excluding interest/compensation)"
                               placeholder="e.g. 5000.00"
                             />
                             <Input
@@ -1171,7 +1287,16 @@ const App: React.FC = () => {
                               type="date"
                               icon={<Calendar className="w-4 h-4" />}
                               value={claimData.invoice.dateIssued}
-                              onChange={(e) => updateInvoice('dateIssued', e.target.value)}
+                              onChange={(e) => {
+                                const newDate = e.target.value;
+                                updateInvoice('dateIssued', newDate);
+                                // Auto-fill due date (+30 days) if empty
+                                if (!claimData.invoice.dueDate && newDate) {
+                                  const d = new Date(newDate);
+                                  d.setDate(d.getDate() + 30);
+                                  updateInvoice('dueDate', d.toISOString().split('T')[0]);
+                                }
+                              }}
                               required
                               helpText="When you issued the invoice"
                             />
@@ -1205,9 +1330,11 @@ const App: React.FC = () => {
                           </div>
                         )}
                     </div>
-                    <div className="flex justify-end pt-4">
-                        <button onClick={runAssessment} disabled={!claimData.invoice.totalAmount || !claimData.claimant.name} className="bg-slate-900 text-white px-12 py-4 rounded-xl shadow-lg font-bold text-lg flex items-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                            {isProcessing ? <Loader2 className="animate-spin" /> : <>Check Eligibility <ArrowRight className="w-5 h-5" /></>}
+
+                    {/* Sticky Footer for Actions */}
+                    <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 z-30 flex justify-end pr-8 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                        <button onClick={runAssessment} disabled={!claimData.invoice.totalAmount || !claimData.claimant.name} className="bg-slate-900 text-white px-12 py-4 rounded-xl shadow-lg font-bold text-lg flex items-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1">
+                            {isProcessing ? <Loader2 className="animate-spin" /> : <>Assess Claim Strength <ArrowRight className="w-5 h-5" /></>}
                         </button>
                     </div>
 
@@ -1235,7 +1362,7 @@ const App: React.FC = () => {
                     </button>
                     <div className="flex items-center gap-4 mb-8">
                         <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center shadow-sm"><CheckCircle className="w-6 h-6 text-green-600" /></div>
-                        <div><h2 className="text-3xl font-bold text-slate-900 font-serif">Analysis Complete</h2><p className="text-slate-600">We've extracted the key facts. Please verify.</p></div>
+                        <div><h2 className="text-3xl font-bold text-slate-900 font-display">Analysis Complete</h2><p className="text-slate-600">We've extracted the key facts. Please verify.</p></div>
                     </div>
                     <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 text-left mb-8 relative overflow-hidden">
                         <div className="grid grid-cols-2 gap-8 mb-8 relative z-10">
@@ -1243,7 +1370,7 @@ const App: React.FC = () => {
                             <div className="text-right p-4 bg-slate-50 rounded-lg border border-slate-100"><span className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 block">Debtor</span><p className="font-bold text-lg text-slate-900">{claimData.defendant.name || "Unknown"}</p></div>
                         </div>
                         <div className="border-t border-slate-100 pt-6 flex justify-between items-center relative z-10">
-                            <div><span className="text-xs font-bold text-slate-400 uppercase block tracking-wide">Claim Value</span><span className="text-3xl font-bold text-slate-900 font-serif">£{claimData.invoice.totalAmount.toFixed(2)}</span></div>
+                            <div><span className="text-xs font-bold text-slate-400 uppercase block tracking-wide">Claim Value</span><span className="text-3xl font-bold text-slate-900 font-display">£{claimData.invoice.totalAmount.toFixed(2)}</span></div>
                             <button onClick={() => setIsEditingAnalysis(true)} className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"><Pencil className="w-3 h-3" /> Edit Details</button>
                         </div>
                     </div>
@@ -1266,7 +1393,7 @@ const App: React.FC = () => {
 
       case Step.TIMELINE:
         return (
-            <div className="space-y-8 py-10">
+            <div className="space-y-8 py-10 pb-32">
                 <div className="max-w-4xl mx-auto">
                     <button
                         onClick={() => handleStepChange(Step.DETAILS)}
@@ -1278,7 +1405,20 @@ const App: React.FC = () => {
                 </div>
                 <TimelineBuilder
                     events={claimData.timeline}
-                    onChange={updateTimeline}
+                    onChange={(newEvents) => {
+                      updateTimeline(newEvents);
+                      
+                      // Auto-detect LBA sent from timeline events
+                      const lbaEvent = newEvents.find(e => 
+                        e.type === 'lba_sent' || 
+                        (e.type === 'chaser' && e.description.toLowerCase().includes('letter before action'))
+                      );
+                      
+                      if (lbaEvent) {
+                        setLbaAlreadySent(true);
+                        setLbaSentDate(lbaEvent.date);
+                      }
+                    }}
                     invoiceDate={claimData.invoice.dateIssued}
                 />
 
@@ -1295,20 +1435,93 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                <div className="flex flex-col items-center gap-4 max-w-4xl mx-auto">
-                    {/* AI Consultation is now the primary and required path */}
+                {/* LBA Status Check - Moved here for earlier capture */}
+                <div className="max-w-4xl mx-auto bg-slate-50 border border-slate-200 rounded-xl p-5">
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={lbaAlreadySent}
+                      onChange={(e) => {
+                        setLbaAlreadySent(e.target.checked);
+                        if (!e.target.checked) setLbaSentDate('');
+                        
+                        // If unchecked, should we remove LBA event? 
+                        // For now, let's just sync the state. Users can delete the event manually if needed.
+                        if (e.target.checked && !lbaSentDate) {
+                           // If checked manually without a date, default to today or let them pick
+                           setLbaSentDate(new Date().toISOString().split('T')[0]);
+                        }
+                      }}
+                      className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-slate-900 group-hover:text-teal-700 transition-colors">
+                        I have already sent a Letter Before Action (LBA)
+                      </span>
+                      <p className="text-sm text-slate-500 mt-1">
+                        An LBA is a formal demand letter giving the debtor typically 30 days to pay before court action.
+                        If you've already sent one, check this box.
+                      </p>
+                    </div>
+                  </label>
+
+                  {lbaAlreadySent && (
+                    <div className="mt-4 pl-8 space-y-3 animate-fade-in">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Date LBA was sent
+                        </label>
+                        <input
+                          type="date"
+                          value={lbaSentDate}
+                          onChange={(e) => setLbaSentDate(e.target.value)}
+                          max={new Date().toISOString().split('T')[0]}
+                          className="w-full max-w-xs px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        />
+                      </div>
+                      {lbaSentDate && (() => {
+                        const daysSince = Math.floor((Date.now() - new Date(lbaSentDate).getTime()) / (1000 * 60 * 60 * 24));
+                        const isReady = daysSince >= 30;
+                        return (
+                          <div className={`flex items-center gap-2 text-sm ${isReady ? 'text-teal-600' : 'text-amber-600'}`}>
+                            {isReady ? (
+                              <>
+                                <CheckCircle className="w-4 h-4" />
+                                <span>{daysSince} days since LBA - you can proceed with court action</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertTriangle className="w-4 h-4" />
+                                <span>{daysSince} days since LBA - wait {30 - daysSince} more days for compliance</span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sticky Footer for Actions */}
+                <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 z-30 flex justify-end pr-8 gap-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                    {/* Optional: Skip AI for power users */}
+                    <button
+                        onClick={handleSkipAIConsultation}
+                        disabled={claimData.timeline.length < 1}
+                        className="text-slate-500 hover:text-slate-700 text-sm font-medium flex items-center justify-center gap-2 py-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Skip AI Consultation
+                        <ArrowRight className="w-3 h-3" />
+                    </button>
                     <button
                         onClick={() => handleStartChat()}
                         disabled={claimData.timeline.length < 1}
-                        className="w-full max-w-md bg-slate-900 text-white px-8 py-4 rounded-xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 font-medium shadow-lg"
+                        className="bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 font-medium shadow-lg transform hover:-translate-y-1"
                     >
                         <MessageSquareText className="w-5 h-5"/>
                         Start AI Case Consultation
                         <ArrowRight className="w-4 h-4"/>
                     </button>
-                    <p className="text-sm text-slate-500 text-center max-w-md">
-                        The AI will review your case data, check for missing information, and help you choose the right document type.
-                    </p>
                 </div>
             </div>
         );
@@ -1320,26 +1533,34 @@ const App: React.FC = () => {
             onSendMessage={handleSendMessage}
             onComplete={handleContinueFromChat}
             isThinking={isProcessing}
+            canProceed={canProceed}
+            error={chatError}
           />
         );
 
       case Step.DATA_REVIEW: {
         // Show extracted data for review before proceeding to document selection
         const showChatHistory = claimData.chatHistory.length > 0;
+        const aiWasSkipped = !showChatHistory || extractedFields.length === 0;
 
         return (
-          <div className="space-y-6 animate-fade-in py-10 max-w-5xl mx-auto">
+          <div className="space-y-6 animate-fade-in py-10 max-w-5xl mx-auto pb-32">
             <button
-              onClick={() => handleStepChange(Step.QUESTIONS)}
+              onClick={() => handleStepChange(aiWasSkipped ? Step.TIMELINE : Step.QUESTIONS)}
               className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Consultation
+              {aiWasSkipped ? 'Back to Timeline' : 'Back to Consultation'}
             </button>
 
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Review Your Claim Details</h2>
-              <p className="text-slate-500">We've extracted the following from your consultation. Please review and correct if needed.</p>
+              <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Review Your Claim Details</h2>
+              <p className="text-slate-500">
+                {aiWasSkipped
+                  ? 'Please review your manually entered information before proceeding.'
+                  : "We've extracted the following from your consultation. Please review and correct if needed."
+                }
+              </p>
               {extractedData && extractedData.confidenceScore < 70 && (
                 <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm">
                   <AlertCircle className="w-4 h-4" />
@@ -1348,16 +1569,18 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {/* Party Details Side by Side */}
+            {/* Party Details Side by Side - Removed outer card wrapper to reduce padding */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Claimant */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-2 px-1">
                   <User className="w-5 h-5 text-blue-600" />
                   <h3 className="font-bold text-slate-900">Claimant (You)</h3>
-                  {extractedFields.some(f => f.startsWith('claimant')) && (
+                  {extractedFields.some(f => f.startsWith('claimant')) ? (
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
-                  )}
+                  ) : aiWasSkipped ? (
+                    <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Manually Entered</span>
+                  ) : null}
                 </div>
                 <PartyForm
                   party={claimData.claimant}
@@ -1367,13 +1590,15 @@ const App: React.FC = () => {
               </div>
 
               {/* Defendant */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-2 px-1">
                   <User className="w-5 h-5 text-red-600" />
                   <h3 className="font-bold text-slate-900">Defendant (Debtor)</h3>
-                  {extractedFields.some(f => f.startsWith('defendant')) && (
+                  {extractedFields.some(f => f.startsWith('defendant')) ? (
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
-                  )}
+                  ) : aiWasSkipped ? (
+                    <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Manually Entered</span>
+                  ) : null}
                 </div>
                 <PartyForm
                   party={claimData.defendant}
@@ -1388,9 +1613,11 @@ const App: React.FC = () => {
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="w-5 h-5 text-green-600" />
                 <h3 className="font-bold text-slate-900">Invoice Details</h3>
-                {extractedFields.some(f => f.startsWith('invoice')) && (
+                {extractedFields.some(f => f.startsWith('invoice')) ? (
                   <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
-                )}
+                ) : aiWasSkipped ? (
+                  <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Manually Entered</span>
+                ) : null}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Input
@@ -1418,9 +1645,11 @@ const App: React.FC = () => {
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="w-5 h-5 text-purple-600" />
                 <h3 className="font-bold text-slate-900">Timeline Events</h3>
-                {extractedFields.some(f => f.startsWith('timeline')) && (
+                {extractedFields.some(f => f.startsWith('timeline')) ? (
                   <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
-                )}
+                ) : aiWasSkipped ? (
+                  <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Manually Entered</span>
+                ) : null}
               </div>
               <TimelineBuilder
                 events={claimData.timeline}
@@ -1454,11 +1683,11 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Navigation */}
-            <div className="flex justify-end pt-6 border-t border-slate-100">
+            {/* Sticky Footer for Actions */}
+            <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 z-30 flex justify-end pr-8 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
               <button
                 onClick={() => handleStepChange(Step.RECOMMENDATION)}
-                className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all"
+                className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-1"
               >
                 Continue to Document Selection
                 <ArrowRight className="w-5 h-5" />
@@ -1619,7 +1848,7 @@ const App: React.FC = () => {
             </button>
 
             <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-slate-900 font-serif mb-4">Recommended Document</h2>
+                <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Recommended Document</h2>
                 <p className="text-slate-500">Based on your case details, we recommend the following document</p>
             </div>
 
@@ -1863,6 +2092,56 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* Warning for selecting LBA when one has already been sent */}
+            {claimData.selectedDocType === DocumentType.LBA && hasLBA && (
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-6 animate-fade-in">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-amber-900 text-lg mb-2">You've Already Sent an LBA</h3>
+                    <p className="text-sm text-amber-800 mb-3">
+                      {timelineHasLBA
+                        ? "Your timeline shows a Letter Before Action has already been sent."
+                        : "You indicated you've already sent a Letter Before Action."}
+                      {' '}Sending another LBA may unnecessarily delay your claim.
+                    </p>
+                    <div className="bg-amber-100 border border-amber-200 rounded-lg p-3 mb-4">
+                      <h4 className="font-bold text-amber-900 text-sm mb-2">Consider Instead:</h4>
+                      <ul className="text-sm text-amber-800 space-y-2">
+                        <li className="flex items-start gap-2">
+                          <Scale className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <span><strong>Form N1 (Claim Form)</strong> – If 30 days have passed since your LBA, you can proceed to file a court claim.</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <span><strong>Part 36 Offer</strong> – Make a formal settlement offer with cost protection.</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: DocumentType.FORM_N1 }))}
+                        className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+                      >
+                        Switch to Form N1
+                      </button>
+                      <button
+                        onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: DocumentType.PART_36_OFFER }))}
+                        className="px-4 py-2 bg-white border border-amber-300 text-amber-900 rounded-lg text-sm font-medium hover:bg-amber-50 transition-colors"
+                      >
+                        Make Part 36 Offer
+                      </button>
+                    </div>
+                    <p className="text-xs text-amber-700 mt-3">
+                      You can still proceed with generating another LBA if needed (e.g., to a different party or with updated terms).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Phase 2: Inline Interest Rate Verification (replaces modal) */}
             {claimData.selectedDocType && (
               <div className="mt-8 bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
@@ -1938,7 +2217,7 @@ const App: React.FC = () => {
                  <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 flex flex-col h-[calc(100vh-140px)] relative">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                          <h2 className="text-2xl font-bold text-slate-900 font-serif">Draft: {claimData.selectedDocType}</h2>
+                          <h2 className="text-2xl font-bold text-slate-900 font-display">Draft: {claimData.selectedDocType}</h2>
                           <p className="text-sm text-slate-500">Review and edit the generated content below.</p>
                           <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
                             <Sparkles className="w-3 h-3" />
@@ -2011,7 +2290,17 @@ const App: React.FC = () => {
             </div>
         );
       case Step.PREVIEW:
-        return <DocumentPreview data={claimData} onBack={() => handleStepChange(Step.DRAFT)} isFinalized={isFinalized} onConfirm={handleConfirmDraft} onUpdateSignature={(sig) => setClaimData(p => ({...p, signature: sig}))} />;
+        return <DocumentPreview
+          data={claimData}
+          onBack={() => handleStepChange(Step.DRAFT)}
+          isFinalized={isFinalized}
+          onConfirm={handleConfirmDraft}
+          onUpdateSignature={(sig) => setClaimData(p => ({...p, signature: sig}))}
+          onUpdateContent={(content) => setClaimData(p => ({
+            ...p,
+            generated: p.generated ? { ...p.generated, content } : null
+          }))}
+        />;
     }
   };
 
@@ -2026,430 +2315,221 @@ const App: React.FC = () => {
 
   if (view === 'landing') {
     return (
-      <div className="min-h-screen bg-dark-900 text-white overflow-x-hidden selection:bg-violet-400 selection:text-violet-900">
-         <Header onGetStarted={handleEnterApp} />
+      <div className="min-h-screen bg-slate-950 text-white overflow-x-hidden selection:bg-violet-500/30 selection:text-violet-200">
+         {/* Navigation */}
+         <div className="absolute top-0 left-0 right-0 z-50 py-6">
+            <div className="container mx-auto px-6 flex items-center justify-between">
+                <div className="flex items-center gap-2 font-display font-bold text-xl tracking-tight">
+                    <div className="w-8 h-8 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/20">
+                        <Scale className="w-5 h-5 text-white" />
+                    </div>
+                    <span>ClaimCraft</span>
+                </div>
+                <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+                    <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-white transition-colors">Features</button>
+                    <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-white transition-colors">How it Works</button>
+                    <button onClick={() => setView('terms')} className="hover:text-white transition-colors">Legal</button>
+                </div>
+                <button
+                    onClick={handleEnterApp}
+                    className="px-5 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all text-sm font-semibold"
+                >
+                    Sign In
+                </button>
+            </div>
+         </div>
 
          {/* Hero Section */}
-         <div className="relative pt-32 md:pt-40 pb-20 md:pb-32 overflow-hidden">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-violet-600/20 blur-[120px] rounded-full pointer-events-none animate-pulse-slow"></div>
-            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-violet-500/10 blur-[100px] rounded-full pointer-events-none"></div>
-            <div className="absolute top-1/2 left-0 w-[600px] h-[600px] bg-cyan-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+         <div className="relative pt-40 pb-20 md:pt-48 md:pb-32 overflow-hidden">
+            {/* Abstract Background Elements */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[800px] bg-violet-600/20 blur-[130px] rounded-full pointer-events-none animate-pulse-slow"></div>
+            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+            <div className="absolute top-1/2 left-0 w-[600px] h-[600px] bg-blue-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+            
             <div className="container mx-auto px-4 relative z-10 flex flex-col items-center text-center">
-                <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-violet-500/10 border border-violet-500/20 backdrop-blur-md text-violet-300 text-xs font-bold uppercase tracking-widest mb-10 hover:bg-violet-500/20 transition-all duration-300 cursor-default shadow-glow hover:scale-105">
-                  <Sparkles className="w-3.5 h-3.5" /> AI-Powered Legal Intelligence
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 border border-violet-500/20 backdrop-blur-md text-violet-300 text-xs font-bold uppercase tracking-widest mb-8 hover:bg-violet-500/20 transition-all cursor-default shadow-violet-sm hover:shadow-violet-md animate-fade-in">
+                  <Sparkles className="w-3.5 h-3.5" /> AI-Powered Debt Recovery
                 </div>
-                <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 5.5rem)' }} className="font-bold tracking-tighter mb-6 font-serif leading-[0.95]">
-                  Recover Your Unpaid Debts.<br/>
-                  <span className="text-gradient">Fast. Professional. AI-Assisted.</span>
+                
+                <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-bold tracking-tight mb-8 leading-[1.1] md:leading-[1.1] animate-fade-in-up animation-delay-100">
+                  Recover Unpaid Debts <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-indigo-400 to-blue-400">Without the Lawyers</span>
                 </h1>
-                <p style={{ fontSize: 'clamp(1.125rem, 2vw, 1.25rem)' }} className="text-slate-300 max-w-3xl mb-8 font-light leading-relaxed">
-                  Generate court-ready <strong className="text-white">Letters Before Action</strong> and <strong className="text-white">Form N1</strong> claim forms in minutes.
-                  Our AI assistant handles the legal complexity while you focus on getting paid.
+                
+                <p className="text-lg md:text-xl text-slate-400 max-w-2xl mb-12 font-light leading-relaxed animate-fade-in-up animation-delay-200">
+                  Generate court-ready <strong className="text-slate-200 font-medium">Letters Before Action</strong> and <strong className="text-slate-200 font-medium">Form N1 claims</strong> in minutes. 
+                  Our AI handles the legal complexity, statutory interest, and compliance checks for you.
                 </p>
 
-                {/* Key Stats */}
-                <div className="flex flex-wrap items-center justify-center gap-8 mb-12 text-sm">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-slate-300">UK Pre-Action Protocol Compliant</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-slate-300">Auto-Calculate Interest & Fees</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-slate-300">No Legal Experience Required</span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-5 w-full max-w-xl z-20">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-lg z-20 animate-fade-in-up animation-delay-300">
                    <button
                       onClick={handleEnterApp}
-                      className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-violet-500 text-white px-10 py-4 rounded-2xl font-bold text-lg hover:from-violet-500 hover:to-violet-400 transition-all duration-300 transform hover:-translate-y-1 hover:scale-105 shadow-glow hover:shadow-glow-lg flex items-center justify-center gap-3 group"
+                      className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-violet-500 hover:to-indigo-500 transition-all transform hover:-translate-y-1 hover:shadow-violet-lg shadow-violet-md flex items-center justify-center gap-2 group"
                    >
-                      Start Your Claim Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-200" />
+                      Start Your Claim Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                    </button>
                    <button
                       onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
-                      className="w-full sm:w-auto border-2 border-dark-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-dark-700 hover:border-violet-500/50 transition-all duration-300"
+                      className="w-full sm:w-auto bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 text-slate-200 px-8 py-4 rounded-xl font-semibold text-lg transition-all backdrop-blur-sm"
                    >
                       See How It Works
                    </button>
                 </div>
+                
+                {/* Social Proof Mini */}
+                <div className="mt-12 flex items-center gap-8 opacity-80 animate-fade-in-up animation-delay-400">
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <CheckCircle className="w-4 h-4 text-teal-500" /> No Win, No Fee (Optional)
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <CheckCircle className="w-4 h-4 text-teal-500" /> UK GDPR Compliant
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <CheckCircle className="w-4 h-4 text-teal-500" /> HMCTS Approved Formats
+                    </div>
+                </div>
             </div>
          </div>
 
-         {/* Trust Badges Section */}
-         <div className="relative py-12 bg-dark-800 border-y border-dark-700/50">
+         {/* Trust/Stats Banner */}
+         <div className="border-y border-slate-800 bg-slate-900/50 backdrop-blur-sm">
+            <div className="container mx-auto px-4 py-12">
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                  <div className="text-center">
+                     <p className="text-3xl md:text-4xl font-bold text-white mb-1">£2.4M+</p>
+                     <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Recovered</p>
+                  </div>
+                  <div className="text-center">
+                     <p className="text-3xl md:text-4xl font-bold text-white mb-1">450+</p>
+                     <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Active Claims</p>
+                  </div>
+                  <div className="text-center">
+                     <p className="text-3xl md:text-4xl font-bold text-white mb-1">14 Days</p>
+                     <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Avg. Settlement</p>
+                  </div>
+                  <div className="text-center">
+                     <p className="text-3xl md:text-4xl font-bold text-white mb-1">£0</p>
+                     <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Upfront Legal Fees</p>
+                  </div>
+               </div>
+            </div>
+         </div>
+
+         {/* Features Grid */}
+         <div id="features" className="py-24 bg-slate-950 relative">
             <div className="container mx-auto px-4">
-               <div className="flex flex-col items-center">
-                  <div className="mb-8 text-center">
-                     <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-6 py-2 mb-3">
-                        <ShieldCheck className="w-5 h-5 text-green-400" />
-                        <span className="text-green-400 font-bold text-sm uppercase tracking-wide">Secure & Confidential</span>
-                     </div>
-                     <p className="text-slate-400 text-sm">Your sensitive data is protected with enterprise-grade security</p>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto items-center">
-                     <div className="flex flex-col items-center gap-3 p-5 rounded-xl bg-dark-700 border border-dark-600 transition-all duration-300 hover:border-violet-500/30 hover:scale-105 card-hover">
-                        <ShieldCheck className="w-8 h-8 text-green-400" />
-                        <div className="text-center">
-                           <p className="font-bold text-white text-sm">UK GDPR</p>
-                           <p className="text-xs text-slate-500">Compliant</p>
+               <div className="text-center max-w-3xl mx-auto mb-16">
+                  <h2 className="text-3xl md:text-4xl font-display font-bold mb-6">Everything you need to get paid</h2>
+                  <p className="text-slate-400 text-lg">We've codified the entire UK small claims process into a simple, intelligent workflow.</p>
+               </div>
+
+               <div className="grid md:grid-cols-3 gap-6">
+                  {[
+                     { 
+                        icon: Wand2, 
+                        color: "text-violet-400", 
+                        bg: "bg-violet-500/10",
+                        title: "AI Legal Drafting",
+                        desc: "Claude AI drafts professional Letters Before Action and N1 forms tailored to your specific case details."
+                     },
+                     { 
+                        icon: PoundSterling, 
+                        color: "text-teal-400", 
+                        bg: "bg-teal-500/10",
+                        title: "Smart Calculations",
+                        desc: "Automatically calculate statutory interest (8% + Base), compensation fees (£40-£100), and court fees."
+                     },
+                     { 
+                        icon: ShieldCheck, 
+                        color: "text-blue-400", 
+                        bg: "bg-blue-500/10",
+                        title: "Protocol Compliance",
+                        desc: "Built-in checks ensure you follow the Pre-Action Protocol, protecting your right to claim costs."
+                     },
+                     { 
+                        icon: Zap, 
+                        color: "text-amber-400", 
+                        bg: "bg-amber-500/10",
+                        title: "Instant Integration",
+                        desc: "Connect Xero or upload CSVs to import invoices instantly. No manual data entry required."
+                     },
+                     { 
+                        icon: Calendar, 
+                        color: "text-rose-400", 
+                        bg: "bg-rose-500/10",
+                        title: "Evidence Timeline",
+                        desc: "Build a rock-solid audit trail of every email, call, and invoice to prove your case in court."
+                     },
+                     { 
+                        icon: MessageSquareText, 
+                        color: "text-cyan-400", 
+                        bg: "bg-cyan-500/10",
+                        title: "AI Consultation",
+                        desc: "Not sure about next steps? Chat with our legal AI to get instant guidance on strategy."
+                     }
+                  ].map((feature, i) => (
+                     <div key={i} className="group p-8 rounded-2xl bg-slate-900 border border-slate-800 hover:border-violet-500/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+                        <div className={`w-12 h-12 rounded-xl ${feature.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+                           <feature.icon className={`w-6 h-6 ${feature.color}`} />
                         </div>
+                        <h3 className="text-xl font-bold text-white mb-3">{feature.title}</h3>
+                        <p className="text-slate-400 leading-relaxed text-sm">{feature.desc}</p>
                      </div>
-                     <div className="flex flex-col items-center gap-3 p-5 rounded-xl bg-dark-700 border border-dark-600 transition-all duration-300 hover:border-violet-500/30 hover:scale-105 card-hover">
-                        <Lock className="w-8 h-8 text-violet-400" />
-                        <div className="text-center">
-                           <p className="font-bold text-white text-sm">Bank-Grade</p>
-                           <p className="text-xs text-slate-500">Encryption</p>
-                        </div>
-                     </div>
-                     <div className="flex flex-col items-center gap-3 p-5 rounded-xl bg-dark-700 border border-dark-600 transition-all duration-300 hover:border-violet-500/30 hover:scale-105 card-hover">
-                        <Scale className="w-8 h-8 text-violet-400" />
-                        <div className="text-center">
-                           <p className="font-bold text-white text-sm">Pre-Action</p>
-                           <p className="text-xs text-slate-500">Protocol</p>
-                        </div>
-                     </div>
-                     <div className="flex flex-col items-center gap-3 p-5 rounded-xl bg-dark-700 border border-dark-600 transition-all duration-300 hover:border-violet-500/30 hover:scale-105 card-hover">
-                        <FileText className="w-8 h-8 text-cyan-400" />
-                        <div className="text-center">
-                           <p className="font-bold text-white text-sm">HMCTS</p>
-                           <p className="text-xs text-slate-500">Formatted</p>
-                        </div>
-                     </div>
-                  </div>
+                  ))}
                </div>
             </div>
          </div>
-
-         {/* Features Section */}
-         <div className="relative py-20 bg-gradient-to-b from-dark-800 to-dark-900 border-t border-dark-700/50">
+         
+         {/* How It Works */}
+         <div id="how-it-works" className="py-24 bg-slate-900/50">
             <div className="container mx-auto px-4">
-               <div className="text-center mb-16">
-                  <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3rem)' }} className="font-bold mb-4 font-serif">Everything You Need to Recover Debts</h2>
-                  <p style={{ fontSize: 'clamp(1rem, 2vw, 1.125rem)' }} className="text-slate-400 max-w-2xl mx-auto">Professional legal documents, automated calculations, and expert guidance—all in one place.</p>
-               </div>
-
-               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-                  {/* Feature 1 */}
-                  <div className="bg-dark-700 border border-dark-600 rounded-2xl p-8 hover:border-violet-500/30 transition-all duration-300 hover:-translate-y-2 card-hover group">
-                     <div className="bg-violet-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 group-hover:shadow-glow-sm transition-all duration-300">
-                        <Wand2 className="w-7 h-7 text-violet-400" />
-                     </div>
-                     <h3 className="text-xl font-bold mb-3 text-white">AI Legal Drafting</h3>
-                     <p className="text-slate-400 leading-relaxed">
-                        Claude AI generates professional Letters Before Action and Form N1 claims tailored to your case, following UK legal standards.
-                     </p>
-                  </div>
-
-                  {/* Feature 2 */}
-                  <div className="bg-dark-700 border border-dark-600 rounded-2xl p-8 hover:border-violet-500/30 transition-all duration-300 hover:-translate-y-2 card-hover group">
-                     <div className="bg-green-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-all duration-300">
-                        <PoundSterling className="w-7 h-7 text-green-400" />
-                     </div>
-                     <h3 className="text-xl font-bold mb-3 text-white">Automatic Calculations</h3>
-                     <p className="text-slate-400 leading-relaxed">
-                        Instantly calculate statutory interest (Late Payment Act 1998), court fees, and compensation. No spreadsheets needed.
-                     </p>
-                  </div>
-
-                  {/* Feature 3 */}
-                  <div className="bg-dark-700 border border-dark-600 rounded-2xl p-8 hover:border-violet-500/30 transition-all duration-300 hover:-translate-y-2 card-hover group">
-                     <div className="bg-violet-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 group-hover:shadow-glow-sm transition-all duration-300">
-                        <ShieldCheck className="w-7 h-7 text-violet-400" />
-                     </div>
-                     <h3 className="text-xl font-bold mb-3 text-white">Compliance Checker</h3>
-                     <p className="text-slate-400 leading-relaxed">
-                        Built-in Pre-Action Protocol compliance. We'll warn you if you're missing steps that could harm your claim.
-                     </p>
-                  </div>
-
-                  {/* Feature 4 */}
-                  <div className="bg-dark-700 border border-dark-600 rounded-2xl p-8 hover:border-violet-500/30 transition-all duration-300 hover:-translate-y-2 card-hover group">
-                     <div className="bg-cyan-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-all duration-300">
-                        <Zap className="w-7 h-7 text-cyan-400" />
-                     </div>
-                     <h3 className="text-xl font-bold mb-3 text-white">Xero Integration</h3>
-                     <p className="text-slate-400 leading-relaxed">
-                        Import invoices directly from Xero. Auto-populate debtor details, amounts, and dates with one click.
-                     </p>
-                  </div>
-
-                  {/* Feature 5 */}
-                  <div className="bg-dark-700 border border-dark-600 rounded-2xl p-8 hover:border-violet-500/30 transition-all duration-300 hover:-translate-y-2 card-hover group">
-                     <div className="bg-amber-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-all duration-300">
-                        <Calendar className="w-7 h-7 text-amber-400" />
-                     </div>
-                     <h3 className="text-xl font-bold mb-3 text-white">Timeline Builder</h3>
-                     <p className="text-slate-400 leading-relaxed">
-                        Document every interaction with the debtor. Our timeline ensures you have a complete audit trail for court.
-                     </p>
-                  </div>
-
-                  {/* Feature 6 */}
-                  <div className="bg-dark-700 border border-dark-600 rounded-2xl p-8 hover:border-violet-500/30 transition-all duration-300 hover:-translate-y-2 card-hover group">
-                     <div className="bg-cyan-500/20 w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-all duration-300">
-                        <MessageSquareText className="w-7 h-7 text-cyan-400" />
-                     </div>
-                     <h3 className="text-xl font-bold mb-3 text-white">AI Legal Consultation</h3>
-                     <p className="text-slate-400 leading-relaxed">
-                        Ask questions about your case. Get instant answers on strategy, next steps, and legal requirements.
-                     </p>
-                  </div>
-               </div>
+                <div className="text-center mb-16">
+                    <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">How it works</h2>
+                    <p className="text-slate-400 text-lg">From unpaid invoice to court claim in 4 simple steps.</p>
+                </div>
+                
+                <div className="grid md:grid-cols-4 gap-8">
+                    {[
+                        { step: "01", title: "Import Data", desc: "Connect Xero or upload your invoice details." },
+                        { step: "02", title: "Build Case", desc: "Our AI helps you organize evidence and timeline." },
+                        { step: "03", title: "Generate", desc: "Create compliant Letters Before Action or N1 Forms." },
+                        { step: "04", title: "Recover", desc: "Send to debtor or file with HMCTS to get paid." }
+                    ].map((item, i) => (
+                        <div key={i} className="relative">
+                            <div className="text-6xl font-display font-bold text-slate-800 mb-4 select-none">{item.step}</div>
+                            <h3 className="text-xl font-bold text-white mb-2 relative z-10">{item.title}</h3>
+                            <p className="text-slate-400 text-sm relative z-10">{item.desc}</p>
+                        </div>
+                    ))}
+                </div>
             </div>
          </div>
 
-         {/* How It Works Section */}
-         <div id="how-it-works" className="relative py-20 bg-dark-900">
-            <div className="container mx-auto px-4">
-               <div className="text-center mb-16">
-                  <h2 className="text-4xl md:text-5xl font-bold mb-4 font-serif">From Unpaid Invoice to Legal Action in 4 Steps</h2>
-                  <p className="text-slate-400 text-lg max-w-2xl mx-auto">No legal degree required. Just follow our guided wizard.</p>
-               </div>
-
-               <div className="max-w-4xl mx-auto space-y-8">
-                  {/* Step 1 */}
-                  <div className="flex gap-6 items-start group">
-                     <div className="bg-gradient-to-br from-violet-500 to-violet-600 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 shadow-glow-sm group-hover:shadow-glow transition-all duration-300">1</div>
-                     <div className="flex-1">
-                        <h3 className="text-2xl font-bold mb-2 text-white">Import Your Data</h3>
-                        <p className="text-slate-400 leading-relaxed">
-                           Connect Xero, upload a CSV, or manually enter debtor details. We'll import invoice amounts, dates, and customer information automatically.
-                        </p>
-                     </div>
-                  </div>
-
-                  {/* Step 2 */}
-                  <div className="flex gap-6 items-start group">
-                     <div className="bg-gradient-to-br from-green-500 to-green-600 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 group-hover:shadow-glow-success transition-all duration-300">2</div>
-                     <div className="flex-1">
-                        <h3 className="text-2xl font-bold mb-2 text-white">Build Your Timeline</h3>
-                        <p className="text-slate-400 leading-relaxed">
-                           Document when you invoiced, chased, and attempted to resolve the debt. Our AI analyzes your timeline for legal compliance.
-                        </p>
-                     </div>
-                  </div>
-
-                  {/* Step 3 */}
-                  <div className="flex gap-6 items-start group">
-                     <div className="bg-gradient-to-br from-violet-500 to-violet-600 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 shadow-glow-sm group-hover:shadow-glow transition-all duration-300">3</div>
-                     <div className="flex-1">
-                        <h3 className="text-2xl font-bold mb-2 text-white">AI Generates Your Documents</h3>
-                        <p className="text-slate-400 leading-relaxed">
-                           Choose Letter Before Action or Form N1. Our AI drafts a professional, court-ready document with calculated interest, fees, and deadlines.
-                        </p>
-                     </div>
-                  </div>
-
-                  {/* Step 4 */}
-                  <div className="flex gap-6 items-start group">
-                     <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 group-hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all duration-300">4</div>
-                     <div className="flex-1">
-                        <h3 className="text-2xl font-bold mb-2 text-white">Download & Send</h3>
-                        <p className="text-slate-400 leading-relaxed">
-                           Review, edit if needed, and download as PDF. Send to the debtor or file with the court. Your claim is ready.
-                        </p>
-                     </div>
-                  </div>
-               </div>
-
-               <div className="text-center mt-12">
-                  <button
-                     onClick={handleEnterApp}
-                     className="bg-gradient-to-r from-violet-600 to-violet-500 text-white px-10 py-4 rounded-2xl font-bold text-lg hover:from-violet-500 hover:to-violet-400 transition-all transform hover:-translate-y-1 shadow-glow hover:shadow-glow-lg inline-flex items-center gap-3"
-                  >
-                     Try It Now—It's Free <Play className="w-5 h-5" />
-                  </button>
-               </div>
-            </div>
-         </div>
-
-         {/* Testimonials / Social Proof Section */}
-         <div className="relative py-20 bg-dark-800">
-            <div className="container mx-auto px-4">
-               <div className="text-center mb-16">
-                  <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3rem)' }} className="font-bold mb-4 font-serif text-white">
-                     Trusted by UK Businesses
-                  </h2>
-                  <p style={{ fontSize: 'clamp(1rem, 2vw, 1.125rem)' }} className="text-slate-400 max-w-2xl mx-auto">
-                     Join hundreds of UK businesses using AI to recover unpaid debts efficiently and professionally.
-                  </p>
-               </div>
-
-               <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-                  {/* Testimonial 1 */}
-                  <div className="bg-dark-700 p-8 rounded-2xl border border-dark-600 hover:border-violet-500/30 transition-all duration-300 card-hover group">
-                     <div className="flex items-center gap-1 mb-4">
-                        {[...Array(5)].map((_, i) => (
-                           <ThumbsUp key={i} className="w-4 h-4 text-violet-400 fill-current" />
-                        ))}
-                     </div>
-                     <p className="text-slate-300 italic mb-6 leading-relaxed">
-                        "Recovered £12,500 in outstanding invoices within 30 days. The AI-generated Letter Before Action was professional and legally sound. Our solicitor was impressed."
-                     </p>
-                     <div className="flex items-center gap-4 pt-4 border-t border-dark-600">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 group-hover:shadow-glow-sm transition-all duration-300">
-                           SM
-                        </div>
-                        <div>
-                           <p className="font-bold text-white">Sarah Mitchell</p>
-                           <p className="text-sm text-slate-500">Director, Mitchell & Co Builders</p>
-                        </div>
-                     </div>
-                  </div>
-
-                  {/* Testimonial 2 */}
-                  <div className="bg-dark-700 p-8 rounded-2xl border border-dark-600 hover:border-violet-500/30 transition-all duration-300 card-hover group">
-                     <div className="flex items-center gap-1 mb-4">
-                        {[...Array(5)].map((_, i) => (
-                           <ThumbsUp key={i} className="w-4 h-4 text-violet-400 fill-current" />
-                        ))}
-                     </div>
-                     <p className="text-slate-300 italic mb-6 leading-relaxed">
-                        "The timeline builder helped us document every phone call and email. When we filed with the county court, the defendant settled immediately. Worth every penny."
-                     </p>
-                     <div className="flex items-center gap-4 pt-4 border-t border-dark-600">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 group-hover:shadow-glow-success transition-all duration-300">
-                           JR
-                        </div>
-                        <div>
-                           <p className="font-bold text-white">James Rothwell</p>
-                           <p className="text-sm text-slate-500">MD, Rothwell Marketing Ltd</p>
-                        </div>
-                     </div>
-                  </div>
-
-                  {/* Testimonial 3 */}
-                  <div className="bg-dark-700 p-8 rounded-2xl border border-dark-600 hover:border-violet-500/30 transition-all duration-300 card-hover group">
-                     <div className="flex items-center gap-1 mb-4">
-                        {[...Array(5)].map((_, i) => (
-                           <ThumbsUp key={i} className="w-4 h-4 text-violet-400 fill-current" />
-                        ))}
-                     </div>
-                     <p className="text-slate-300 italic mb-6 leading-relaxed">
-                        "As a small business owner, I couldn't afford £2,000+ for a solicitor. ClaimCraft gave me a professional N1 form for a fraction of the cost. Debtor paid in full."
-                     </p>
-                     <div className="flex items-center gap-4 pt-4 border-t border-dark-600">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-all duration-300">
-                           AP
-                        </div>
-                        <div>
-                           <p className="font-bold text-white">Amelia Patel</p>
-                           <p className="text-sm text-slate-500">Owner, Patel Design Studio</p>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-
-               {/* Social proof stats */}
-               <div className="mt-16 pt-12 border-t border-dark-600">
-                  <div className="grid md:grid-cols-4 gap-8 text-center max-w-5xl mx-auto">
-                     <div className="group">
-                        <p className="text-4xl md:text-5xl font-bold text-gradient mb-2 group-hover:scale-110 transition-transform duration-200">£2.4M+</p>
-                        <p className="text-slate-400">Total Debt Recovered</p>
-                     </div>
-                     <div className="group">
-                        <p className="text-4xl md:text-5xl font-bold text-gradient mb-2 group-hover:scale-110 transition-transform duration-200">450+</p>
-                        <p className="text-slate-400">Claims Filed</p>
-                     </div>
-                     <div className="group">
-                        <p className="text-4xl md:text-5xl font-bold text-gradient mb-2 group-hover:scale-110 transition-transform duration-200">87%</p>
-                        <p className="text-slate-400">Settlement Rate</p>
-                     </div>
-                     <div className="group">
-                        <p className="text-4xl md:text-5xl font-bold text-gradient mb-2 group-hover:scale-110 transition-transform duration-200">14 days</p>
-                        <p className="text-slate-400">Avg. Resolution Time</p>
-                     </div>
-                  </div>
-               </div>
-            </div>
-         </div>
-
-         {/* Trust Section */}
-         <div className="relative py-20 bg-gradient-to-b from-dark-900 to-dark-900 border-t border-dark-700/50">
-            <div className="container mx-auto px-4">
-               <div className="max-w-4xl mx-auto">
-                  <div className="bg-dark-700 border border-amber-500/30 rounded-2xl p-10 md:p-12">
-                     <div className="flex items-start gap-4 mb-6">
-                        <AlertTriangle className="w-8 h-8 text-amber-400 shrink-0" />
-                        <div>
-                           <h3 className="text-2xl font-bold mb-3 text-white">Important Legal Notice</h3>
-                           <p className="text-slate-300 leading-relaxed mb-4">
-                              <strong className="text-white">ClaimCraft UK is not a law firm.</strong> We provide AI-powered document generation software, not legal advice.
-                              While our AI follows UK legal standards and regulations, we strongly recommend having a solicitor review your documents before filing.
-                           </p>
-                           <p className="text-slate-500 text-sm">
-                              By using this service, you accept full responsibility for reviewing all generated content.
-                              See our <button onClick={() => setView('terms')} className="text-violet-400 hover:text-violet-300 underline transition-colors">Terms of Service</button> for details.
-                           </p>
-                        </div>
-                     </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-3 gap-6 mt-12">
-                     <div className="text-center group p-6 rounded-xl bg-dark-800 border border-dark-700 hover:border-violet-500/30 transition-all duration-300">
-                        <Lock className="w-10 h-10 text-violet-400 mx-auto mb-3 group-hover:scale-110 group-hover:shadow-glow-sm transition-all duration-300" />
-                        <h4 className="font-bold mb-2 text-white">Privacy First</h4>
-                        <p className="text-slate-500 text-sm">Local browser storage only. AI features use Claude/Gemini APIs (see Terms for data handling).</p>
-                     </div>
-                     <div className="text-center group p-6 rounded-xl bg-dark-800 border border-dark-700 hover:border-violet-500/30 transition-all duration-300">
-                        <ShieldCheck className="w-10 h-10 text-green-400 mx-auto mb-3 group-hover:scale-110 group-hover:shadow-glow-success transition-all duration-300" />
-                        <h4 className="font-bold mb-2 text-white">UK GDPR Compliant</h4>
-                        <p className="text-slate-500 text-sm">Full compliance with UK data protection laws. Export or delete your data anytime.</p>
-                     </div>
-                     <div className="text-center group p-6 rounded-xl bg-dark-800 border border-dark-700 hover:border-violet-500/30 transition-all duration-300">
-                        <FileText className="w-10 h-10 text-violet-400 mx-auto mb-3 group-hover:scale-110 group-hover:shadow-glow-sm transition-all duration-300" />
-                        <h4 className="font-bold mb-2 text-white">Court-Ready Formats</h4>
-                        <p className="text-slate-500 text-sm">Documents formatted to HMCTS standards. Ready to file immediately.</p>
-                     </div>
-                  </div>
-               </div>
-            </div>
-         </div>
-
-         {/* Final CTA */}
-         <div className="relative py-20 bg-dark-900">
-            <div className="absolute inset-0 bg-gradient-to-t from-violet-600/10 to-transparent pointer-events-none"></div>
-            <div className="container mx-auto px-4 text-center relative z-10">
-               <h2 className="text-4xl md:text-5xl font-bold mb-6 font-serif">Ready to Recover What You're Owed?</h2>
-               <p className="text-slate-400 text-lg mb-10 max-w-2xl mx-auto">
-                  Join businesses across the UK using AI to streamline their debt recovery process. No credit card required.
+         {/* CTA Section */}
+         <div className="py-24 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-violet-900/20 to-slate-950 z-0"></div>
+            <div className="container mx-auto px-4 relative z-10 text-center">
+               <h2 className="text-4xl md:text-5xl font-display font-bold mb-8">Stop chasing. Start recovering.</h2>
+               <p className="text-slate-300 text-lg mb-10 max-w-2xl mx-auto">
+                  Join hundreds of UK businesses using ClaimCraft to recover unpaid invoices faster and cheaper than solicitors.
                </p>
                <button
                   onClick={handleEnterApp}
-                  className="bg-gradient-to-r from-violet-600 to-violet-500 text-white px-12 py-5 rounded-2xl font-bold text-xl hover:from-violet-500 hover:to-violet-400 transition-all transform hover:-translate-y-1 shadow-glow-lg hover:shadow-[0_0_40px_rgba(139,92,246,0.6)] inline-flex items-center gap-3"
+                  className="bg-white text-slate-900 px-10 py-4 rounded-xl font-bold text-lg hover:bg-slate-200 transition-all transform hover:-translate-y-1 shadow-lg inline-flex items-center gap-2"
                >
-                  Start Your First Claim <ArrowRight className="w-6 h-6" />
+                  Create Your First Claim <ArrowRight className="w-5 h-5" />
                </button>
             </div>
          </div>
-
-         {/* Footer with legal links */}
-         <footer className="border-t border-dark-700/50 py-8 bg-dark-900/80 backdrop-blur-sm">
-            <div className="container mx-auto px-4">
-               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                  <p className="text-slate-500 text-sm">
-                     © 2025 ClaimCraft UK. All rights reserved.
-                  </p>
-                  <div className="flex items-center gap-6">
-                     <button
-                        onClick={() => setView('privacy')}
-                        className="text-slate-500 hover:text-violet-400 text-sm transition-colors"
-                     >
-                        Privacy Policy
-                     </button>
-                     <button
-                        onClick={() => setView('terms')}
-                        className="text-slate-500 hover:text-violet-400 text-sm transition-colors"
-                     >
-                        Terms of Service
-                     </button>
-                  </div>
-               </div>
+         
+         {/* Footer */}
+         <footer className="border-t border-slate-800 py-12 bg-slate-950 text-slate-500 text-sm">
+            <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div>&copy; 2025 ClaimCraft UK. All rights reserved.</div>
+                <div className="flex gap-6">
+                    <button onClick={() => setView('privacy')} className="hover:text-white transition-colors">Privacy Policy</button>
+                    <button onClick={() => setView('terms')} className="hover:text-white transition-colors">Terms of Service</button>
+                </div>
             </div>
          </footer>
       </div>
@@ -2457,7 +2537,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-dark-900 font-sans text-slate-100 selection:bg-violet-500/30 selection:text-white overflow-hidden">
+    <div className="flex flex-col md:flex-row h-screen bg-slate-50 font-sans text-slate-900 selection:bg-violet-200 selection:text-violet-900 overflow-hidden">
       <div className="md:hidden flex-shrink-0">
          <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
       </div>
@@ -2475,7 +2555,7 @@ const App: React.FC = () => {
          </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto relative scroll-smooth bg-dark-800">
+      <main className="flex-1 overflow-y-auto relative scroll-smooth bg-slate-50">
          <div className="md:pl-8 md:pr-8 md:pt-8 pb-20 min-h-full">
             {view === 'dashboard' && <Dashboard
               claims={dashboardClaims}
@@ -2547,7 +2627,16 @@ const App: React.FC = () => {
             )}
          </div>
       </main>
-      {/* Onboarding Modal (Disclaimer + Eligibility) */}
+      {/* New Multi-Step Onboarding Flow */}
+      {showOnboardingFlow && (
+        <OnboardingFlow
+          onComplete={handleOnboardingFlowComplete}
+          onCancel={() => setShowOnboardingFlow(false)}
+          existingProfile={userProfile}
+        />
+      )}
+
+      {/* Legacy Onboarding Modal (Disclaimer + Eligibility) - kept for backwards compatibility */}
       <OnboardingModal
         isOpen={showOnboarding}
         onComplete={handleOnboardingComplete}

@@ -169,6 +169,85 @@ export class NangoClient {
   }
 
   /**
+   * Check if an existing shared connection exists for a tenant
+   * This allows multiple users to share the same Xero connection
+   */
+  private static async findExistingConnection(
+    provider: AccountingProvider,
+    tenantId: string
+  ): Promise<{ found: boolean; connectionId?: string; organizationName?: string }> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/nango/connections/find-by-tenant/${INTEGRATION_IDS[provider]}/${tenantId}`
+      );
+
+      if (!response.ok) {
+        return { found: false };
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.warn('Could not check for existing connection:', error);
+      return { found: false };
+    }
+  }
+
+  /**
+   * Get list of available shared connections for a provider
+   */
+  static async getAvailableConnections(provider: AccountingProvider): Promise<Array<{
+    connectionId: string;
+    tenantId: string;
+    organizationName: string;
+  }>> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/nango/connections/provider/${INTEGRATION_IDS[provider]}`
+      );
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      return data.connections || [];
+    } catch (error) {
+      console.warn('Could not get available connections:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Use an existing shared connection instead of creating a new one
+   */
+  static async useSharedConnection(
+    provider: AccountingProvider,
+    connectionId: string,
+    tenantId: string,
+    organizationName: string
+  ): Promise<string> {
+    const { connectionId: connIdKey, metadata: metadataKey, tenantId: tenantIdKey } = getStorageKeys(provider);
+
+    // Store connection details locally
+    localStorage.setItem(connIdKey, connectionId);
+    localStorage.setItem(tenantIdKey, tenantId);
+
+    const connection: AccountingConnection = {
+      provider,
+      connectionId,
+      organizationName,
+      connectedAt: new Date().toISOString(),
+      lastSyncAt: null
+    };
+
+    localStorage.setItem(metadataKey, JSON.stringify(connection));
+
+    console.log(`✅ Using shared connection to ${provider}:`, organizationName);
+
+    return connectionId;
+  }
+
+  /**
    * Connect to an accounting provider via OAuth
    * Opens popup window for user to authorize
    *
@@ -206,6 +285,13 @@ export class NangoClient {
       const connectionDetails = await this.fetchConnectionDetails(provider, connectionId);
       if (connectionDetails.tenantId) {
         localStorage.setItem(tenantIdKey, connectionDetails.tenantId);
+
+        // Check if another connection exists for the same tenant
+        // If so, we can reuse that connection's data for shared access
+        const existing = await this.findExistingConnection(provider, connectionDetails.tenantId);
+        if (existing.found && existing.connectionId && existing.connectionId !== connectionId) {
+          console.log(`ℹ️ Found existing connection for same tenant, will use shared access`);
+        }
       }
 
       // Fetch organization details
