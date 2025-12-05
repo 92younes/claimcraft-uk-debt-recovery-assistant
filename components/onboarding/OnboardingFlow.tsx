@@ -213,62 +213,52 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex bg-slate-900/50 backdrop-blur-sm animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        ref={modalRef}
-        tabIndex={-1}
-        className="flex w-full h-full bg-white focus:outline-none"
-      >
-        {/* Sidebar */}
-        <OnboardingSidebar
-          currentStep={currentStep}
-          completedSteps={completedSteps}
-          onCancel={onCancel}
-        />
+    <div className="flex h-screen bg-white">
+      {/* Sidebar */}
+      <OnboardingSidebar
+        currentStep={currentStep}
+        completedSteps={completedSteps}
+        onCancel={onCancel}
+      />
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
-          {/* Content Area */}
-          <div className="flex-1 overflow-y-auto p-8 md:p-12">
-            <div className="max-w-2xl mx-auto">
-              {renderStepContent()}
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-8 md:p-12">
+          <div className="max-w-2xl mx-auto">
+            {renderStepContent()}
+          </div>
+        </div>
+
+        {/* Footer Navigation */}
+        {!disqualified && (
+          <div className="border-t border-slate-200 bg-slate-50 px-8 py-4">
+            <div className="max-w-2xl mx-auto flex justify-between items-center">
+              <button
+                onClick={handleBack}
+                disabled={currentStep === 1}
+                className={`
+                  flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-colors
+                  ${currentStep === 1
+                    ? 'text-slate-300 cursor-not-allowed'
+                    : 'text-slate-700 hover:bg-slate-100'
+                  }
+                `}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Go back
+              </button>
+
+              <button
+                onClick={handleNext}
+                className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+              >
+                {currentStep === 5 ? 'Complete Setup' : 'Continue'}
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
-
-          {/* Footer Navigation */}
-          {!disqualified && (
-            <div className="border-t border-slate-200 bg-slate-50 px-8 py-4">
-              <div className="max-w-2xl mx-auto flex justify-between items-center">
-                <button
-                  onClick={handleBack}
-                  disabled={currentStep === 1}
-                  className={`
-                    flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-colors
-                    ${currentStep === 1
-                      ? 'text-slate-300 cursor-not-allowed'
-                      : 'text-slate-700 hover:bg-slate-100'
-                    }
-                  `}
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Go back
-                </button>
-
-                <button
-                  onClick={handleNext}
-                  className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-                >
-                  {currentStep === 5 ? 'Complete Setup' : 'Continue'}
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

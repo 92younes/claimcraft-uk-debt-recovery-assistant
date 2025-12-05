@@ -36,8 +36,10 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
       button: 'bg-amber-500 hover:bg-amber-600'
     },
     info: {
-      header: 'bg-teal-600',
-      icon: 'bg-teal-100 text-teal-600',
+      header: 'bg-white text-slate-900 border-b border-slate-200',
+      icon: 'bg-teal-50 text-teal-600',
+      title: 'text-slate-900',
+      close: 'text-slate-400 hover:bg-slate-100',
       button: 'bg-teal-600 hover:bg-teal-700'
     }
   };
@@ -53,19 +55,19 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-slide-up border border-slate-200">
         {/* Header */}
-        <div className={`${styles.header} text-white p-6 flex items-center justify-between`}>
+        <div className={`${styles.header} p-6 flex items-center justify-between`}>
           <div className="flex items-center gap-3">
             <div className={`w-12 h-12 ${styles.icon} rounded-xl flex items-center justify-center`}>
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h2 className="text-2xl font-bold font-display">{title}</h2>
+            <h2 className={`text-2xl font-bold font-display ${variant === 'info' ? 'text-slate-900' : 'text-white'}`}>{title}</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
+            className={`p-2 rounded-lg transition-colors duration-200 ${variant === 'info' ? 'hover:bg-slate-100 text-slate-400' : 'hover:bg-white/20 text-white'}`}
             aria-label="Close"
           >
-            <X className="w-5 h-5 text-white" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 

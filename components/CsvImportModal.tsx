@@ -188,9 +188,28 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
             const postcode = idxPostcode !== -1 ? row[idxPostcode] : '';
             const county = postcode ? getCountyFromPostcode(postcode) : '';
 
+            // Calculate overdue status
+            const dueDate = idxDue !== -1 ? row[idxDue] : '';
+            let status = 'draft' as const;
+            if (dueDate) {
+                const today = new Date().toISOString().split('T')[0];
+                if (dueDate < today) {
+                    status = 'overdue';
+                }
+            } else if (idxDate !== -1) {
+                // If no due date, assume 30 day terms
+                const issueDate = new Date(row[idxDate]);
+                const impliedDueDate = new Date(issueDate);
+                impliedDueDate.setDate(issueDate.getDate() + 30);
+                if (impliedDueDate.toISOString().split('T')[0] < new Date().toISOString().split('T')[0]) {
+                    status = 'overdue';
+                }
+            }
+
             const newClaim: ClaimState = {
                 ...INITIAL_STATE,
                 id: Math.random().toString(36).substr(2, 9),
+                status: status,
                 source: 'csv',
                 lastModified: Date.now(),
                 claimant: { ...INITIAL_PARTY, name: 'Your Company (Edit Later)' }, // Placeholder
@@ -262,17 +281,17 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200">
 
-        <div className="bg-gradient-to-r from-teal-600 to-teal-500 p-5 flex justify-between items-center text-white">
+        <div className="bg-white border-b border-slate-200 p-5 flex justify-between items-center text-slate-900">
             <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-xl">
-                    <FileSpreadsheet className="w-6 h-6 text-white" />
+                <div className="bg-teal-50 p-2 rounded-xl">
+                    <FileSpreadsheet className="w-6 h-6 text-teal-600" />
                 </div>
                 <div>
                     <h2 className="font-bold text-xl font-display">Import Claims (CSV)</h2>
-                    <p className="text-xs text-teal-100">Bulk create drafts from spreadsheet</p>
+                    <p className="text-xs text-slate-500">Bulk create drafts from spreadsheet</p>
                 </div>
             </div>
-            <button onClick={onClose} className="text-white/70 hover:text-white"><X className="w-6 h-6" /></button>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-lg transition-colors"><X className="w-6 h-6" /></button>
         </div>
 
         <div className="p-6 md:p-8 overflow-y-auto">

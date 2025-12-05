@@ -14,8 +14,9 @@ import { Nango } from '@nangohq/node';
 import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables (load .env.local first, then .env as fallback)
+dotenv.config({ path: '.env.local' });
+dotenv.config(); // Load .env as fallback for any missing variables
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;

@@ -50,21 +50,21 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200">
         {/* Header - Red warning theme */}
-        <div className="sticky top-0 bg-gradient-to-r from-red-600 to-red-500 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 rounded-t-2xl flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="w-8 h-8 text-white" />
+            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold font-display">Statement of Truth Warning</h2>
-              <p className="text-red-100 text-sm mt-0.5 leading-relaxed">Criminal Offence - Read Carefully</p>
+              <h2 className="text-2xl font-bold font-display text-slate-900">Statement of Truth Warning</h2>
+              <p className="text-red-600 text-sm mt-0.5 leading-relaxed font-semibold">Criminal Offence - Read Carefully</p>
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors duration-200"
           >
-            <X className="w-5 h-5 text-white" />
+            <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
 

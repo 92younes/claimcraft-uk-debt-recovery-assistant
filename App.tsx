@@ -35,16 +35,16 @@ import { validateDateRelationship, validateInterestCalculation, validateUniqueIn
 import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, ChevronUp, ChevronDown, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent } from 'lucide-react';
 
 // New view state
-type ViewState = 'landing' | 'dashboard' | 'wizard' | 'privacy' | 'terms';
+type ViewState = 'landing' | 'onboarding' | 'dashboard' | 'wizard' | 'privacy' | 'terms';
 
 enum Step {
   SOURCE = 1,
   DETAILS = 2,
-  ASSESSMENT = 3,  // DEPRECATED: Not used in flow, kept for enum stability
+  VIABILITY = 3,   // Legal Viability Check (Gatekeeper)
   TIMELINE = 4,    // Moved before Questions so AI has context
   QUESTIONS = 5,   // Chat / Consultation
-  DATA_REVIEW = 6, // NEW: Review AI-extracted data
-  RECOMMENDATION = 7, // Renamed from FINAL: Strategy & Doc Selection
+  DATA_REVIEW = 6, // Review AI-extracted data
+  RECOMMENDATION = 7, // Strategy & Doc Selection
   DRAFT = 8,
   PREVIEW = 9
 }
@@ -53,6 +53,7 @@ enum Step {
 const WIZARD_STEPS = [
   { number: Step.SOURCE, label: 'Data Source', description: 'Import or enter' },
   { number: Step.DETAILS, label: 'Claim Details', description: 'Parties & amounts' },
+  { number: Step.VIABILITY, label: 'Assessment', description: 'Legal check' },
   { number: Step.TIMELINE, label: 'Timeline', description: 'Event history' },
   { number: Step.QUESTIONS, label: 'Consultation', description: 'AI questions' },
   { number: Step.DATA_REVIEW, label: 'Review Data', description: 'Verify details' },
@@ -66,7 +67,6 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('landing');
   const [dashboardClaims, setDashboardClaims] = useState<ClaimState[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false); // Combined disclaimer + eligibility (legacy)
-  const [showOnboardingFlow, setShowOnboardingFlow] = useState(false); // New multi-step onboarding
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -120,6 +120,27 @@ const App: React.FC = () => {
   const [lbaAlreadySent, setLbaAlreadySent] = useState(false); // Manual override: user confirms they already sent an LBA
   const [lbaSentDate, setLbaSentDate] = useState<string>(''); // Date when LBA was sent (for 30-day warning)
   const [chatError, setChatError] = useState<string | null>(null);
+
+  // Helper to reset all wizard-specific state when starting/resuming a claim
+  const resetWizardState = () => {
+    setCanProceed(false);
+    setHasVerifiedInterest(false);
+    setExtractedData(null);
+    setRecommendationReason('');
+    setExtractedFields([]);
+    setChatHistoryExpanded(false);
+    setDateValidationError(null);
+    setDuplicateInvoiceWarning(null);
+    setShowViabilityWarning(false);
+    setViabilityIssues([]);
+    setHasAcknowledgedViability(false);
+    setHasAcknowledgedLbaWarning(false);
+    setLbaAlreadySent(false);
+    setLbaSentDate('');
+    setChatError(null);
+    setIsEditingAnalysis(false);
+    setIsFinalized(false);
+  };
 
   // Initialize Nango on mount
   useEffect(() => {
@@ -314,8 +335,10 @@ const App: React.FC = () => {
 
     if (!profile) {
       // First-time user: show full onboarding flow
-      setShowOnboardingFlow(true);
+      setView('onboarding');
     } else {
+      // Reset all wizard state for fresh claim
+      resetWizardState();
       // Returning user: pre-fill claimant from profile and go to wizard
       const claimantFromProfile = profileToClaimantParty(profile);
       setClaimData({
@@ -325,7 +348,6 @@ const App: React.FC = () => {
       });
       setStep(Step.SOURCE);
       setMaxStepReached(Step.SOURCE);
-      setIsEditingAnalysis(false);
       setView('wizard');
     }
   };
@@ -334,8 +356,9 @@ const App: React.FC = () => {
   const handleOnboardingFlowComplete = async (profile: UserProfile) => {
     await saveUserProfile(profile);
     setUserProfile(profile);
-    setShowOnboardingFlow(false);
 
+    // Reset all wizard state for fresh claim
+    resetWizardState();
     // Start claim with pre-filled claimant
     const claimantFromProfile = profileToClaimantParty(profile);
     setClaimData({
@@ -345,18 +368,17 @@ const App: React.FC = () => {
     });
     setStep(Step.SOURCE);
     setMaxStepReached(Step.SOURCE);
-    setIsEditingAnalysis(false);
     setView('wizard');
   };
 
   // Phase 2: Combined onboarding handlers (replaces disclaimer + eligibility flow) - LEGACY
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
-    // Reset Wizard and Enter
+    // Reset all wizard state for fresh claim
+    resetWizardState();
     setClaimData({ ...INITIAL_STATE, id: Math.random().toString(36).substr(2, 9) });
     setStep(Step.SOURCE);
     setMaxStepReached(Step.SOURCE);
-    setIsEditingAnalysis(false);
     setView('wizard');
   };
 
@@ -366,7 +388,10 @@ const App: React.FC = () => {
   };
 
   const handleResumeClaim = (claim: ClaimState) => {
+    // Reset wizard state to avoid stale data from previous claim
+    resetWizardState();
     setClaimData(claim);
+
     // Smart heuristic to jump to the correct step based on claim completeness
     let resumeStep: Step;
     if (claim.status === 'sent') {
@@ -377,19 +402,23 @@ const App: React.FC = () => {
     } else if (!claim.claimant.name || !claim.defendant.name || !claim.invoice.totalAmount) {
       // Missing essential party/invoice details
       resumeStep = Step.DETAILS;
+    } else if (!claim.assessment) {
+      // Ensure assessment is run before proceeding
+      resumeStep = Step.DETAILS;
     } else if (claim.timeline.length < 1) {
       // Need at least the invoice event
       resumeStep = Step.TIMELINE;
-    } else if (claim.chatHistory.length === 0) {
-      // Must go through AI consultation before document selection
-      // This ensures the AI checks for missing data and recommends the right document
-      resumeStep = Step.TIMELINE;
-    } else if (claim.selectedDocType && claim.chatHistory.length > 0) {
-      // Has completed consultation and selected a document type
-      resumeStep = Step.RECOMMENDATION;
+    } else if (!claim.selectedDocType) {
+       // No document selected yet - check if they are in consultation or need to start
+       if (claim.chatHistory.length > 0) {
+         resumeStep = Step.QUESTIONS;
+       } else {
+         resumeStep = Step.TIMELINE;
+       }
     } else {
-      // In the middle of consultation
-      resumeStep = Step.QUESTIONS;
+      // Has selected document type (from AI or manual skip)
+      // Go to Data Review to verify details before Strategy
+      resumeStep = Step.DATA_REVIEW;
     }
     setStep(resumeStep);
     setMaxStepReached(resumeStep);
@@ -555,6 +584,22 @@ const App: React.FC = () => {
       claimData.claimant.type,
       claimData.defendant.type,
       view
+  ]);
+
+  // Reset viability acknowledgment when key claim data changes
+  // This ensures users must re-acknowledge viability issues if they modify critical fields
+  useEffect(() => {
+    if (hasAcknowledgedViability) {
+      setHasAcknowledgedViability(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    claimData.invoice.totalAmount,
+    claimData.claimant.type,
+    claimData.claimant.name,
+    claimData.defendant.type,
+    claimData.defendant.name,
+    claimData.defendant.solvencyStatus
   ]);
 
   const calculateInterest = (
@@ -743,7 +788,9 @@ const App: React.FC = () => {
             ...processed,
             interest,
             compensation,
-            courtFee
+            courtFee,
+            // If overdue, update status (unless it was already something advanced like 'court')
+            status: (interest.daysOverdue > 0 && ['draft', 'overdue'].includes(processed.status)) ? 'overdue' : processed.status
         };
 
         await saveClaimToStorage(processed);
@@ -818,6 +865,9 @@ const App: React.FC = () => {
 
       setViabilityIssues(issues);
       setShowViabilityWarning(true);
+    } else {
+      // If viable (or no critical issues), proceed to Assessment Report step
+      handleStepChange(Step.VIABILITY);
     }
   };
 
@@ -848,6 +898,12 @@ const App: React.FC = () => {
 
   // Skip AI consultation and go directly to Data Review with manual defaults
   const handleSkipAIConsultation = () => {
+    // Defensive check: require at least one timeline entry
+    if (claimData.timeline.length < 1) {
+      setError('Please add at least one timeline event before proceeding.');
+      return;
+    }
+
     // Set defaults for data that AI would have extracted
     setExtractedData(null);
     setRecommendationReason('Manual entry - AI consultation skipped');
@@ -1173,61 +1229,90 @@ const App: React.FC = () => {
 
   const renderWizardStep = () => {
       switch (step) {
-      case Step.SOURCE:
+      case Step.SOURCE: {
+        // Check if claim already has data (source is set, or has invoice data)
+        const hasExistingData = claimData.source !== 'none' || claimData.invoice.totalAmount > 0 || claimData.defendant.name;
+
         return (
           <div className="max-w-3xl mx-auto animate-fade-in py-8">
              {/* Header */}
              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">New Claim</h2>
-                <p className="text-slate-500">Import your claim data or enter manually.</p>
+                <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">
+                  {hasExistingData ? 'Evidence & Documents' : 'New Claim'}
+                </h2>
+                <p className="text-slate-500">
+                  {hasExistingData
+                    ? 'Upload supporting evidence for your claim.'
+                    : 'Import your claim data or enter manually.'}
+                </p>
              </div>
 
-             {/* Option Cards - matching mockup */}
-             <div className="grid md:grid-cols-2 gap-4 mb-8">
-                <button
-                  onClick={handleOpenAccountingModal}
-                  className={`p-6 rounded-xl transition-all flex flex-col items-center gap-3 border hover:shadow-md hover:border-teal-300 ${
-                    accountingConnection ? 'bg-teal-50 border-teal-200' : 'bg-white border-slate-200'
-                  }`}
-                >
-                    <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
-                        <FileText className="w-5 h-5 text-teal-500"/>
-                    </div>
-                    <div className="text-center">
-                       <span className="block font-semibold text-slate-900">{accountingConnection ? "Import from " + accountingConnection.provider : "Connect Accounting"}</span>
-                       <span className="text-sm text-slate-500 mt-1 block">{accountingConnection ? `${accountingConnection.organizationName}` : "Xero, QuickBooks & more"}</span>
-                    </div>
-                </button>
+             {/* Option Cards - only show if no existing data */}
+             {!hasExistingData && (
+               <div className="grid md:grid-cols-2 gap-4 mb-8">
+                  <button
+                    onClick={handleOpenAccountingModal}
+                    className={`p-6 rounded-xl transition-all flex flex-col items-center gap-3 border hover:shadow-md hover:border-teal-300 ${
+                      accountingConnection ? 'bg-teal-50 border-teal-200' : 'bg-white border-slate-200'
+                    }`}
+                  >
+                      <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-teal-500"/>
+                      </div>
+                      <div className="text-center">
+                         <span className="block font-semibold text-slate-900">{accountingConnection ? "Import from " + accountingConnection.provider : "Connect Accounting"}</span>
+                         <span className="text-sm text-slate-500 mt-1 block">{accountingConnection ? `${accountingConnection.organizationName}` : "Xero, QuickBooks & more"}</span>
+                      </div>
+                  </button>
 
-                <button
-                  onClick={handleManualEntry}
-                  className="p-6 bg-white border border-slate-200 hover:border-teal-300 rounded-xl transition-all flex flex-col items-center gap-3 hover:shadow-md"
-                >
-                    <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-                        <Keyboard className="w-5 h-5 text-slate-600"/>
-                    </div>
-                    <div className="text-center">
-                       <span className="block font-semibold text-slate-900">Manual Entry</span>
-                       <span className="text-sm text-slate-500 mt-1 block">Type in claim details</span>
-                    </div>
-                </button>
-             </div>
+                  <button
+                    onClick={handleManualEntry}
+                    className="p-6 bg-white border border-slate-200 hover:border-teal-300 rounded-xl transition-all flex flex-col items-center gap-3 hover:shadow-md"
+                  >
+                      <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
+                          <Keyboard className="w-5 h-5 text-slate-600"/>
+                      </div>
+                      <div className="text-center">
+                         <span className="block font-semibold text-slate-900">Manual Entry</span>
+                         <span className="text-sm text-slate-500 mt-1 block">Type in claim details</span>
+                      </div>
+                  </button>
+               </div>
+             )}
 
-             {/* Evidence Locker Section - matching mockup */}
+             {/* Evidence Locker Section */}
              <div className="bg-white rounded-xl border border-slate-200 p-6">
                 <h3 className="text-xl font-semibold text-slate-900 text-center mb-2">Evidence Locker</h3>
-                <p className="text-slate-500 text-center text-sm mb-6">Upload your Invoices, Contracts, and Emails (PDFs or Images).<br/>Gemini will analyze the entire bundle.</p>
+                <p className="text-slate-500 text-center text-sm mb-6">
+                  {hasExistingData
+                    ? 'Add contracts, emails, or other documents to strengthen your claim.'
+                    : 'Upload your Invoices, Contracts, and Emails (PDFs or Images). Gemini will analyze the entire bundle.'}
+                </p>
 
                 <EvidenceUpload
                   files={claimData.evidence}
                   onAddFiles={(newFiles) => setClaimData(prev => ({...prev, evidence: [...prev.evidence, ...newFiles]}))}
                   onRemoveFile={(idx) => setClaimData(prev => ({...prev, evidence: prev.evidence.filter((_, i) => i !== idx)}))}
-                  onAnalyze={handleEvidenceAnalysis}
+                  onAnalyze={hasExistingData ? undefined : handleEvidenceAnalysis}
                   isProcessing={isProcessing}
                 />
              </div>
+
+             {/* Continue button when claim already has data */}
+             {hasExistingData && (
+               <div className="mt-6 flex justify-end">
+                 <button
+                   onClick={() => handleStepChange(Step.DETAILS)}
+                   className="bg-teal-600 hover:bg-teal-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-1"
+                 >
+                   Continue to Claim Details
+                   <ArrowRight className="w-5 h-5" />
+                 </button>
+               </div>
+             )}
           </div>
         );
+      }
       
       case Step.DETAILS:
         // Logic: If Source is Manual OR User has clicked "Edit Analysis", show full form.
@@ -1332,21 +1417,11 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Sticky Footer for Actions */}
-                    <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 z-30 flex justify-end pr-8 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                        <button onClick={runAssessment} disabled={!claimData.invoice.totalAmount || !claimData.claimant.name} className="bg-slate-900 text-white px-12 py-4 rounded-xl shadow-lg font-bold text-lg flex items-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1">
+                    <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-dark-800/95 backdrop-blur-md border-t border-dark-700 p-4 z-30 flex justify-end pr-8 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+                        <button onClick={runAssessment} disabled={!claimData.invoice.totalAmount || !claimData.claimant.name || !claimData.defendant.name || !claimData.invoice.dateIssued} className="bg-teal-600 hover:bg-teal-500 text-white px-12 py-4 rounded-xl shadow-lg font-bold text-lg flex items-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1 hover:shadow-teal-500/25 hover:shadow-xl">
                             {isProcessing ? <Loader2 className="animate-spin" /> : <>Assess Claim Strength <ArrowRight className="w-5 h-5" /></>}
                         </button>
                     </div>
-
-                    {/* Inline Assessment Report */}
-                    {claimData.assessment && (
-                        <div className="mt-12 pt-8 border-t-2 border-slate-200">
-                            <AssessmentReport
-                                assessment={claimData.assessment}
-                                onContinue={() => handleStepChange(Step.TIMELINE)}
-                            />
-                        </div>
-                    )}
                 </div>
             );
         } else {
@@ -1374,33 +1449,44 @@ const App: React.FC = () => {
                             <button onClick={() => setIsEditingAnalysis(true)} className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"><Pencil className="w-3 h-3" /> Edit Details</button>
                         </div>
                     </div>
-                    <div className="flex justify-end"><button onClick={runAssessment} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-xl font-bold shadow-lg flex items-center gap-3 transition-all transform hover:-translate-y-0.5">
+                    <div className="flex justify-end"><button onClick={runAssessment} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 rounded-xl font-bold shadow-lg flex items-center gap-3 transition-all transform hover:-translate-y-0.5">
                         {isProcessing ? <Loader2 className="animate-spin" /> : <>Run Legal Viability Check <ArrowRight className="w-5 h-5"/></>}
                     </button></div>
-
-                    {/* Inline Assessment Report */}
-                    {claimData.assessment && (
-                        <div className="mt-12 pt-8 border-t-2 border-slate-200">
-                            <AssessmentReport
-                                assessment={claimData.assessment}
-                                onContinue={() => handleStepChange(Step.TIMELINE)}
-                            />
-                        </div>
-                    )}
                 </div>
             );
         }
+
+      case Step.VIABILITY:
+        return (
+            <div className="py-10 pb-32">
+                <div className="max-w-4xl mx-auto mb-6">
+                    <button
+                        onClick={() => handleStepChange(Step.DETAILS)}
+                        className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to Details
+                    </button>
+                </div>
+                {claimData.assessment && (
+                    <AssessmentReport
+                        assessment={claimData.assessment}
+                        onContinue={() => handleStepChange(Step.TIMELINE)}
+                    />
+                )}
+            </div>
+        );
 
       case Step.TIMELINE:
         return (
             <div className="space-y-8 py-10 pb-32">
                 <div className="max-w-4xl mx-auto">
                     <button
-                        onClick={() => handleStepChange(Step.DETAILS)}
+                        onClick={() => handleStepChange(Step.VIABILITY)}
                         className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
                     >
                         <ArrowLeft className="w-4 h-4" />
-                        Back to Details
+                        Back to Assessment
                     </button>
                 </div>
                 <TimelineBuilder
@@ -1503,12 +1589,12 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Sticky Footer for Actions */}
-                <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 z-30 flex justify-end pr-8 gap-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-dark-800/95 backdrop-blur-md border-t border-dark-700 p-4 z-30 flex justify-end pr-8 gap-4 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
                     {/* Optional: Skip AI for power users */}
                     <button
                         onClick={handleSkipAIConsultation}
                         disabled={claimData.timeline.length < 1}
-                        className="text-slate-500 hover:text-slate-700 text-sm font-medium flex items-center justify-center gap-2 py-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-slate-400 hover:text-white text-sm font-medium flex items-center justify-center gap-2 py-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Skip AI Consultation
                         <ArrowRight className="w-3 h-3" />
@@ -1516,7 +1602,7 @@ const App: React.FC = () => {
                     <button
                         onClick={() => handleStartChat()}
                         disabled={claimData.timeline.length < 1}
-                        className="bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 font-medium shadow-lg transform hover:-translate-y-1"
+                        className="bg-teal-600 hover:bg-teal-500 text-white px-8 py-3 rounded-xl disabled:bg-slate-600 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 font-medium shadow-lg transform hover:-translate-y-1 hover:shadow-teal-500/25 hover:shadow-xl"
                     >
                         <MessageSquareText className="w-5 h-5"/>
                         Start AI Case Consultation
@@ -1684,10 +1770,10 @@ const App: React.FC = () => {
             )}
 
             {/* Sticky Footer for Actions */}
-            <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 z-30 flex justify-end pr-8 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+            <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-dark-800/95 backdrop-blur-md border-t border-dark-700 p-4 z-30 flex justify-end pr-8 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
               <button
                 onClick={() => handleStepChange(Step.RECOMMENDATION)}
-                className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-1"
+                className="bg-teal-600 hover:bg-teal-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-1 hover:shadow-teal-500/25 hover:shadow-xl"
               >
                 Continue to Document Selection
                 <ArrowRight className="w-5 h-5" />
@@ -2203,7 +2289,7 @@ const App: React.FC = () => {
                 <button
                   onClick={handleDraftClaim}
                   disabled={isProcessing || !claimData.selectedDocType || !hasVerifiedInterest || (claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && !hasAcknowledgedLbaWarning)}
-                  className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-12 py-4 rounded-xl shadow-lg hover:shadow-2xl font-bold text-lg flex items-center gap-3 transition-all transform hover:-translate-y-1 disabled:transform-none"
+                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-12 py-4 rounded-xl shadow-lg hover:shadow-2xl font-bold text-lg flex items-center gap-3 transition-all transform hover:-translate-y-1 disabled:transform-none"
                 >
                     {isProcessing ? <Loader2 className="animate-spin"/> : <><Wand2 className="w-5 h-5" /> Generate Document</>}
                 </button>
@@ -2285,7 +2371,7 @@ const App: React.FC = () => {
                             onChange={(e) => setClaimData(prev => prev.generated ? ({...prev, generated: {...prev.generated!, content: e.target.value}}) : prev)}
                         />
                     )}
-                    <div className="flex justify-between mt-6 pt-6 border-t border-slate-100"><button onClick={() => handleStepChange(Step.RECOMMENDATION)} className="text-slate-500 font-medium hover:text-slate-800 transition-colors flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back to Selection</button><button onClick={handlePrePreview} disabled={isProcessing} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all">{isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <>Finalize & Preview <ArrowRight className="w-5 h-5" /></>}</button></div>
+                    <div className="flex justify-between mt-6 pt-6 border-t border-slate-100"><button onClick={() => handleStepChange(Step.RECOMMENDATION)} className="text-slate-500 font-medium hover:text-slate-800 transition-colors flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back to Selection</button><button onClick={handlePrePreview} disabled={isProcessing} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all">{isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <>Finalize & Preview <ArrowRight className="w-5 h-5" /></>}</button></div>
                  </div>
             </div>
         );
@@ -2313,26 +2399,36 @@ const App: React.FC = () => {
     return <TermsOfService onBack={() => setView('landing')} />;
   }
 
+  if (view === 'onboarding') {
+    return (
+      <OnboardingFlow
+        onComplete={handleOnboardingFlowComplete}
+        onCancel={() => setView('landing')}
+        existingProfile={userProfile}
+      />
+    );
+  }
+
   if (view === 'landing') {
     return (
-      <div className="min-h-screen bg-slate-950 text-white overflow-x-hidden selection:bg-violet-500/30 selection:text-violet-200">
+      <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden selection:bg-teal-100 selection:text-teal-900">
          {/* Navigation */}
          <div className="absolute top-0 left-0 right-0 z-50 py-6">
             <div className="container mx-auto px-6 flex items-center justify-between">
                 <div className="flex items-center gap-2 font-display font-bold text-xl tracking-tight">
-                    <div className="w-8 h-8 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/20">
+                    <div className="w-8 h-8 bg-gradient-to-tr from-teal-600 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-teal-500/20">
                         <Scale className="w-5 h-5 text-white" />
                     </div>
-                    <span>ClaimCraft</span>
+                    <span className="text-slate-900">ClaimCraft</span>
                 </div>
-                <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
-                    <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-white transition-colors">Features</button>
-                    <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-white transition-colors">How it Works</button>
-                    <button onClick={() => setView('terms')} className="hover:text-white transition-colors">Legal</button>
+                <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+                    <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-teal-600 transition-colors">Features</button>
+                    <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-teal-600 transition-colors">How it Works</button>
+                    <button onClick={() => setView('terms')} className="hover:text-teal-600 transition-colors">Legal</button>
                 </div>
                 <button
                     onClick={handleEnterApp}
-                    className="px-5 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all text-sm font-semibold"
+                    className="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white transition-all text-sm font-semibold shadow-sm"
                 >
                     Sign In
                 </button>
@@ -2340,75 +2436,74 @@ const App: React.FC = () => {
          </div>
 
          {/* Hero Section */}
-         <div className="relative pt-40 pb-20 md:pt-48 md:pb-32 overflow-hidden">
+         <div className="relative pt-40 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-slate-50">
             {/* Abstract Background Elements */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[800px] bg-violet-600/20 blur-[130px] rounded-full pointer-events-none animate-pulse-slow"></div>
-            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none"></div>
-            <div className="absolute top-1/2 left-0 w-[600px] h-[600px] bg-blue-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[800px] bg-teal-100/40 blur-[130px] rounded-full pointer-events-none"></div>
+            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-blue-100/40 blur-[120px] rounded-full pointer-events-none"></div>
             
             <div className="container mx-auto px-4 relative z-10 flex flex-col items-center text-center">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 border border-violet-500/20 backdrop-blur-md text-violet-300 text-xs font-bold uppercase tracking-widest mb-8 hover:bg-violet-500/20 transition-all cursor-default shadow-violet-sm hover:shadow-violet-md animate-fade-in">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-teal-100 text-teal-700 text-xs font-bold uppercase tracking-widest mb-8 hover:border-teal-200 transition-all cursor-default shadow-sm animate-fade-in">
                   <Sparkles className="w-3.5 h-3.5" /> AI-Powered Debt Recovery
                 </div>
                 
-                <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-bold tracking-tight mb-8 leading-[1.1] md:leading-[1.1] animate-fade-in-up animation-delay-100">
+                <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-bold tracking-tight mb-8 leading-[1.1] md:leading-[1.1] text-slate-900 animate-fade-in-up animation-delay-100">
                   Recover Unpaid Debts <br/>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-indigo-400 to-blue-400">Without the Lawyers</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">Without the Lawyers</span>
                 </h1>
                 
-                <p className="text-lg md:text-xl text-slate-400 max-w-2xl mb-12 font-light leading-relaxed animate-fade-in-up animation-delay-200">
-                  Generate court-ready <strong className="text-slate-200 font-medium">Letters Before Action</strong> and <strong className="text-slate-200 font-medium">Form N1 claims</strong> in minutes. 
+                <p className="text-lg md:text-xl text-slate-600 max-w-2xl mb-12 font-light leading-relaxed animate-fade-in-up animation-delay-200">
+                  Generate court-ready <strong className="text-slate-900 font-medium">Letters Before Action</strong> and <strong className="text-slate-900 font-medium">Form N1 claims</strong> in minutes. 
                   Our AI handles the legal complexity, statutory interest, and compliance checks for you.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-lg z-20 animate-fade-in-up animation-delay-300">
                    <button
                       onClick={handleEnterApp}
-                      className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-violet-500 hover:to-indigo-500 transition-all transform hover:-translate-y-1 hover:shadow-violet-lg shadow-violet-md flex items-center justify-center gap-2 group"
+                      className="w-full sm:w-auto bg-teal-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-teal-700 transition-all transform hover:-translate-y-1 shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2 group"
                    >
                       Start Your Claim Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                    </button>
                    <button
                       onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
-                      className="w-full sm:w-auto bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 text-slate-200 px-8 py-4 rounded-xl font-semibold text-lg transition-all backdrop-blur-sm"
+                      className="w-full sm:w-auto bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold text-lg transition-all shadow-sm hover:shadow-md"
                    >
                       See How It Works
                    </button>
                 </div>
                 
                 {/* Social Proof Mini */}
-                <div className="mt-12 flex items-center gap-8 opacity-80 animate-fade-in-up animation-delay-400">
+                <div className="mt-12 flex items-center gap-8 animate-fade-in-up animation-delay-400">
                     <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <CheckCircle className="w-4 h-4 text-teal-500" /> No Win, No Fee (Optional)
+                        <CheckCircle className="w-4 h-4 text-teal-600" /> No Win, No Fee (Optional)
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <CheckCircle className="w-4 h-4 text-teal-500" /> UK GDPR Compliant
+                        <CheckCircle className="w-4 h-4 text-teal-600" /> UK GDPR Compliant
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <CheckCircle className="w-4 h-4 text-teal-500" /> HMCTS Approved Formats
+                        <CheckCircle className="w-4 h-4 text-teal-600" /> HMCTS Approved Formats
                     </div>
                 </div>
             </div>
          </div>
 
          {/* Trust/Stats Banner */}
-         <div className="border-y border-slate-800 bg-slate-900/50 backdrop-blur-sm">
+         <div className="border-y border-slate-200 bg-white">
             <div className="container mx-auto px-4 py-12">
                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                   <div className="text-center">
-                     <p className="text-3xl md:text-4xl font-bold text-white mb-1">£2.4M+</p>
+                     <p className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">£2.4M+</p>
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Recovered</p>
                   </div>
                   <div className="text-center">
-                     <p className="text-3xl md:text-4xl font-bold text-white mb-1">450+</p>
+                     <p className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">450+</p>
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Active Claims</p>
                   </div>
                   <div className="text-center">
-                     <p className="text-3xl md:text-4xl font-bold text-white mb-1">14 Days</p>
+                     <p className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">14 Days</p>
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Avg. Settlement</p>
                   </div>
                   <div className="text-center">
-                     <p className="text-3xl md:text-4xl font-bold text-white mb-1">£0</p>
+                     <p className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">£0</p>
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Upfront Legal Fees</p>
                   </div>
                </div>
@@ -2416,64 +2511,64 @@ const App: React.FC = () => {
          </div>
 
          {/* Features Grid */}
-         <div id="features" className="py-24 bg-slate-950 relative">
+         <div id="features" className="py-24 bg-slate-50 relative">
             <div className="container mx-auto px-4">
                <div className="text-center max-w-3xl mx-auto mb-16">
-                  <h2 className="text-3xl md:text-4xl font-display font-bold mb-6">Everything you need to get paid</h2>
-                  <p className="text-slate-400 text-lg">We've codified the entire UK small claims process into a simple, intelligent workflow.</p>
+                  <h2 className="text-3xl md:text-4xl font-display font-bold mb-6 text-slate-900">Everything you need to get paid</h2>
+                  <p className="text-slate-600 text-lg">We've codified the entire UK small claims process into a simple, intelligent workflow.</p>
                </div>
 
                <div className="grid md:grid-cols-3 gap-6">
                   {[
                      { 
                         icon: Wand2, 
-                        color: "text-violet-400", 
-                        bg: "bg-violet-500/10",
+                        color: "text-teal-600", 
+                        bg: "bg-teal-50",
                         title: "AI Legal Drafting",
                         desc: "Claude AI drafts professional Letters Before Action and N1 forms tailored to your specific case details."
                      },
                      { 
                         icon: PoundSterling, 
-                        color: "text-teal-400", 
-                        bg: "bg-teal-500/10",
+                        color: "text-blue-600", 
+                        bg: "bg-blue-50",
                         title: "Smart Calculations",
                         desc: "Automatically calculate statutory interest (8% + Base), compensation fees (£40-£100), and court fees."
                      },
                      { 
                         icon: ShieldCheck, 
-                        color: "text-blue-400", 
-                        bg: "bg-blue-500/10",
+                        color: "text-teal-600", 
+                        bg: "bg-teal-50",
                         title: "Protocol Compliance",
                         desc: "Built-in checks ensure you follow the Pre-Action Protocol, protecting your right to claim costs."
                      },
                      { 
                         icon: Zap, 
-                        color: "text-amber-400", 
-                        bg: "bg-amber-500/10",
+                        color: "text-amber-600", 
+                        bg: "bg-amber-50",
                         title: "Instant Integration",
                         desc: "Connect Xero or upload CSVs to import invoices instantly. No manual data entry required."
                      },
                      { 
                         icon: Calendar, 
-                        color: "text-rose-400", 
-                        bg: "bg-rose-500/10",
+                        color: "text-red-600", 
+                        bg: "bg-red-50",
                         title: "Evidence Timeline",
                         desc: "Build a rock-solid audit trail of every email, call, and invoice to prove your case in court."
                      },
                      { 
                         icon: MessageSquareText, 
-                        color: "text-cyan-400", 
-                        bg: "bg-cyan-500/10",
+                        color: "text-blue-600", 
+                        bg: "bg-blue-50",
                         title: "AI Consultation",
                         desc: "Not sure about next steps? Chat with our legal AI to get instant guidance on strategy."
                      }
                   ].map((feature, i) => (
-                     <div key={i} className="group p-8 rounded-2xl bg-slate-900 border border-slate-800 hover:border-violet-500/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+                     <div key={i} className="group p-8 rounded-2xl bg-white border border-slate-200 hover:border-teal-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
                         <div className={`w-12 h-12 rounded-xl ${feature.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
                            <feature.icon className={`w-6 h-6 ${feature.color}`} />
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-3">{feature.title}</h3>
-                        <p className="text-slate-400 leading-relaxed text-sm">{feature.desc}</p>
+                        <h3 className="text-xl font-bold text-slate-900 mb-3">{feature.title}</h3>
+                        <p className="text-slate-500 leading-relaxed text-sm">{feature.desc}</p>
                      </div>
                   ))}
                </div>
@@ -2481,11 +2576,11 @@ const App: React.FC = () => {
          </div>
          
          {/* How It Works */}
-         <div id="how-it-works" className="py-24 bg-slate-900/50">
+         <div id="how-it-works" className="py-24 bg-white">
             <div className="container mx-auto px-4">
                 <div className="text-center mb-16">
-                    <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">How it works</h2>
-                    <p className="text-slate-400 text-lg">From unpaid invoice to court claim in 4 simple steps.</p>
+                    <h2 className="text-3xl md:text-4xl font-display font-bold mb-4 text-slate-900">How it works</h2>
+                    <p className="text-slate-600 text-lg">From unpaid invoice to court claim in 4 simple steps.</p>
                 </div>
                 
                 <div className="grid md:grid-cols-4 gap-8">
@@ -2495,10 +2590,10 @@ const App: React.FC = () => {
                         { step: "03", title: "Generate", desc: "Create compliant Letters Before Action or N1 Forms." },
                         { step: "04", title: "Recover", desc: "Send to debtor or file with HMCTS to get paid." }
                     ].map((item, i) => (
-                        <div key={i} className="relative">
-                            <div className="text-6xl font-display font-bold text-slate-800 mb-4 select-none">{item.step}</div>
-                            <h3 className="text-xl font-bold text-white mb-2 relative z-10">{item.title}</h3>
-                            <p className="text-slate-400 text-sm relative z-10">{item.desc}</p>
+                        <div key={i} className="relative p-6 rounded-2xl bg-slate-50 border border-slate-100">
+                            <div className="text-5xl font-display font-bold text-teal-100 mb-4 select-none absolute top-4 right-4">{item.step}</div>
+                            <h3 className="text-xl font-bold text-slate-900 mb-2 relative z-10">{item.title}</h3>
+                            <p className="text-slate-500 text-sm relative z-10">{item.desc}</p>
                         </div>
                     ))}
                 </div>
@@ -2506,16 +2601,16 @@ const App: React.FC = () => {
          </div>
 
          {/* CTA Section */}
-         <div className="py-24 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-900/20 to-slate-950 z-0"></div>
+         <div className="py-24 relative overflow-hidden bg-slate-900">
+            <div className="absolute inset-0 bg-gradient-to-br from-teal-900/20 to-slate-900 z-0"></div>
             <div className="container mx-auto px-4 relative z-10 text-center">
-               <h2 className="text-4xl md:text-5xl font-display font-bold mb-8">Stop chasing. Start recovering.</h2>
+               <h2 className="text-4xl md:text-5xl font-display font-bold mb-8 text-white">Stop chasing. Start recovering.</h2>
                <p className="text-slate-300 text-lg mb-10 max-w-2xl mx-auto">
                   Join hundreds of UK businesses using ClaimCraft to recover unpaid invoices faster and cheaper than solicitors.
                </p>
                <button
                   onClick={handleEnterApp}
-                  className="bg-white text-slate-900 px-10 py-4 rounded-xl font-bold text-lg hover:bg-slate-200 transition-all transform hover:-translate-y-1 shadow-lg inline-flex items-center gap-2"
+                  className="bg-white text-slate-900 px-10 py-4 rounded-xl font-bold text-lg hover:bg-teal-50 transition-all transform hover:-translate-y-1 shadow-lg inline-flex items-center gap-2"
                >
                   Create Your First Claim <ArrowRight className="w-5 h-5" />
                </button>
@@ -2523,12 +2618,12 @@ const App: React.FC = () => {
          </div>
          
          {/* Footer */}
-         <footer className="border-t border-slate-800 py-12 bg-slate-950 text-slate-500 text-sm">
+         <footer className="border-t border-slate-200 py-12 bg-white text-slate-500 text-sm">
             <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div>&copy; 2025 ClaimCraft UK. All rights reserved.</div>
                 <div className="flex gap-6">
-                    <button onClick={() => setView('privacy')} className="hover:text-white transition-colors">Privacy Policy</button>
-                    <button onClick={() => setView('terms')} className="hover:text-white transition-colors">Terms of Service</button>
+                    <button onClick={() => setView('privacy')} className="hover:text-teal-600 transition-colors">Privacy Policy</button>
+                    <button onClick={() => setView('terms')} className="hover:text-teal-600 transition-colors">Terms of Service</button>
                 </div>
             </div>
          </footer>
@@ -2625,16 +2720,8 @@ const App: React.FC = () => {
                 {renderWizardStep()}
               </div>
             )}
-         </div>
+          </div>
       </main>
-      {/* New Multi-Step Onboarding Flow */}
-      {showOnboardingFlow && (
-        <OnboardingFlow
-          onComplete={handleOnboardingFlowComplete}
-          onCancel={() => setShowOnboardingFlow(false)}
-          existingProfile={userProfile}
-        />
-      )}
 
       {/* Legacy Onboarding Modal (Disclaimer + Eligibility) - kept for backwards compatibility */}
       <OnboardingModal

@@ -264,7 +264,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
              Your Letter Before Action has been dispatched via Registered Post and Email. 
              Tracking number: <span className="font-mono font-bold text-slate-800">GB-2938-4421</span>
           </p>
-          <button onClick={onBack} className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold">
+          <button onClick={onBack} className="bg-teal-600 text-white px-8 py-3 rounded-xl font-bold">
              Return to Dashboard
           </button>
        </div>
@@ -351,7 +351,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                         onConfirm();
                       }
                     }}
-                    className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all duration-200 transform hover:-translate-y-0.5 ${review.isPass ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+                    className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all duration-200 transform hover:-translate-y-0.5 ${review.isPass ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
                  >
                     <CheckCircle className="w-4 h-4" /> {review.isPass ? "Approve & Finalize" : "Override & Approve"}
                  </button>
@@ -373,19 +373,19 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
              <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm overflow-x-auto max-w-full">
                 <button 
                   onClick={() => setViewMode('letter')}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'letter' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'letter' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Letter
                 </button>
                 <button 
                   onClick={() => setViewMode('info-sheet')}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Info Sheet
                 </button>
                 <button 
                   onClick={() => setViewMode('reply-form')}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Reply Form
                 </button>
@@ -955,7 +955,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                   onUpdateContent(editedParticulars);
                   setShowParticularsModal(false);
                 }}
-                className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold transition-colors flex items-center gap-2"
+                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold transition-colors flex items-center gap-2"
               >
                 <CheckCircle className="w-4 h-4" />
                 Save Changes

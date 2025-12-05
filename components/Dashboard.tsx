@@ -30,6 +30,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [claimToDelete, setClaimToDelete] = useState<{ id: string; name: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest + curr.compensation, 0);
   const activeClaims = claims.filter(c => c.status !== 'paid').length;
 
@@ -61,6 +64,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     return filtered;
   }, [claims, statusFilter, searchQuery]);
+
+  const paginatedClaims = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredClaims.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredClaims, currentPage]);
+
+  const totalPages = Math.ceil(filteredClaims.length / itemsPerPage);
 
   // Handle delete confirmation
   const handleDeleteClick = (id: string, name: string) => {
@@ -240,7 +250,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 Clear filters
               </button>
             </div>
-          ) : filteredClaims.map((claim, idx) => {
+          ) : paginatedClaims.map((claim, idx) => {
             const stageBadgeColor = getStatusBadgeColor(claim.status);
 
             return (
@@ -248,7 +258,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               key={claim.id}
               onClick={() => onResume(claim)}
               className={`group grid grid-cols-12 gap-4 px-6 py-4 items-center cursor-pointer transition-all duration-200 hover:bg-slate-50 ${
-                idx !== filteredClaims.length - 1 ? 'border-b border-slate-100' : ''
+                idx !== paginatedClaims.length - 1 ? 'border-b border-slate-100' : ''
               }`}
             >
                {/* Debtor */}
@@ -303,6 +313,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {filteredClaims.length > itemsPerPage && (
+        <div className="flex justify-center items-center gap-4 mt-6">
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-slate-600">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Next
+          </button>
         </div>
       )}
 

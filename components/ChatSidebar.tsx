@@ -22,20 +22,13 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({ progress }) => {
 
   // Calculate completion based on items
   const completedCount = items.filter(item => progress[item.key]).length;
-  const totalCount = items.length;
-  const percentage = Math.round((completedCount / totalCount) * 100);
+  // const totalCount = items.length;
+  // const percentage = Math.round((completedCount / totalCount) * 100);
 
   return (
     <div className="bg-slate-50 border-l border-slate-200 w-72 p-6 hidden lg:block overflow-y-auto h-full flex-shrink-0">
       <div className="mb-6">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Case Readiness</h3>
-        <div className="flex items-end gap-2 mb-2">
-            <span className="text-3xl font-bold text-teal-600">{percentage}%</span>
-            <span className="text-sm text-slate-500 mb-1">complete</span>
-        </div>
-        <div className="w-full bg-slate-200 rounded-full h-1.5">
-            <div className="bg-teal-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }}></div>
-        </div>
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Required Information</h3>
       </div>
 
       <div className="space-y-4">

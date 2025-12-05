@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Download, CheckSquare, Square, Loader, AlertCircle, Filter, CheckCircle, AlertTriangle } from 'lucide-react';
-import { XeroPuller } from '../services/xeroPuller';
+import { XeroPuller, parseXeroDate } from '../services/xeroPuller';
 import { ClaimState, Party, XeroInvoice } from '../types';
 
 interface XeroInvoiceImporterProps {
@@ -309,7 +309,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
                         <div className="min-w-[120px]">
                           <p className="font-mono font-bold text-slate-900">{row.invoice.InvoiceNumber}</p>
                           <p className="text-xs text-slate-500">
-                            Due: {new Date(row.invoice.DueDate).toLocaleDateString('en-GB')}
+                            Due: {parseXeroDate(row.invoice.DueDate).toLocaleDateString('en-GB')}
                           </p>
                         </div>
 

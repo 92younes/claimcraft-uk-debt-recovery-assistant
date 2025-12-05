@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType, ClaimStrength, ExtractedClaimData, TimelineEvent, ChatResponse } from "../types";
 import { formatCurrency, formatTotalDebt, formatGrandTotal } from "../utils/calculations";
+import { getCountyFromPostcode } from "../constants";
 
 const getClient = () => {
   const apiKey = import.meta.env.VITE_API_KEY;
@@ -582,9 +583,20 @@ export const extractDataFromChat = async (
 
     const recommendedDoc = docTypeMap[result.recommendedDocument] || DocumentType.LBA;
 
+    // Enhance address data with lookup logic if county is missing
+    const enhancedClaimant = { ...result.claimant };
+    if (!enhancedClaimant.county && enhancedClaimant.postcode) {
+      enhancedClaimant.county = getCountyFromPostcode(enhancedClaimant.postcode);
+    }
+
+    const enhancedDefendant = { ...result.defendant };
+    if (!enhancedDefendant.county && enhancedDefendant.postcode) {
+      enhancedDefendant.county = getCountyFromPostcode(enhancedDefendant.postcode);
+    }
+
     return {
-      claimant: result.claimant || {},
-      defendant: result.defendant || {},
+      claimant: enhancedClaimant || {},
+      defendant: enhancedDefendant || {},
       invoice: result.invoice || {},
       timeline: result.timeline || [],
       recommendedDocument: recommendedDoc,

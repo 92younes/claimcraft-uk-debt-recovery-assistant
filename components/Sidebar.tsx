@@ -11,7 +11,8 @@ import {
   ShieldCheck,
   FolderOpen,
   X,
-  ChevronRight
+  ChevronRight,
+  FileText
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -28,11 +29,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
   const steps = [
     { id: 1, displayNum: 1, label: 'Evidence Source', sublabel: 'Import your data', icon: Upload },
     { id: 2, displayNum: 2, label: 'Details & Analysis', sublabel: 'Review claim details', icon: SearchCheck },
-    { id: 4, displayNum: 3, label: 'Legal Viability', sublabel: 'Check requirements', icon: Scale },
-    { id: 5, displayNum: 4, label: 'Timeline', sublabel: 'Build chronology', icon: CalendarClock },
-    { id: 6, displayNum: 5, label: 'Clarification', sublabel: 'AI consultation', icon: MessageSquareText },
-    { id: 7, displayNum: 6, label: 'Final Review', sublabel: 'Verify all data', icon: CheckCircle2 },
-    { id: 8, displayNum: 7, label: 'Drafting', sublabel: 'Generate documents', icon: FileSignature },
+    { id: 3, displayNum: 3, label: 'Legal Viability', sublabel: 'Check requirements', icon: Scale },
+    { id: 4, displayNum: 4, label: 'Timeline', sublabel: 'Build chronology', icon: CalendarClock },
+    { id: 5, displayNum: 5, label: 'Clarification', sublabel: 'AI consultation', icon: MessageSquareText },
+    { id: 6, displayNum: 6, label: 'Data Review', sublabel: 'Verify details', icon: FileText },
+    { id: 7, displayNum: 7, label: 'Strategy', sublabel: 'Select approach', icon: ShieldCheck },
+    { id: 8, displayNum: 8, label: 'Drafting', sublabel: 'Generate documents', icon: FileSignature },
+    { id: 9, displayNum: 9, label: 'Final Review', sublabel: 'Ready to send', icon: CheckCircle2 },
   ];
 
   return (

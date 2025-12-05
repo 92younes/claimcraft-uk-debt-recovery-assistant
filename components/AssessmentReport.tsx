@@ -143,7 +143,7 @@ export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, 
           onClick={onContinue}
           className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 rounded-xl shadow-sm font-semibold transition-all duration-200 flex items-center gap-2 btn-primary hover:shadow-teal-md hover:-translate-y-0.5"
         >
-          Start Clarification Chat <MessageSquareText className="w-4 h-4" />
+          Proceed to Timeline <Clock className="w-4 h-4" />
         </button>
       </div>
     </div>

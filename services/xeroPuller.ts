@@ -24,7 +24,7 @@ import {
  * - Microsoft JSON date: /Date(1757548800000+0000)/
  * - ISO string: 2025-09-11T00:00:00
  */
-function parseXeroDate(dateString: string): Date {
+export function parseXeroDate(dateString: string): Date {
   if (!dateString) {
     return new Date();
   }
@@ -284,9 +284,12 @@ export class XeroPuller {
     // Generate unique claim ID
     const claimId = `xero_${invoice.InvoiceID.substring(0, 8)}_${Date.now()}`;
 
+    // Determine initial status based on overdue days
+    const status: ClaimStatus = interest.daysOverdue > 0 ? 'overdue' : 'draft';
+
     return {
       id: claimId,
-      status: 'draft',
+      status,
       lastModified: Date.now(),
       source: 'xero',
       claimant,
