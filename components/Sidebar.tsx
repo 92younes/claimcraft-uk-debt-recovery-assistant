@@ -12,19 +12,27 @@ import {
   FolderOpen,
   X,
   ChevronRight,
-  FileText
+  FileText,
+  Calendar,
+  Settings
 } from 'lucide-react';
+import { UserProfile } from '../types';
 
 interface SidebarProps {
-  view: 'landing' | 'dashboard' | 'wizard';
+  view: 'landing' | 'dashboard' | 'wizard' | 'conversation' | 'calendar' | 'settings';
   currentStep: number;
   maxStepReached?: number;
   onDashboardClick: () => void;
+  onCalendarClick?: () => void;
+  onSettingsClick?: () => void;
+  onLegalClick?: () => void;
   onCloseMobile?: () => void;
   onStepSelect?: (step: number) => void;
+  upcomingDeadlinesCount?: number;
+  userProfile?: UserProfile | null;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReached, onDashboardClick, onCloseMobile, onStepSelect }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReached, onDashboardClick, onCalendarClick, onSettingsClick, onLegalClick, onCloseMobile, onStepSelect, upcomingDeadlinesCount, userProfile }) => {
 
   const steps = [
     { id: 1, displayNum: 1, label: 'Evidence Source', sublabel: 'Import your data', icon: Upload },
@@ -53,7 +61,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
             </div>
           </div>
           {onCloseMobile && (
-            <button onClick={onCloseMobile} className="md:hidden text-slate-400 hover:text-slate-900 transition-colors duration-200 p-2 hover:bg-slate-100 rounded-lg">
+            <button
+              onClick={onCloseMobile}
+              className="md:hidden text-slate-400 hover:text-slate-900 transition-colors duration-200 p-2 hover:bg-slate-100 rounded-lg"
+              aria-label="Close navigation menu"
+            >
               <X className="w-5 h-5" />
             </button>
           )}
@@ -62,30 +74,91 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
 
       {/* User Profile */}
       <div className="px-5 pb-5 flex-shrink-0">
-         <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+         <div
+           className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
+           onClick={() => { onSettingsClick?.(); onCloseMobile?.(); }}
+         >
             <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">
-               G
+               {userProfile?.businessName?.charAt(0).toUpperCase() || 'G'}
             </div>
             <div className="overflow-hidden flex-1">
-               <p className="text-sm font-medium text-slate-900">Guest User</p>
-               <p className="text-xs text-slate-400">Local Session</p>
+               <p className="text-sm font-medium text-slate-900 truncate">{userProfile?.businessName || 'Guest User'}</p>
+               <p className="text-xs text-slate-400">{userProfile ? 'Click to edit profile' : 'Local Session'}</p>
             </div>
+            {userProfile && <Settings className="w-4 h-4 text-slate-400" />}
          </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-4 overflow-y-auto">
-         {view === 'dashboard' ? (
+         {view === 'dashboard' || view === 'calendar' ? (
              <>
                 <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-3 tracking-wider">Main Menu</p>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-teal-50 text-teal-700 border-l-4 border-teal-500 cursor-pointer">
-                    <LayoutDashboard className="w-4 h-4 text-teal-500" />
-                    <span className="text-sm font-semibold">Dashboard</span>
+                <div
+                  onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                    view === 'dashboard'
+                      ? 'bg-teal-50 text-teal-700 border-l-4 border-teal-500'
+                      : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
+                  }`}
+                >
+                    <LayoutDashboard className={`w-4 h-4 ${view === 'dashboard' ? 'text-teal-500' : ''}`} />
+                    <span className={`text-sm ${view === 'dashboard' ? 'font-semibold' : 'font-medium'}`}>Dashboard</span>
                 </div>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 cursor-pointer transition-all duration-200 mt-1">
-                    <FolderOpen className="w-4 h-4" />
-                    <span className="text-sm font-medium">Archived Claims</span>
+                <div
+                  onClick={() => { onCalendarClick?.(); onCloseMobile?.(); }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 mt-1 ${
+                    view === 'calendar'
+                      ? 'bg-teal-50 text-teal-700 border-l-4 border-teal-500'
+                      : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
+                  }`}
+                >
+                    <Calendar className={`w-4 h-4 ${view === 'calendar' ? 'text-teal-500' : ''}`} />
+                    <span className={`text-sm ${view === 'calendar' ? 'font-semibold' : 'font-medium'}`}>Calendar</span>
+                    {upcomingDeadlinesCount && upcomingDeadlinesCount > 0 && view !== 'calendar' && (
+                      <span className="ml-auto bg-teal-500 text-white text-xs px-2 py-0.5 rounded-full">
+                        {upcomingDeadlinesCount}
+                      </span>
+                    )}
                 </div>
+                <div
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 cursor-not-allowed transition-all duration-200 mt-1"
+                  title="Coming soon"
+                  aria-disabled="true"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                  <span className="text-sm font-medium">Archived Claims</span>
+                  <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                    Coming soon
+                  </span>
+                </div>
+             </>
+         ) : view === 'conversation' ? (
+             <>
+               {/* Back to Dashboard */}
+               <div
+                  onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
+                  className="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 cursor-pointer transition-all duration-200 mb-6"
+               >
+                   <LayoutDashboard className="w-4 h-4" />
+                   <span className="text-sm font-medium">Back to Dashboard</span>
+               </div>
+
+               {/* Conversation Entry Indicator */}
+               <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-4 tracking-wider">New Claim</p>
+               <div className="flex items-center gap-3 px-4 py-3 rounded-r-xl bg-teal-50 border-l-4 border-teal-500">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 bg-teal-500 text-white">
+                    <MessageSquareText className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm block font-semibold text-teal-700">Describe Your Claim</span>
+                    <span className="text-xs text-teal-600">Upload or describe</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-teal-500 flex-shrink-0" />
+               </div>
+               <div className="mt-4 px-3">
+                  <p className="text-xs text-slate-400">Next: Verify details in wizard</p>
+               </div>
              </>
          ) : (
              <>
@@ -161,7 +234,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
 
       {/* Legal Disclaimer */}
       <div className="p-4 flex-shrink-0">
-         <button className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all duration-200">
+         <button
+           onClick={() => {
+             onLegalClick?.();
+             onCloseMobile?.();
+           }}
+           className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all duration-200"
+           title="View legal information"
+         >
             <ShieldCheck className="w-4 h-4" />
             <span>Legal Disclaimer</span>
          </button>

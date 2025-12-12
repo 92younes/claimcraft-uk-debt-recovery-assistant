@@ -27,8 +27,8 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Title */}
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
-              <div className="bg-blue-100 p-3 rounded-xl">
-                <Shield className="w-6 h-6 text-blue-600" />
+              <div className="bg-teal-100 p-3 rounded-xl">
+                <Shield className="w-6 h-6 text-teal-600" />
               </div>
               <h1 className="text-4xl font-bold text-slate-900 font-display">Privacy Policy</h1>
             </div>
@@ -53,7 +53,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 1: Information We Collect */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Database className="w-5 h-5 text-blue-600" />
+              <Database className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">1. Information We Collect</h2>
             </div>
 
@@ -91,7 +91,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 2: How We Use Your Information */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Eye className="w-5 h-5 text-blue-600" />
+              <Eye className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">2. How We Use Your Information</h2>
             </div>
 
@@ -130,7 +130,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 3: Data Storage and Security */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Lock className="w-5 h-5 text-blue-600" />
+              <Lock className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">3. Data Storage and Security</h2>
             </div>
 
@@ -181,7 +181,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 4: Your Rights */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <UserCheck className="w-5 h-5 text-blue-600" />
+              <UserCheck className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">4. Your Rights Under UK GDPR</h2>
             </div>
 
@@ -197,12 +197,12 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
                 <li><strong>Right to Withdraw Consent:</strong> Stop us from processing your data at any time</li>
               </ul>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mt-4">
                 <p className="text-slate-800 font-semibold mb-2">How to Exercise Your Rights:</p>
                 <ul className="list-disc ml-6 space-y-1 text-slate-700 text-sm">
                   <li><strong>Delete All Data:</strong> Clear your browser's local storage or use the "Delete All Claims" feature in the Dashboard</li>
                   <li><strong>Export Data:</strong> Use the "Export All Data" button in Settings to download your claims as JSON</li>
-                  <li><strong>Contact Us:</strong> Email <a href="mailto:privacy@claimcraft.uk" className="text-blue-600 underline">privacy@claimcraft.uk</a> for data requests or questions</li>
+                  <li><strong>Contact Us:</strong> Email <a href="mailto:privacy@claimcraft.uk" className="text-teal-700 underline">privacy@claimcraft.uk</a> for data requests or questions</li>
                 </ul>
               </div>
             </div>
@@ -211,7 +211,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 5: Sharing Your Data */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">5. Data Sharing and Disclosure</h2>
             </div>
 
@@ -231,7 +231,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 6: Cookies and Tracking */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Eye className="w-5 h-5 text-blue-600" />
+              <Eye className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">6. Cookies and Local Storage</h2>
             </div>
 
@@ -260,7 +260,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 7: International Transfers */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Mail className="w-5 h-5 text-blue-600" />
+              <Mail className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">7. International Data Transfers</h2>
             </div>
 
@@ -282,7 +282,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 8: Children's Privacy */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <UserCheck className="w-5 h-5 text-blue-600" />
+              <UserCheck className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">8. Children's Privacy</h2>
             </div>
 
@@ -290,7 +290,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
               <p className="text-slate-700">
                 ClaimCraft UK is not intended for users under 18 years of age. We do not knowingly collect
                 data from children. If you believe a child has provided us with personal data, please contact
-                us immediately at <a href="mailto:privacy@claimcraft.uk" className="text-blue-600 underline">privacy@claimcraft.uk</a>.
+                us immediately at <a href="mailto:privacy@claimcraft.uk" className="text-teal-700 underline">privacy@claimcraft.uk</a>.
               </p>
             </div>
           </section>
@@ -298,7 +298,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 9: Changes to This Policy */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">9. Changes to This Privacy Policy</h2>
             </div>
 
@@ -318,7 +318,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           {/* Section 10: Contact Us */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Mail className="w-5 h-5 text-blue-600" />
+              <Mail className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">10. Contact Information</h2>
             </div>
 
@@ -330,7 +330,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                 <p className="text-slate-700 font-semibold mb-2">Data Protection Contact:</p>
                 <p className="text-slate-700">
-                  <strong>Email:</strong> <a href="mailto:privacy@claimcraft.uk" className="text-blue-600 underline">privacy@claimcraft.uk</a><br />
+                  <strong>Email:</strong> <a href="mailto:privacy@claimcraft.uk" className="text-teal-700 underline">privacy@claimcraft.uk</a><br />
                   <strong>Response Time:</strong> We aim to respond within 48 hours
                 </p>
               </div>
@@ -342,7 +342,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
                   with the UK Information Commissioner's Office (ICO):
                 </p>
                 <p className="text-slate-700 mt-2">
-                  <strong>Website:</strong> <a href="https://ico.org.uk" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">ico.org.uk</a><br />
+                  <strong>Website:</strong> <a href="https://ico.org.uk" target="_blank" rel="noopener noreferrer" className="text-teal-700 underline">ico.org.uk</a><br />
                   <strong>Phone:</strong> 0303 123 1113
                 </p>
               </div>

@@ -303,7 +303,7 @@ const N225_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Page 1 - Header
   claimNumber: {
     page: 0, x: 400, y: 770, size: 11, isBold: true,
-    getValue: () => '[TO BE ALLOCATED]'
+    getValue: (d) => d.courtFormData?.claimNumber || 'Pending allocation'
   },
 
   // Claimant Details
@@ -448,7 +448,7 @@ const N225A_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Header
   claimNumber: {
     page: 0, x: 400, y: 770, size: 11, isBold: true,
-    getValue: () => '[TO BE ALLOCATED]'
+    getValue: (d) => d.courtFormData?.claimNumber || 'Pending allocation'
   },
 
   // Parties
@@ -464,7 +464,9 @@ const N225A_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Admission Details
   admissionDate: {
     page: 0, x: 250, y: 600, size: 10,
-    getValue: () => '[DATE DEFENDANT ADMITTED]'
+    getValue: (d) => d.courtFormData?.admissionDate
+      ? new Date(d.courtFormData.admissionDate).toLocaleDateString('en-GB')
+      : 'Date not provided'
   },
   amountAdmitted: {
     page: 0, x: 250, y: 580, size: 11,
@@ -472,7 +474,7 @@ const N225A_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   },
   defendantProposal: {
     page: 0, x: 100, y: 545, size: 10, maxWidth: 400,
-    getValue: () => '[DEFENDANT\'S PROPOSED PAYMENT TERMS]'
+    getValue: (d) => d.courtFormData?.defendantProposal || 'Not specified'
   },
 
   // Claimant's Position
@@ -484,7 +486,10 @@ const N225A_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Claimant's Proposal
   claimantPaymentTerms: {
     page: 0, x: 100, y: 420, size: 10, maxWidth: 400,
-    getValue: () => 'Payment in full within 14 days, or monthly installments of £[AMOUNT] (to be determined based on defendant\'s means)'
+    getValue: (d) => d.courtFormData?.claimantPaymentTerms
+      || (d.courtFormData?.installmentAmount
+        ? `Monthly installments of £${d.courtFormData.installmentAmount.toFixed(2)}`
+        : 'Payment in full within 14 days')
   },
 
   // Total Amount
@@ -589,7 +594,7 @@ const N180_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Header
   claimNumber: {
     page: 0, x: 400, y: 770, size: 11, isBold: true,
-    getValue: () => '[TO BE ALLOCATED]'
+    getValue: (d) => d.courtFormData?.claimNumber || 'Pending allocation'
   },
   claimantName: {
     page: 0, x: 100, y: 735, size: 11, isBold: true,
@@ -609,21 +614,21 @@ const N180_TEXT_FIELDS: Record<string, N225FieldConfig> = {
   // Witnesses
   witnessCount: {
     page: 0, x: 450, y: 560, size: 11,
-    getValue: () => '1'
+    getValue: (d) => String(d.courtFormData?.witnessCount ?? 1)
   },
   witnessName1: {
     page: 0, x: 120, y: 535, size: 10,
-    getValue: (d) => `${d.claimant.name} (Claimant)`
+    getValue: (d) => d.courtFormData?.witnessNames?.[0] || `${d.claimant.name} (Claimant)`
   },
 
   // Hearing
   hearingDuration: {
     page: 0, x: 350, y: 460, size: 11,
-    getValue: () => '1'
+    getValue: (d) => String(d.courtFormData?.estimatedHearingDuration ?? 1)
   },
   unavailableDates: {
     page: 0, x: 100, y: 430, size: 10, maxWidth: 400,
-    getValue: () => '[List any dates you cannot attend]'
+    getValue: (d) => d.courtFormData?.unavailableDates || 'None'
   },
 
   // Documents
@@ -647,11 +652,19 @@ const N180_CHECKBOXES: Record<string, CheckboxConfig> = {
   // Section A - Settlement
   settlementStayYes: {
     page: 0, x: 420, y: 680, size: 12,
-    condition: () => true
+    condition: (d) => d.courtFormData?.wantsSettlementStay !== false // Default to yes unless explicitly no
+  },
+  settlementStayNo: {
+    page: 0, x: 480, y: 680, size: 12,
+    condition: (d) => d.courtFormData?.wantsSettlementStay === false
   },
   mediationYes: {
     page: 0, x: 420, y: 660, size: 12,
-    condition: () => true
+    condition: (d) => d.courtFormData?.wantsMediation !== false // Default to yes unless explicitly no
+  },
+  mediationNo: {
+    page: 0, x: 480, y: 660, size: 12,
+    condition: (d) => d.courtFormData?.wantsMediation === false
   },
 
   // Section B - Track
@@ -661,21 +674,33 @@ const N180_CHECKBOXES: Record<string, CheckboxConfig> = {
   },
 
   // Section D - Experts
+  expertsYes: {
+    page: 0, x: 120, y: 500, size: 12,
+    condition: (d) => d.courtFormData?.needsExpert === true
+  },
   expertsNo: {
     page: 0, x: 180, y: 500, size: 12,
-    condition: () => true
+    condition: (d) => d.courtFormData?.needsExpert !== true // Default to no
   },
 
   // Section E - Special Requirements
+  disabilityYes: {
+    page: 0, x: 120, y: 405, size: 12,
+    condition: (d) => d.courtFormData?.hasDisability === true
+  },
   disabilityNo: {
     page: 0, x: 180, y: 405, size: 12,
-    condition: () => true
+    condition: (d) => d.courtFormData?.hasDisability !== true // Default to no
   },
 
   // Section G - Costs
+  lossOfEarningsYes: {
+    page: 0, x: 120, y: 310, size: 12,
+    condition: (d) => d.courtFormData?.claimLossOfEarnings === true
+  },
   lossOfEarningsNo: {
     page: 0, x: 180, y: 310, size: 12,
-    condition: () => true
+    condition: (d) => d.courtFormData?.claimLossOfEarnings !== true // Default to no
   },
 
   // Statement of Truth
@@ -752,4 +777,79 @@ export const generateN180PDF = async (data: ClaimState): Promise<Uint8Array> => 
   }
 
   return await pdfDoc.save();
+};
+
+
+// ============================================================================
+// HTML-TO-PDF GENERATOR FOR LETTER DOCUMENTS (LBA, Polite Chaser, etc.)
+// ============================================================================
+
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+/**
+ * Generate a PDF from an HTML element (for letter documents like LBA, Polite Chaser)
+ * Uses html2canvas to capture the HTML and jsPDF to create the PDF
+ */
+export const generateLetterPDF = async (elementId: string): Promise<Blob> => {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    throw new Error(`Element with ID '${elementId}' not found`);
+  }
+
+  // Capture HTML element as canvas with high quality
+  const canvas = await html2canvas(element, {
+    scale: 2, // Higher quality (2x resolution)
+    useCORS: true,
+    logging: false,
+    backgroundColor: '#ffffff',
+    windowWidth: element.scrollWidth,
+    windowHeight: element.scrollHeight
+  });
+
+  // A4 dimensions in mm
+  const pageWidth = 210;
+  const pageHeight = 297;
+
+  // Calculate image dimensions to fit A4 width with margins
+  const marginX = 10; // 10mm margin on each side
+  const contentWidth = pageWidth - (marginX * 2);
+  const imgWidth = contentWidth;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+  // Create PDF
+  const pdf = new jsPDF('p', 'mm', 'a4');
+
+  // Handle multi-page content
+  let heightLeft = imgHeight;
+  let position = marginX; // Start with top margin
+  const contentHeight = pageHeight - (marginX * 2); // Available height per page
+
+  // First page
+  pdf.addImage(
+    canvas.toDataURL('image/png'),
+    'PNG',
+    marginX,
+    position,
+    imgWidth,
+    imgHeight
+  );
+  heightLeft -= contentHeight;
+
+  // Additional pages if needed
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight + marginX;
+    pdf.addPage();
+    pdf.addImage(
+      canvas.toDataURL('image/png'),
+      'PNG',
+      marginX,
+      position,
+      imgWidth,
+      imgHeight
+    );
+    heightLeft -= contentHeight;
+  }
+
+  return pdf.output('blob');
 };

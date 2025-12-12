@@ -1,13 +1,22 @@
 
 export const UK_COUNTIES = [
-  "Avon", "Bedfordshire", "Berkshire", "Buckinghamshire", "Cambridgeshire", "Cheshire", 
-  "Cleveland", "Cornwall", "Cumbria", "Derbyshire", "Devon", "Dorset", "Durham", 
-  "East Sussex", "Essex", "Gloucestershire", "Greater London", "Greater Manchester", 
-  "Hampshire", "Herefordshire", "Hertfordshire", "Isle of Wight", "Kent", "Lancashire", 
-  "Leicestershire", "Lincolnshire", "Merseyside", "Norfolk", "North Yorkshire", 
-  "Northamptonshire", "Northumberland", "Nottinghamshire", "Oxfordshire", "Shropshire", 
-  "Somerset", "South Yorkshire", "Staffordshire", "Suffolk", "Surrey", "Tyne and Wear", 
-  "Warwickshire", "West Midlands", "West Sussex", "West Yorkshire", "Wiltshire", "Worcestershire"
+  // England
+  "Avon", "Bedfordshire", "Berkshire", "Buckinghamshire", "Cambridgeshire", "Cheshire",
+  "Cleveland", "Cornwall", "Cumbria", "Derbyshire", "Devon", "Dorset", "Durham",
+  "East Sussex", "East Yorkshire", "Essex", "Gloucestershire", "Greater London", "Greater Manchester",
+  "Hampshire", "Herefordshire", "Hertfordshire", "Isle of Wight", "Kent", "Lancashire",
+  "Leicestershire", "Lincolnshire", "Merseyside", "Norfolk", "North Yorkshire",
+  "Northamptonshire", "Northumberland", "Nottinghamshire", "Oxfordshire", "Shropshire",
+  "Somerset", "South Yorkshire", "Staffordshire", "Suffolk", "Surrey", "Tyne and Wear",
+  "Warwickshire", "West Midlands", "West Sussex", "West Yorkshire", "Wiltshire", "Worcestershire",
+  // Scotland
+  "Aberdeenshire", "Angus", "Ayrshire", "City of Edinburgh", "City of Glasgow",
+  "Dumfries and Galloway", "Fife", "Highland", "Perth and Kinross", "Renfrewshire",
+  "Scottish Borders", "Shetland Islands", "South Lanarkshire", "Stirling",
+  // Wales
+  "Gwent", "Gwynedd", "Powys", "South Glamorgan", "West Glamorgan",
+  // Northern Ireland
+  "County Antrim"
 ];
 
 // Bank of England base rate - LAST UPDATED: January 2025
@@ -74,7 +83,7 @@ export const POSTCODE_COUNTY_MAP: Record<string, string> = {
   'SK': 'Cheshire', 'WA': 'Cheshire', 'WN': 'Greater Manchester',
 
   // North East
-  'DH': 'County Durham', 'DL': 'County Durham', 'NE': 'Tyne and Wear', 'SR': 'Tyne and Wear',
+  'DH': 'Durham', 'DL': 'Durham', 'NE': 'Tyne and Wear', 'SR': 'Tyne and Wear',
   'TS': 'Cleveland',
 
   // Wales (use region names)
@@ -185,3 +194,59 @@ export const ONBOARDING_STEPS = [
     icon: 'ShieldCheck'
   }
 ];
+
+// ==========================================
+// UK Legal Deadline Constants
+// ==========================================
+
+/**
+ * UK Legal Deadline Rules
+ * Based on Pre-Action Protocol for Debt Claims and Civil Procedure Rules
+ */
+export const UK_LEGAL_DEADLINES = {
+  // Pre-Action Protocol for Debt Claims
+  LBA_RESPONSE_PERIOD: 14,              // Minimum 14 days response time for business
+  LBA_RESPONSE_PERIOD_CONSUMER: 30,     // Up to 30 days for consumers
+
+  // Court Proceedings (CPR)
+  ACKNOWLEDGMENT_PERIOD: 14,            // Days to acknowledge service
+  DEFENCE_PERIOD_AFTER_ACK: 14,         // Additional days after acknowledgment
+  DEFENCE_PERIOD_TOTAL: 28,             // Total days to file defence without ack
+  JUDGMENT_APPLICATION_WINDOW: 14,      // Days after default to apply for judgment
+
+  // Enforcement
+  ENFORCEMENT_WAIT_AFTER_JUDGMENT: 14,  // Days to wait before enforcement
+
+  // Statutory Limits
+  LIMITATION_PERIOD_YEARS: 6,           // Limitation Act 1980
+};
+
+/**
+ * Deadline Priority Colors for UI
+ * Matches Tailwind CSS classes
+ */
+export const DEADLINE_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  critical: { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-700', dot: 'bg-red-500' },
+  high: { bg: 'bg-orange-50', border: 'border-orange-500', text: 'text-orange-700', dot: 'bg-orange-500' },
+  medium: { bg: 'bg-amber-50', border: 'border-amber-500', text: 'text-amber-700', dot: 'bg-amber-500' },
+  low: { bg: 'bg-slate-50', border: 'border-slate-300', text: 'text-slate-700', dot: 'bg-slate-400' },
+};
+
+/**
+ * Default reminder intervals (days before deadline)
+ */
+export const DEFAULT_REMINDER_DAYS = [7, 3, 1, 0];
+
+/**
+ * Deadline type labels for UI display
+ */
+export const DEADLINE_TYPE_LABELS: Record<string, string> = {
+  lba_response: 'LBA Response Period',
+  court_filing: 'Court Filing Deadline',
+  defendant_response: 'Defendant Response',
+  acknowledgment: 'Acknowledgment of Service',
+  defence_deadline: 'Defence Filing Deadline',
+  judgment_deadline: 'Judgment Application',
+  enforcement: 'Enforcement Action',
+  custom: 'Custom Deadline',
+};

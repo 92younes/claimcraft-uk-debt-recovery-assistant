@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
 import { Send, User, Scale, ArrowRight, Loader2, CheckCircle2, Briefcase, Gavel, Sparkles, AlertTriangle } from 'lucide-react';
 import { ChatSidebar } from './ChatSidebar';
+import { Button } from './ui/Button';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -15,6 +16,21 @@ interface ChatInterfaceProps {
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, onComplete, isThinking, canProceed = false, error }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotionRef = useRef(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!mq) return;
+
+    const update = () => {
+      prefersReducedMotionRef.current = mq.matches;
+    };
+
+    update();
+    mq.addEventListener?.('change', update);
+    return () => mq.removeEventListener?.('change', update);
+  }, []);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Get the latest progress from the last AI message
   const lastAiMessage = [...messages].reverse().find(m => m.role === 'ai');
@@ -28,7 +44,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: prefersReducedMotionRef.current ? 'auto' : 'smooth'
+    });
   };
 
   useEffect(() => {
@@ -43,13 +61,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
   };
 
   return (
-    <div className="max-w-6xl mx-auto animate-fade-in flex h-[calc(100vh-140px)] gap-6">
+    <div className="max-w-7xl mx-auto animate-fade-in flex h-[calc(100vh-140px)] gap-6">
        {/* Sidebar - Checklist */}
        <ChatSidebar progress={progress} />
 
        {/* Chat Container */}
        <div className="flex-grow flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="text-center py-4 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
+        <div className="text-center py-3 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
           <div className="flex items-center justify-center gap-2">
             <div className="bg-teal-600 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-teal-sm">
               <Gavel className="w-4 h-4" />
@@ -62,12 +80,60 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
           </div>
         </div>
 
+        {/* Accessibility: Live region for screen reader announcements */}
+        <div
+          aria-live="polite"
+          aria-atomic="false"
+          className="sr-only"
+        >
+          {isThinking && "Assistant is thinking..."}
+          {messages.length > 0 && `New message from ${messages[messages.length - 1].role === 'ai' ? 'assistant' : 'you'}`}
+        </div>
+
         {/* Chat Area */}
-        <div className="flex-grow overflow-y-auto px-6 py-6 space-y-6">
+        <div className="flex-grow overflow-y-auto px-6 py-4 space-y-5" role="log" aria-label="Chat messages">
           {messages.length === 0 && !isThinking && !error && (
-              <div className="text-center text-slate-400 italic mt-10 text-sm">
-                Establishing secure link to AI legal assistant...
+            <div className="max-w-2xl mx-auto mt-6">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-slate-700 shadow-sm">
+                <p className="font-semibold text-slate-900 mb-2">Describe the debt in your own words</p>
+                <p className="text-sm text-slate-600 mb-4">
+                  Include the amount, invoice date/number, what you delivered, and any chasers you’ve already sent.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const example = "ABC Ltd owes me £5,000 for invoice INV-2024-001 dated 12/09/2024. Payment terms were 30 days. I’ve sent 2 chaser emails and called twice. No payment received.";
+                      setInput(example);
+                      setTimeout(() => inputRef.current?.focus(), 0);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 hover:text-teal-700 hover:border-teal-300 transition-colors"
+                  >
+                    Insert example
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInput("They say they’re disputing the invoice. The work was delivered and accepted. Here’s what happened: ");
+                      setTimeout(() => inputRef.current?.focus(), 0);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 hover:text-teal-700 hover:border-teal-300 transition-colors"
+                  >
+                    Dispute scenario
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInput("I don’t have a signed contract, but I have emails/messages agreeing scope and price. The debtor owes £");
+                      setTimeout(() => inputRef.current?.focus(), 0);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 hover:text-teal-700 hover:border-teal-300 transition-colors"
+                  >
+                    No signed contract
+                  </button>
+                </div>
               </div>
+            </div>
           )}
 
           {messages.map((msg, index) => {
@@ -125,27 +191,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
         </div>
 
         {/* Input Area */}
-        <div className="bg-slate-50 border-t border-slate-200 p-4 flex-shrink-0">
-          <form onSubmit={handleSend} className="relative flex gap-2">
-            <input
-              type="text"
+        <div className="bg-slate-50 border-t border-slate-200 p-3 flex-shrink-0">
+          <form onSubmit={handleSend} className="flex gap-2 items-stretch">
+            <textarea
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your answer here..."
-              className="flex-grow px-4 py-3.5 pr-14 bg-white border border-slate-200 rounded-xl text-base text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200 shadow-sm"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Type your answer here… (Enter to send, Shift+Enter for a new line)"
+              className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-base text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200 shadow-sm resize-none"
               disabled={isThinking}
+              rows={2}
               autoFocus
+              aria-label="Message"
             />
-            <button
+            <Button
               type="submit"
               disabled={!input.trim() || isThinking}
-              className="absolute right-2 top-2 bottom-2 bg-teal-600 hover:bg-teal-700 text-white px-4 rounded-lg disabled:bg-slate-200 disabled:text-slate-400 transition-all duration-200 shadow-sm flex items-center justify-center"
-            >
-              <Send className="w-4 h-4" />
-            </button>
+              aria-label="Send message"
+              icon={<Send className="w-4 h-4" />}
+              iconOnly
+              className="px-4"
+            />
           </form>
-          <div className="mt-3 flex justify-between items-center px-1">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Press Enter to send</span>
+          <div className="mt-2 flex justify-between items-center px-1">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Enter to send • Shift+Enter for newline</span>
             
             <div className="flex items-center gap-3">
                 {!canProceed && (
@@ -153,19 +228,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMe
                         Answer questions to proceed
                       </span>
                 )}
-                <button
+                <Button
                   onClick={onComplete}
                   disabled={!canProceed}
                   title={!canProceed ? "Please answer the assistant's questions first" : "Proceed to review"}
-                  className={`flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-200 shadow-sm ${
-                      canProceed 
-                      ? "text-white bg-teal-600 hover:bg-teal-700 btn-primary animate-fade-in" 
-                      : "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300"
-                  }`}
+                  variant={canProceed ? 'primary' : 'secondary'}
+                  className={canProceed ? 'btn-primary' : 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none hover:bg-slate-200 hover:border-slate-300'}
+                  icon={<CheckCircle2 className="w-4 h-4" />}
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Review Extracted Data <ArrowRight className="w-4 h-4" />
-                </button>
+                  Review Extracted Data
+                </Button>
             </div>
           </div>
         </div>

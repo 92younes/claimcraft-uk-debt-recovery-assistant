@@ -1,0 +1,26 @@
+/*
+  Global stylesheet placeholder.
+
+  The app currently uses Tailwind via CDN (configured in `index.html`) plus inline global styles.
+  This file exists because `index.html` references `/index.css` and some hosts will otherwise 404 it.
+
+  Keep minimal styles here unless you decide to migrate inline styles out of `index.html`.
+*/
+
+/* Reduced motion support (important for an animation-heavy UI) */
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+

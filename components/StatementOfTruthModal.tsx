@@ -10,7 +10,9 @@
  */
 
 import React, { useState } from 'react';
-import { AlertTriangle, Scale, X } from 'lucide-react';
+import { AlertTriangle, Scale } from 'lucide-react';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface StatementOfTruthModalProps {
   isOpen: boolean;
@@ -47,29 +49,32 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200">
-        {/* Header - Red warning theme */}
-        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 rounded-t-2xl flex items-center justify-between z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold font-display text-slate-900">Statement of Truth Warning</h2>
-              <p className="text-red-600 text-sm mt-0.5 leading-relaxed font-semibold">Criminal Offence - Read Carefully</p>
-            </div>
-          </div>
-          <button
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Statement of Truth Warning"
+      description="Criminal offence — read carefully before signing."
+      maxWidthClassName="max-w-2xl"
+      footer={(
+        <div className="w-full flex gap-3">
+          <Button
             onClick={handleClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors duration-200"
+            variant="secondary"
+            className="flex-1"
           >
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
+            Cancel - Review Document
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={!hasReadWarning || !confirmsTruth}
+            className="flex-1"
+          >
+            {hasReadWarning && confirmsTruth ? 'Proceed to Sign' : 'Complete Confirmations Above'}
+          </Button>
         </div>
-
-        {/* Content */}
-        <div className="p-6 md:p-8 space-y-6">
+      )}
+    >
+      <div className="space-y-6">
           {/* What You're About to Sign */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
             <div className="flex items-start gap-3 mb-3">
@@ -186,25 +191,7 @@ export const StatementOfTruthModal: React.FC<StatementOfTruthModalProps> = ({
               This software is a tool to assist you, not a replacement for legal advice.
             </p>
           </div>
-        </div>
-
-        {/* Footer - Action Buttons */}
-        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 p-6 rounded-b-2xl flex gap-3">
-          <button
-            onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 text-slate-700 rounded-xl font-medium transition-colors duration-200"
-          >
-            Cancel - Review Document
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!hasReadWarning || !confirmsTruth}
-            className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all duration-200 shadow-sm disabled:shadow-none"
-          >
-            {hasReadWarning && confirmsTruth ? 'Proceed to Sign' : 'Complete Confirmations Above'}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

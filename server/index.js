@@ -1,17 +1,14 @@
-/**
- * Backend Server for ClaimCraft
- *
- * Handles Nango session token generation for accounting integrations.
- * This is required because Nango deprecated public key authentication.
- *
- * Run with: node server/index.js
- * Or use: npm run server
- */
+// ... existing imports
+// You might need to install 'form-data' if you are on an older Node version. 
+// For Node 18+, native FormData is available.
 
 import express from 'express';
 import cors from 'cors';
 import { Nango } from '@nangohq/node';
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
+import { Resend } from 'resend';
+import Stripe from 'stripe';
 import dotenv from 'dotenv';
 
 // Load environment variables (load .env.local first, then .env as fallback)
@@ -51,22 +48,65 @@ if (anthropicApiKey) {
   console.warn('⚠️ ANTHROPIC_API_KEY not set - document generation will be limited');
 }
 
+// Initialize Google Generative AI client (for Gemini)
+const googleApiKey = process.env.GOOGLE_API_KEY;
+let gemini = null;
+
+if (googleApiKey) {
+  gemini = new GoogleGenAI({ apiKey: googleApiKey });
+  console.log('✅ Gemini API configured');
+} else {
+  console.warn('⚠️ GOOGLE_API_KEY not set - evidence analysis and chat will be limited');
+}
+
+// Initialize Resend for email notifications
+const resendApiKey = process.env.RESEND_API_KEY;
+let resend = null;
+
+if (resendApiKey) {
+  resend = new Resend(resendApiKey);
+  console.log('✅ Resend API configured');
+} else {
+  console.warn('⚠️ RESEND_API_KEY not set - email notifications will be disabled');
+}
+
+// Initialize Stripe for payment processing
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+let stripe = null;
+
+if (stripeSecretKey) {
+  stripe = new Stripe(stripeSecretKey, {
+    apiVersion: '2024-11-20.acacia'
+  });
+  console.log('✅ Stripe API configured');
+} else {
+  console.warn('⚠️ STRIPE_SECRET_KEY not set - payments will be disabled');
+}
+
 /**
- * Health check endpoint
+ * Health check endpoint - reports service availability
  */
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  // Check if mail service (Stannp) is configured
+  const stannpKey = process.env.STANNP_API_KEY || process.env.VITE_STANNP_API_KEY;
+  const mailEnabled = !!stannpKey;
+
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    services: {
+      mail: mailEnabled,
+      email: !!resend,
+      payments: !!stripe,
+      ai: !!anthropic,
+      gemini: !!gemini
+    }
+  });
 });
 
 /**
  * Create a Nango connect session token
  * POST /api/nango/session
- *
- * Body: {
- *   userId: string,      // Unique user identifier
- *   userEmail?: string,  // Optional user email
- *   allowedIntegrations?: string[]  // Optional list of allowed integrations
- * }
  */
 app.post('/api/nango/session', async (req, res) => {
   try {
@@ -125,38 +165,8 @@ app.post('/api/nango/session', async (req, res) => {
 });
 
 /**
- * Get connection status for a user
- * GET /api/nango/connections/:userId
- */
-app.get('/api/nango/connections/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    // List connections for this user
-    const connections = await nango.listConnections();
-
-    // Filter by connection_id prefix (our connection IDs start with user_{provider}_{timestamp})
-    const userConnections = connections.connections.filter(conn =>
-      conn.connection_id.startsWith(`user_`)
-    );
-
-    res.json({ connections: userConnections });
-
-  } catch (error) {
-    console.error('❌ Failed to list connections:', error);
-    res.status(500).json({
-      error: 'Failed to list connections',
-      message: error.message
-    });
-  }
-});
-
-/**
  * Find an existing connection by tenant ID
  * GET /api/nango/connections/find-by-tenant/:provider/:tenantId
- *
- * This allows multiple users to share the same Xero connection
- * by looking up existing connections for the same organization.
  */
 app.get('/api/nango/connections/find-by-tenant/:provider/:tenantId', async (req, res) => {
   try {
@@ -310,16 +320,6 @@ app.delete('/api/nango/connections/:provider/:connectionId', async (req, res) =>
 /**
  * Proxy API calls to accounting providers via Nango
  * POST /api/nango/proxy
- *
- * Body: {
- *   provider: string,      // e.g., 'xero', 'quickbooks'
- *   connectionId: string,  // Nango connection ID
- *   endpoint: string,      // API endpoint (e.g., '/Invoices')
- *   method?: string,       // HTTP method (default: 'GET')
- *   params?: object,       // Query parameters
- *   headers?: object,      // Custom headers (e.g., Xero-Tenant-Id)
- *   data?: object          // Request body (for POST/PUT)
- * }
  */
 app.post('/api/nango/proxy', async (req, res) => {
   try {
@@ -374,15 +374,6 @@ app.post('/api/nango/proxy', async (req, res) => {
 /**
  * Proxy Claude/Anthropic API calls
  * POST /api/anthropic/messages
- *
- * This keeps the API key secure on the server side.
- *
- * Body: {
- *   model: string,       // e.g., 'claude-3-5-sonnet-20241022'
- *   max_tokens: number,  // Maximum tokens in response
- *   temperature?: number, // Optional temperature (0-1)
- *   messages: array      // Message array for Claude
- * }
  */
 app.post('/api/anthropic/messages', async (req, res) => {
   try {
@@ -437,6 +428,83 @@ app.post('/api/anthropic/messages', async (req, res) => {
   }
 });
 
+/**
+ * Proxy Google Gemini API calls
+ * POST /api/gemini
+ */
+app.post('/api/gemini', async (req, res) => {
+  try {
+    if (!gemini) {
+      return res.status(503).json({
+        error: 'Gemini API not configured',
+        message: 'Please set GOOGLE_API_KEY in your .env file'
+      });
+    }
+
+    const { model, prompt, files, config } = req.body;
+
+    if (!model || !prompt) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'model and prompt are required'
+      });
+    }
+
+    console.log(`🤖 Gemini request: ${model}, prompt length: ${prompt.length}`);
+
+    // Build parts array for Gemini
+    const parts = [];
+
+    // Add files if provided (for evidence analysis)
+    if (files && Array.isArray(files)) {
+      for (const file of files) {
+        if (file.data && file.mimeType) {
+          parts.push({
+            inlineData: {
+              data: file.data,
+              mimeType: file.mimeType
+            }
+          });
+        }
+      }
+    }
+
+    // Add text prompt
+    parts.push({ text: prompt });
+
+    // Make request to Gemini
+    const requestParams = {
+      model,
+      contents: { parts }
+    };
+
+    // Add optional config if provided
+    if (config) {
+      requestParams.config = config;
+    }
+
+    const response = await gemini.models.generateContent(requestParams);
+
+    console.log(`✅ Gemini response received`);
+
+    res.json({
+      text: response.text,
+      candidates: response.candidates
+    });
+
+  } catch (error) {
+    console.error('❌ Gemini request failed:', error);
+
+    const statusCode = error.status || 500;
+
+    res.status(statusCode).json({
+      error: 'Gemini request failed',
+      message: error.message || 'Unknown error',
+      status: statusCode
+    });
+  }
+});
+
 // Increase request body size limit for document generation (templates can be large)
 app.use(express.json({ limit: '1mb' }));
 
@@ -444,8 +512,6 @@ app.use(express.json({ limit: '1mb' }));
  * Proxy Companies House API calls
  * GET /api/companies-house/search?q=query
  * GET /api/companies-house/company/:companyNumber
- *
- * This keeps the API key secure and avoids CORS issues.
  */
 const companiesHouseApiKey = process.env.COMPANIES_HOUSE_API_KEY || process.env.VITE_COMPANIES_HOUSE_API_KEY;
 
@@ -548,6 +614,344 @@ app.get('/api/companies-house/company/:companyNumber', async (req, res) => {
   }
 });
 
+/**
+ * Mailroom API - Send Physical Letter via Stannp
+ * POST /api/mail/send
+ */
+const stannpApiKey = process.env.STANNP_API_KEY || process.env.VITE_STANNP_API_KEY;
+
+app.post('/api/mail/send', async (req, res) => {
+  try {
+    if (!stannpApiKey) {
+      return res.status(503).json({
+        error: 'Mail service not configured',
+        message: 'Please set STANNP_API_KEY in your .env file'
+      });
+    }
+
+    const { recipient, html, test = true } = req.body;
+
+    if (!recipient || !html) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'recipient and html content are required'
+      });
+    }
+
+    // Validate recipient fields for Stannp
+    if (!recipient.address1 || !recipient.postcode) {
+       return res.status(400).json({
+        error: 'Invalid Address',
+        message: 'Address Line 1 and Postcode are mandatory for physical mail.'
+      });
+    }
+
+    console.log(`📨 Sending physical letter to ${recipient.name} at ${recipient.postcode} (Test Mode: ${test})`);
+
+    // Prepare Form Data for Stannp
+    const params = new URLSearchParams();
+    params.append('api_key', stannpApiKey);
+    params.append('recipient[title]', recipient.title || '');
+    params.append('recipient[firstname]', recipient.firstName || recipient.name.split(' ')[0]);
+    params.append('recipient[lastname]', recipient.lastName || recipient.name.split(' ').slice(1).join(' ') || '');
+    params.append('recipient[address1]', recipient.address1);
+    params.append('recipient[address2]', recipient.address2 || '');
+    params.append('recipient[town]', recipient.city);
+    params.append('recipient[postcode]', recipient.postcode);
+    params.append('recipient[country]', 'GB');
+    
+    // Wrap content in a professional template
+    const fullHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; color: #000; }
+            .header { margin-bottom: 30px; }
+            .content { white-space: pre-wrap; }
+            .footer { margin-top: 50px; font-size: 9pt; color: #666; border-top: 1px solid #ccc; padding-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="content">
+            ${html}
+          </div>
+          <div class="footer">
+            <p>Sent via ClaimCraft UK - Digital Debt Recovery Assistant</p>
+          </div>
+        </body>
+      </html>
+    `;
+    params.append('html', fullHtml);
+    params.append('test', test ? 'true' : 'false'); 
+
+    const response = await fetch('https://dash.stannp.com/api/v1/letters/create', {
+      method: 'POST',
+      body: params
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      console.error('❌ Stannp API Error:', data.error);
+      // Stannp often returns errors in a specific format, we should forward that
+      return res.status(400).json({ 
+        error: 'Stannp API Error', 
+        message: typeof data.error === 'string' ? data.error : JSON.stringify(data.error)
+      });
+    }
+
+    console.log('✅ Letter dispatched via Stannp:', data.data.pdf);
+
+    res.json({
+      success: true,
+      status: 'dispatched',
+      trackingId: data.data.id,
+      pdfUrl: data.data.pdf, 
+      cost: data.data.cost,
+      created_at: data.data.created
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to send physical letter:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
+});
+
+// ==========================================
+// Email Notification Endpoints (Resend)
+// ==========================================
+
+/**
+ * Check notification service status
+ * GET /api/notifications/status
+ */
+app.get('/api/notifications/status', (req, res) => {
+  res.json({
+    configured: !!resend,
+    provider: 'resend'
+  });
+});
+
+/**
+ * Send deadline reminder email
+ * POST /api/notifications/send-reminder
+ */
+app.post('/api/notifications/send-reminder', async (req, res) => {
+  try {
+    if (!resend) {
+      return res.status(503).json({
+        error: 'Email service not configured',
+        message: 'Please set RESEND_API_KEY in your .env file'
+      });
+    }
+
+    const { to, subject, html, text } = req.body;
+
+    if (!to || !subject || (!html && !text)) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'to, subject, and html/text are required'
+      });
+    }
+
+    console.log(`📧 Sending reminder email to: ${to}`);
+
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'ClaimCraft <notifications@claimcraft.uk>';
+
+    const { data, error } = await resend.emails.send({
+      from: fromEmail,
+      to: [to],
+      subject,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error('❌ Resend error:', error);
+      return res.status(500).json({ error: 'Failed to send email', details: error });
+    }
+
+    console.log('✅ Email sent successfully:', data);
+    res.json({ success: true, messageId: data.id });
+
+  } catch (error) {
+    console.error('❌ Failed to send reminder email:', error);
+    res.status(500).json({
+      error: 'Failed to send email',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Send test email to verify configuration
+ * POST /api/notifications/test
+ */
+app.post('/api/notifications/test', async (req, res) => {
+  try {
+    if (!resend) {
+      return res.status(503).json({
+        error: 'Email service not configured',
+        message: 'Please set RESEND_API_KEY in your .env file'
+      });
+    }
+
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email address is required' });
+    }
+
+    console.log(`📧 Sending test email to: ${email}`);
+
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'ClaimCraft <notifications@claimcraft.uk>';
+
+    const { data, error } = await resend.emails.send({
+      from: fromEmail,
+      to: [email],
+      subject: 'ClaimCraft - Test Notification',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: #f0fdfa; padding: 24px; border-radius: 12px; border-left: 4px solid #0d9488;">
+            <h2 style="color: #0d9488; margin: 0 0 8px 0;">Test Notification</h2>
+            <p style="font-size: 16px; margin: 0; color: #111827;">Your email notifications are configured correctly!</p>
+          </div>
+          <div style="padding: 20px 0;">
+            <p style="color: #374151;">This is a test email from ClaimCraft UK - Debt Recovery Assistant.</p>
+            <p style="color: #374151;">You will receive deadline reminders at this email address when enabled.</p>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e5e7eb;" />
+          <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+            ClaimCraft UK - Debt Recovery Assistant
+          </p>
+        </div>
+      `,
+      text: 'Test Notification - Your email notifications are configured correctly! This is a test email from ClaimCraft UK - Debt Recovery Assistant.'
+    });
+
+    if (error) {
+      console.error('❌ Resend error:', error);
+      return res.status(500).json({ error: 'Failed to send test email', details: error });
+    }
+
+    console.log('✅ Test email sent successfully:', data);
+    res.json({ success: true, messageId: data.id });
+
+  } catch (error) {
+    console.error('❌ Failed to send test email:', error);
+    res.status(500).json({
+      error: 'Failed to send test email',
+      message: error.message
+    });
+  }
+});
+
+// ==========================================
+// Stripe Payment Endpoints
+// ==========================================
+
+/**
+ * Check payment service status
+ * GET /api/payments/status
+ */
+app.get('/api/payments/status', (req, res) => {
+  res.json({
+    configured: !!stripe,
+    provider: 'stripe'
+  });
+});
+
+/**
+ * Create a Stripe PaymentIntent for document download
+ * POST /api/payments/create-intent
+ */
+app.post('/api/payments/create-intent', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({
+        error: 'Payment service not configured',
+        message: 'Please set STRIPE_SECRET_KEY in your .env file'
+      });
+    }
+
+    const { claimId, documentType } = req.body;
+
+    if (!claimId || !documentType) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'claimId and documentType are required'
+      });
+    }
+
+    console.log(`💳 Creating PaymentIntent for claim: ${claimId}, doc: ${documentType}`);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: 250, // £2.50 in pence - HARDCODED for security
+      currency: 'gbp',
+      automatic_payment_methods: {
+        enabled: true,
+      },
+      metadata: {
+        claimId,
+        documentType,
+        product: 'document_download'
+      },
+      description: `ClaimCraft UK - ${documentType} Document Download`
+    });
+
+    console.log(`✅ PaymentIntent created: ${paymentIntent.id}`);
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to create PaymentIntent:', error);
+    res.status(500).json({
+      error: 'Payment creation failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Verify payment status before allowing download
+ * GET /api/payments/verify/:paymentIntentId
+ */
+app.get('/api/payments/verify/:paymentIntentId', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Payment service not configured' });
+    }
+
+    const { paymentIntentId } = req.params;
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    console.log(`🔍 Payment verification for ${paymentIntentId}: ${paymentIntent.status}`);
+
+    res.json({
+      status: paymentIntent.status,
+      paid: paymentIntent.status === 'succeeded',
+      claimId: paymentIntent.metadata.claimId,
+      documentType: paymentIntent.metadata.documentType,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to verify payment:', error);
+    res.status(500).json({
+      error: 'Payment verification failed',
+      message: error.message
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`
@@ -558,7 +962,11 @@ app.listen(PORT, () => {
 ║  Port: ${PORT}                                                 ║
 ║  Nango: Connected                                           ║
 ║  Anthropic: ${anthropic ? 'Connected' : 'Not Configured'}                                    ║
+║  Gemini: ${gemini ? 'Connected' : 'Not Configured'}                                       ║
+║  Resend: ${resend ? 'Connected' : 'Not Configured'}                                       ║
+║  Stripe: ${stripe ? 'Connected' : 'Not Configured'}                                       ║
 ║  Companies House: ${companiesHouseApiKey ? 'Connected' : 'Not Configured'}                                ║
+║  Stannp (Mail): ${stannpApiKey ? 'Connected' : 'Not Configured'}                                ║
 ╠════════════════════════════════════════════════════════════╣
 ║  Endpoints:                                                 ║
 ║  • GET  /api/health                - Health check           ║
@@ -567,8 +975,16 @@ app.listen(PORT, () => {
 ║  • GET  /api/nango/connections     - List connections       ║
 ║  • DELETE /api/nango/connections   - Delete connection      ║
 ║  • POST /api/anthropic/messages    - Claude AI proxy        ║
+║  • POST /api/gemini                - Gemini AI proxy        ║
 ║  • GET  /api/companies-house/search - Company search        ║
 ║  • GET  /api/companies-house/company/:num - Company profile ║
+║  • GET  /api/notifications/status  - Email service status   ║
+║  • POST /api/notifications/send-reminder - Send reminder    ║
+║  • POST /api/notifications/test    - Test email             ║
+║  • POST /api/mail/send             - Send physical letter   ║
+║  • GET  /api/payments/status       - Payment service status ║
+║  • POST /api/payments/create-intent - Create PaymentIntent  ║
+║  • GET  /api/payments/verify/:id   - Verify payment         ║
 ╚════════════════════════════════════════════════════════════╝
   `);
 });

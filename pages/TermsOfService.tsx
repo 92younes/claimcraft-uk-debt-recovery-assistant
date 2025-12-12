@@ -27,8 +27,8 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Title */}
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
-              <div className="bg-blue-100 p-3 rounded-xl">
-                <Scale className="w-6 h-6 text-blue-600" />
+              <div className="bg-teal-100 p-3 rounded-xl">
+                <Scale className="w-6 h-6 text-teal-600" />
               </div>
               <h1 className="text-4xl font-bold text-slate-900 font-display">Terms of Service</h1>
             </div>
@@ -68,7 +68,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 1: Acceptance of Terms */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
+              <CheckCircle className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">1. Acceptance of Terms</h2>
             </div>
 
@@ -88,7 +88,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 2: Nature of the Service */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">2. Nature of the Service</h2>
             </div>
 
@@ -131,7 +131,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 3: User Responsibilities */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Shield className="w-5 h-5 text-blue-600" />
+              <Shield className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">3. User Responsibilities</h2>
             </div>
 
@@ -177,7 +177,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 4: Limitation of Liability */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <XCircle className="w-5 h-5 text-blue-600" />
+              <XCircle className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">4. Limitation of Liability</h2>
             </div>
 
@@ -239,7 +239,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 5: Intellectual Property */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">5. Intellectual Property</h2>
             </div>
 
@@ -276,7 +276,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 6: Data and Privacy */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Shield className="w-5 h-5 text-blue-600" />
+              <Shield className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">6. Data and Privacy</h2>
             </div>
 
@@ -305,7 +305,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 7: Service Availability */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <AlertTriangle className="w-5 h-5 text-blue-600" />
+              <AlertTriangle className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">7. Service Availability</h2>
             </div>
 
@@ -329,7 +329,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 8: Pricing and Payments */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">8. Pricing and Payments</h2>
             </div>
 
@@ -364,7 +364,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 9: Termination */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <XCircle className="w-5 h-5 text-blue-600" />
+              <XCircle className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">9. Termination</h2>
             </div>
 
@@ -392,7 +392,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 10: Governing Law */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <Scale className="w-5 h-5 text-blue-600" />
+              <Scale className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">10. Governing Law and Disputes</h2>
             </div>
 
@@ -408,7 +408,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
 
               <p className="text-slate-700 mt-3">
                 <strong>Informal Resolution:</strong> Before filing a legal claim, we encourage you to contact
-                us at <a href="mailto:support@claimcraft.uk" className="text-blue-600 underline">support@claimcraft.uk</a> to
+                us at <a href="mailto:support@claimcraft.uk" className="text-teal-700 underline">support@claimcraft.uk</a> to
                 resolve the issue amicably.
               </p>
             </div>
@@ -417,7 +417,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 11: Changes to Terms */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">11. Changes to These Terms</h2>
             </div>
 
@@ -436,7 +436,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 12: Miscellaneous */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">12. Miscellaneous</h2>
             </div>
 
@@ -466,7 +466,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
           {/* Section 13: Contact Information */}
           <section className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-teal-600" />
               <h2 className="text-2xl font-bold text-slate-900">13. Contact Us</h2>
             </div>
 
@@ -477,7 +477,7 @@ export const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
 
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                 <p className="text-slate-700">
-                  <strong>Email:</strong> <a href="mailto:support@claimcraft.uk" className="text-blue-600 underline">support@claimcraft.uk</a><br />
+                  <strong>Email:</strong> <a href="mailto:support@claimcraft.uk" className="text-teal-700 underline">support@claimcraft.uk</a><br />
                   <strong>Response Time:</strong> We aim to respond within 48 hours
                 </p>
               </div>

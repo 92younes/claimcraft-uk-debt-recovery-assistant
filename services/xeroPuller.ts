@@ -285,7 +285,7 @@ export class XeroPuller {
     const claimId = `xero_${invoice.InvoiceID.substring(0, 8)}_${Date.now()}`;
 
     // Determine initial status based on overdue days
-    const status: ClaimStatus = interest.daysOverdue > 0 ? 'overdue' : 'draft';
+    const status = interest.daysOverdue > 0 ? 'overdue' as const : 'draft' as const;
 
     return {
       id: claimId,
@@ -313,6 +313,7 @@ export class XeroPuller {
       selectedDocType: DocumentType.LBA, // Start with Letter Before Action
       generated: null,
       signature: null,
+      hasPaid: false,
       importSource: {
         provider: 'xero',
         invoiceId: invoice.InvoiceID,

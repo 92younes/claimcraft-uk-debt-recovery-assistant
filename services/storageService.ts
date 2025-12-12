@@ -1,10 +1,13 @@
 
-import { ClaimState, UserProfile } from '../types';
+import { ClaimState, UserProfile, Deadline, DeadlineReminder, UserNotificationPreferences } from '../types';
 
 const DB_NAME = 'claimcraft_db';
 const CLAIMS_STORE = 'claims';
 const USER_PROFILE_STORE = 'user_profile';
-const DB_VERSION = 2; // Bumped for user_profile store
+const DEADLINES_STORE = 'deadlines';
+const REMINDERS_STORE = 'reminders';
+const NOTIFICATION_PREFS_STORE = 'notification_preferences';
+const DB_VERSION = 3; // Bumped for deadline stores
 
 const openDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -26,6 +29,27 @@ const openDB = (): Promise<IDBDatabase> => {
       // User profile store (new in v2)
       if (!db.objectStoreNames.contains(USER_PROFILE_STORE)) {
         db.createObjectStore(USER_PROFILE_STORE, { keyPath: 'id' });
+      }
+
+      // Deadlines store (new in v3)
+      if (!db.objectStoreNames.contains(DEADLINES_STORE)) {
+        const deadlinesStore = db.createObjectStore(DEADLINES_STORE, { keyPath: 'id' });
+        deadlinesStore.createIndex('claimId', 'claimId', { unique: false });
+        deadlinesStore.createIndex('dueDate', 'dueDate', { unique: false });
+        deadlinesStore.createIndex('status', 'status', { unique: false });
+      }
+
+      // Reminders store (new in v3)
+      if (!db.objectStoreNames.contains(REMINDERS_STORE)) {
+        const remindersStore = db.createObjectStore(REMINDERS_STORE, { keyPath: 'id' });
+        remindersStore.createIndex('deadlineId', 'deadlineId', { unique: false });
+        remindersStore.createIndex('reminderDate', 'reminderDate', { unique: false });
+        remindersStore.createIndex('sent', 'sent', { unique: false });
+      }
+
+      // Notification preferences store (new in v3)
+      if (!db.objectStoreNames.contains(NOTIFICATION_PREFS_STORE)) {
+        db.createObjectStore(NOTIFICATION_PREFS_STORE, { keyPath: 'id' });
       }
     };
 
@@ -242,5 +266,208 @@ export const deleteAllUserData = async (): Promise<void> => {
     } catch (e) {
         console.error("Failed to delete all user data", e);
         throw e;
+    }
+};
+
+// ==========================================
+// Deadline Functions
+// ==========================================
+
+export const getDeadlines = async (): Promise<Deadline[]> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(DEADLINES_STORE, 'readonly');
+            const store = transaction.objectStore(DEADLINES_STORE);
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to load deadlines from DB", e);
+        return [];
+    }
+};
+
+export const saveDeadline = async (deadline: Deadline): Promise<boolean> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(DEADLINES_STORE, 'readwrite');
+            const store = transaction.objectStore(DEADLINES_STORE);
+            const request = store.put(deadline);
+
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(false);
+        });
+    } catch (e) {
+        console.error("Failed to save deadline to DB", e);
+        return false;
+    }
+};
+
+export const deleteDeadline = async (id: string): Promise<void> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(DEADLINES_STORE, 'readwrite');
+            const store = transaction.objectStore(DEADLINES_STORE);
+            const request = store.delete(id);
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to delete deadline from DB", e);
+        throw e;
+    }
+};
+
+export const getDeadlinesForClaim = async (claimId: string): Promise<Deadline[]> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(DEADLINES_STORE, 'readonly');
+            const store = transaction.objectStore(DEADLINES_STORE);
+            const index = store.index('claimId');
+            const request = index.getAll(claimId);
+
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to load deadlines for claim from DB", e);
+        return [];
+    }
+};
+
+export const deleteDeadlinesForClaim = async (claimId: string): Promise<void> => {
+    try {
+        const deadlines = await getDeadlinesForClaim(claimId);
+        for (const deadline of deadlines) {
+            await deleteDeadline(deadline.id);
+        }
+    } catch (e) {
+        console.error("Failed to delete deadlines for claim from DB", e);
+        throw e;
+    }
+};
+
+// ==========================================
+// Reminder Functions
+// ==========================================
+
+export const getReminders = async (): Promise<DeadlineReminder[]> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(REMINDERS_STORE, 'readonly');
+            const store = transaction.objectStore(REMINDERS_STORE);
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to load reminders from DB", e);
+        return [];
+    }
+};
+
+export const saveReminder = async (reminder: DeadlineReminder): Promise<boolean> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(REMINDERS_STORE, 'readwrite');
+            const store = transaction.objectStore(REMINDERS_STORE);
+            const request = store.put(reminder);
+
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(false);
+        });
+    } catch (e) {
+        console.error("Failed to save reminder to DB", e);
+        return false;
+    }
+};
+
+export const getRemindersForDeadline = async (deadlineId: string): Promise<DeadlineReminder[]> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(REMINDERS_STORE, 'readonly');
+            const store = transaction.objectStore(REMINDERS_STORE);
+            const index = store.index('deadlineId');
+            const request = index.getAll(deadlineId);
+
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to load reminders for deadline from DB", e);
+        return [];
+    }
+};
+
+export const getPendingReminders = async (): Promise<DeadlineReminder[]> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(REMINDERS_STORE, 'readonly');
+            const store = transaction.objectStore(REMINDERS_STORE);
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                // Filter for unsent reminders in JavaScript since IDB can't index booleans directly
+                const allReminders = request.result || [];
+                const pendingReminders = allReminders.filter((r: DeadlineReminder) => !r.sent);
+                resolve(pendingReminders);
+            };
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to load pending reminders from DB", e);
+        return [];
+    }
+};
+
+// ==========================================
+// Notification Preferences Functions
+// ==========================================
+
+export const getNotificationPreferences = async (): Promise<UserNotificationPreferences | null> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(NOTIFICATION_PREFS_STORE, 'readonly');
+            const store = transaction.objectStore(NOTIFICATION_PREFS_STORE);
+            const request = store.get('current');
+
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Failed to load notification preferences from DB", e);
+        return null;
+    }
+};
+
+export const saveNotificationPreferences = async (prefs: UserNotificationPreferences): Promise<boolean> => {
+    try {
+        const db = await openDB();
+        const prefsWithId = { ...prefs, id: 'current' };
+
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(NOTIFICATION_PREFS_STORE, 'readwrite');
+            const store = transaction.objectStore(NOTIFICATION_PREFS_STORE);
+            const request = store.put(prefsWithId);
+
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(false);
+        });
+    } catch (e) {
+        console.error("Failed to save notification preferences to DB", e);
+        return false;
     }
 };

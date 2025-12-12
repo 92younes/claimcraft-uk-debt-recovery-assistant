@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { ClaimState, DocumentType } from '../types';
-import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown, RefreshCw } from 'lucide-react';
+import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown, RefreshCw, ExternalLink, CreditCard, Settings, Mail } from 'lucide-react';
+import { Button } from './ui/Button';
+import { Modal } from './ui/Modal';
+import { SegmentedControl } from './ui/SegmentedControl';
 import { SignaturePad } from './SignaturePad';
 import { FinalReviewModal } from './FinalReviewModal';
 import { ConfirmModal } from './ConfirmModal';
-import { generateN1PDF, generateN225PDF, generateN225APDF, generateN180PDF } from '../services/pdfGenerator';
+import { PaymentModal } from './PaymentModal';
+import { generateN1PDF, generateN225PDF, generateN225APDF, generateN180PDF, generateLetterPDF } from '../services/pdfGenerator';
 
 interface DocumentPreviewProps {
   data: ClaimState;
@@ -13,12 +17,16 @@ interface DocumentPreviewProps {
   onConfirm: () => void;
   onUpdateSignature: (sig: string) => void;
   onUpdateContent: (content: string) => void;
+  onSendPhysicalMail?: () => Promise<void>;
+  onOpenMcol?: () => void;
+  mailSuccess?: boolean;
+  onPaymentComplete?: (paymentIntentId: string) => void;
 }
 
 // A4 Page Wrapper with optional Watermark and Overflow Handling
 // Mobile responsive: full width on small screens, A4 width on larger screens
-const Page = ({ children, className = "", watermark = false }: { children?: React.ReactNode; className?: string; watermark?: boolean }) => (
-  <div className={`bg-white shadow-xl w-full md:w-[210mm] min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-hidden flex-shrink-0 ${className}`}>
+const Page = ({ children, className = "", watermark = false, id }: { children?: React.ReactNode; className?: string; watermark?: boolean; id?: string }) => (
+  <div id={id} className={`bg-white shadow-xl w-full md:w-[210mm] min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-hidden flex-shrink-0 ${className}`}>
     {watermark && (
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50 opacity-15 select-none overflow-hidden">
         <div className="transform -rotate-45 text-3xl sm:text-5xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-4 md:border-[10px] border-slate-900 p-4 md:p-10 rounded-2xl mix-blend-multiply">
@@ -30,7 +38,18 @@ const Page = ({ children, className = "", watermark = false }: { children?: Reac
   </div>
 );
 
-export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, isFinalized, onConfirm, onUpdateSignature, onUpdateContent }) => {
+export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
+  data,
+  onBack,
+  isFinalized,
+  onConfirm,
+  onUpdateSignature,
+  onUpdateContent,
+  onSendPhysicalMail,
+  onOpenMcol,
+  mailSuccess = false,
+  onPaymentComplete
+}) => {
   const [viewMode, setViewMode] = useState<'letter' | 'reply-form' | 'info-sheet' | 'n1-form'>('letter');
   const [isSigning, setIsSigning] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -42,6 +61,10 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   const [showOverrideConfirm, setShowOverrideConfirm] = useState(false);
   const [cachedPdfBlob, setCachedPdfBlob] = useState<Blob | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingPaymentAction, setPendingPaymentAction] = useState<'download' | 'send' | null>(null);
 
   // Content editing state
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -66,6 +89,13 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
   };
 
   const handleDownloadPDF = async () => {
+    // Payment gate: show modal if unpaid
+    if (!data.hasPaid) {
+      setPendingPaymentAction('download');
+      setShowPaymentModal(true);
+      return;
+    }
+
     // Show Final Review Modal for all court forms before download
     if (formsRequiringReview.includes(data.selectedDocType)) {
       setShowFinalReview(true);
@@ -138,18 +168,96 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
       } finally {
         setIsGeneratingPdf(false);
       }
+    } else if (isLetter) {
+      // For letter documents (LBA, Polite Chaser, etc.), use html2canvas + jsPDF
+      setIsGeneratingPdf(true);
+      setPdfError(null);
+      try {
+        const blob = await generateLetterPDF('letter-preview-container');
+        const docTypeSlug = data.selectedDocType.replace(/\s+/g, '_');
+        const filename = `${docTypeSlug}_${data.invoice.invoiceNumber || 'document'}.pdf`;
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Failed to generate letter PDF", error);
+        setPdfError(error instanceof Error ? error.message : 'Unknown error');
+      } finally {
+        setIsGeneratingPdf(false);
+      }
     } else {
-      // For non-PDF forms (letters, etc.), use print dialog
+      // Fallback for any other document types
       window.print();
     }
   };
 
-  const handleSend = () => {
-    setIsSending(true);
-    setTimeout(() => {
-      setIsSending(false);
-      setSendSuccess(true);
-    }, 2000);
+  const handleSend = async () => {
+    // Payment gate: show modal if unpaid
+    if (!data.hasPaid) {
+      setPendingPaymentAction('send');
+      setShowPaymentModal(true);
+      return;
+    }
+
+    if (onSendPhysicalMail) {
+      setIsSending(true);
+      try {
+        await onSendPhysicalMail();
+        // Success state handled by parent via mailSuccess prop or we can set it here if parent doesn't re-mount
+      } catch (e) {
+        console.error("Failed to send", e);
+      } finally {
+        setIsSending(false);
+      }
+    } else {
+      // Fallback mock
+      setIsSending(true);
+      setTimeout(() => {
+        setIsSending(false);
+        setSendSuccess(true);
+      }, 2000);
+    }
+  };
+
+  // Handle payment success - continue with pending action
+  const handlePaymentSuccess = async (paymentIntentId: string) => {
+    setShowPaymentModal(false);
+
+    // Call parent to update payment state
+    if (onPaymentComplete) {
+      onPaymentComplete(paymentIntentId);
+    }
+
+    // Continue with the pending action after a brief delay for state update
+    setTimeout(async () => {
+      if (pendingPaymentAction === 'download') {
+        // For court forms, show final review; otherwise download directly
+        if (formsRequiringReview.includes(data.selectedDocType)) {
+          setShowFinalReview(true);
+        } else {
+          await performDownload();
+        }
+      } else if (pendingPaymentAction === 'send') {
+        // Trigger send
+        if (onSendPhysicalMail) {
+          setIsSending(true);
+          try {
+            await onSendPhysicalMail();
+          } catch (e) {
+            console.error("Failed to send", e);
+          } finally {
+            setIsSending(false);
+          }
+        }
+      }
+      setPendingPaymentAction(null);
+    }, 100);
   };
 
   const today = new Date().toLocaleDateString('en-GB');
@@ -242,6 +350,38 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
     };
   }, [pdfPreviewUrl]);
 
+  const handleEmailLba = () => {
+    // Payment gate: show modal if unpaid
+    if (!data.hasPaid) {
+        setPendingPaymentAction('send'); // Use 'send' context for payment modal text
+        setShowPaymentModal(true);
+        return;
+    }
+
+    // Generate mailto link
+    const subject = encodeURIComponent(`Letter Before Action - Invoice ${data.invoice.invoiceNumber}`);
+    const body = encodeURIComponent(`Dear ${data.defendant.name},
+
+Please find attached a Letter Before Action regarding the outstanding balance of £${data.invoice.totalAmount.toFixed(2)}.
+
+${data.generated?.content?.substring(0, 200)}...
+
+Please treat this matter with urgency.
+
+Sincerely,
+${data.claimant.name}`);
+
+    // If debtor has email, pre-fill it
+    const recipient = data.defendant.email || '';
+    
+    window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
+    
+    // In a real app with backend email sending, we'd do this after API success
+    // For mailto, we assume they sent it
+    setSendSuccess(true);
+    setTimeout(() => setSendSuccess(false), 5000);
+  };
+
   // Reset preview URL when switching away from N1
   React.useEffect(() => {
     if (data.selectedDocType !== DocumentType.FORM_N1 && 
@@ -253,7 +393,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
     }
   }, [data.selectedDocType, pdfPreviewUrl]);
 
-  if (sendSuccess) {
+  if (mailSuccess || sendSuccess) {
      return (
        <div className="max-w-lg mx-auto mt-20 text-center animate-fade-in">
           <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -264,9 +404,11 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
              Your Letter Before Action has been dispatched via Registered Post and Email. 
              Tracking number: <span className="font-mono font-bold text-slate-800">GB-2938-4421</span>
           </p>
-          <button onClick={onBack} className="bg-teal-600 text-white px-8 py-3 rounded-xl font-bold">
-             Return to Dashboard
-          </button>
+          <div className="flex justify-center">
+            <Button onClick={onBack} className="px-8">
+              Return to Dashboard
+            </Button>
+          </div>
        </div>
      );
   }
@@ -339,10 +481,14 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
               )}
 
               <div className="flex flex-col md:flex-row justify-end gap-4 pt-6 border-t border-slate-100">
-                 <button onClick={onBack} className="px-5 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg font-medium transition-colors duration-200 border border-slate-200 hover:border-slate-300 text-center">
-                    Back & Edit Data
-                 </button>
-                 <button
+                 <Button
+                    variant="secondary"
+                    onClick={onBack}
+                    className="px-6"
+                 >
+                   Back & Edit Data
+                 </Button>
+                 <Button
                     onClick={() => {
                       // If review failed, show confirmation dialog before approving
                       if (!review.isPass) {
@@ -351,10 +497,11 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                         onConfirm();
                       }
                     }}
-                    className={`px-8 py-2.5 rounded-lg shadow-md font-bold flex items-center justify-center gap-2 transition-all duration-200 transform hover:-translate-y-0.5 ${review.isPass ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+                    variant={review.isPass ? 'primary' : 'danger'}
+                    icon={<CheckCircle className="w-4 h-4" />}
                  >
-                    <CheckCircle className="w-4 h-4" /> {review.isPass ? "Approve & Finalize" : "Override & Approve"}
-                 </button>
+                    {review.isPass ? "Approve & Finalize" : "Override & Approve"}
+                 </Button>
               </div>
            </div>
         </div>
@@ -362,87 +509,140 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
 
       {/* Actions Bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 mt-8 no-print gap-4 px-4 md:px-0">
-        <button 
+        <Button 
+          variant="secondary"
           onClick={onBack}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 transition-colors duration-200 w-full md:w-auto justify-center"
+          icon={<ArrowLeft className="w-4 h-4" />}
+          className="w-full md:w-auto"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Editor
-        </button>
+          Back to Editor
+        </Button>
         <div className="flex flex-wrap gap-2 items-center justify-center">
            {isLetter && (
-             <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm overflow-x-auto max-w-full">
-                <button 
-                  onClick={() => setViewMode('letter')}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'letter' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  Letter
-                </button>
-                <button 
-                  onClick={() => setViewMode('info-sheet')}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'info-sheet' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  Info Sheet
-                </button>
-                <button 
-                  onClick={() => setViewMode('reply-form')}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap ${viewMode === 'reply-form' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  Reply Form
-                </button>
-             </div>
+             <SegmentedControl
+               value={viewMode}
+               onChange={setViewMode}
+               options={[
+                 { value: 'letter', label: 'Letter' },
+                 { value: 'info-sheet', label: 'Info Sheet' },
+                 { value: 'reply-form', label: 'Reply Form' },
+               ]}
+             />
            )}
 
           {isFinalized ? (
               <div className="flex gap-2">
-                {!isLetter && (
-                    <button 
-                        onClick={handleDownloadPDF}
-                        disabled={isGeneratingPdf}
-                        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors duration-200 shadow-sm border border-slate-200 font-bold"
-                    >
-                        {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                        <span className="hidden md:inline">Download PDF</span>
-                        <span className="md:hidden">PDF</span>
-                    </button>
+                {/* MCOL Sidecar Button (for N1 forms) */}
+                {onOpenMcol && !isLetter && (
+                  <Button
+                    onClick={onOpenMcol}
+                    className="bg-slate-800 hover:bg-slate-900"
+                    icon={<ExternalLink className="w-4 h-4" />}
+                  >
+                    <span className="hidden md:inline">File on MCOL</span>
+                    <span className="md:hidden">MCOL</span>
+                  </Button>
                 )}
-                <button 
+
+                {!isLetter && (
+                    <Button
+                        variant={data.hasPaid ? 'secondary' : 'primary'}
+                        onClick={handleDownloadPDF}
+                        isLoading={isGeneratingPdf}
+                        className={data.hasPaid ? 'border-slate-200' : 'border-teal-600'}
+                        icon={!isGeneratingPdf && (data.hasPaid ? <FileDown className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />)}
+                    >
+                        <span className="hidden md:inline">
+                          {data.hasPaid ? 'Download PDF' : 'Download PDF (£2.50)'}
+                        </span>
+                        <span className="md:hidden">
+                          {data.hasPaid ? 'PDF' : '£2.50'}
+                        </span>
+                    </Button>
+                )}
+                <Button
+                  variant="secondary"
                   onClick={handlePrint}
-                  className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-lg transition-colors duration-200 shadow-sm border border-slate-200 font-bold"
+                  icon={<Printer className="w-4 h-4" />}
+                  aria-label="Print document"
                 >
-                  <Printer className="w-4 h-4" /> 
                   <span className="hidden md:inline">Print</span>
-                </button>
-                <button 
-                  onClick={handleSend}
-                  disabled={isSending}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg transition-colors duration-200 shadow-lg font-bold animate-fade-in"
-                >
-                  {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send (£2.50)</>}
-                </button>
+                </Button>
+
+                {/* Download PDF Button for Letters */}
+                {isLetter && (
+                  <Button
+                    variant={data.hasPaid ? 'secondary' : 'primary'}
+                    onClick={handleDownloadPDF}
+                    isLoading={isGeneratingPdf}
+                    className={data.hasPaid ? 'border-slate-200' : 'border-teal-600'}
+                    icon={!isGeneratingPdf && (data.hasPaid ? <FileDown className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />)}
+                    aria-label="Download PDF"
+                  >
+                    <span className="hidden md:inline">
+                      {data.hasPaid ? 'Download PDF' : 'Download PDF (£2.50)'}
+                    </span>
+                    <span className="md:hidden">
+                      {data.hasPaid ? 'PDF' : '£2.50'}
+                    </span>
+                  </Button>
+                )}
+
+                {/* Email Button */}
+                {isLetter && (
+                  <Button
+                    variant={data.hasPaid ? 'secondary' : 'primary'}
+                    onClick={handleEmailLba}
+                    className={data.hasPaid ? 'border-slate-200' : 'border-teal-600'}
+                    icon={<Mail className="w-4 h-4" />}
+                  >
+                    <span className="hidden md:inline">
+                      {data.hasPaid ? 'Email LBA' : 'Unlock & Email'}
+                    </span>
+                  </Button>
+                )}
+
+                {/* Mailroom Button (for Letters) - only show if mail service available */}
+                {isLetter && onSendPhysicalMail && (
+                  <Button
+                    onClick={handleSend}
+                    disabled={isSending}
+                    isLoading={isSending}
+                    icon={!isSending && (data.hasPaid ? <Send className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />)}
+                    className={data.hasPaid ? 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500' : ''}
+                  >
+                    {data.hasPaid ? 'Send via Post (£2.00)' : 'Unlock & Send (£2.50)'}
+                  </Button>
+                )}
               </div>
            ) : (
-              <button 
+              <Button 
                 disabled
-                className="flex items-center gap-2 bg-slate-100 text-slate-400 px-6 py-2.5 rounded-lg font-bold cursor-not-allowed border border-slate-200"
+                variant="secondary"
+                className="bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                icon={<Lock className="w-4 h-4" />}
               >
-                <Lock className="w-4 h-4" /> Approve to Send
-              </button>
+                Approve to Send
+              </Button>
            )}
         </div>
       </div>
 
       {/* Signature Modal */}
-      {isSigning && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-           <div className="bg-white p-6 rounded-xl shadow-2xl">
-              <div className="flex justify-between items-center mb-4">
-                 <h3 className="font-bold text-lg">Add Signature</h3>
-                 <button onClick={() => setIsSigning(false)}><XCircle className="w-6 h-6 text-slate-400" /></button>
-              </div>
-              <SignaturePad onSave={(sig) => { onUpdateSignature(sig); setIsSigning(false); }} />
-           </div>
-        </div>
-      )}
+      <Modal
+        isOpen={isSigning}
+        onClose={() => setIsSigning(false)}
+        title="Add Signature"
+        description="Sign once and we’ll apply it to the document."
+        maxWidthClassName="max-w-lg"
+      >
+        <SignaturePad
+          onSave={(sig) => {
+            onUpdateSignature(sig);
+            setIsSigning(false);
+          }}
+        />
+      </Modal>
 
       {/* Document Container - Mobile Responsive */}
       <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 mx-2 md:mx-0">
@@ -450,7 +650,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
           {isLetter ? (
             <>
                {viewMode === 'letter' && (
-                  <Page watermark={!isFinalized} className="!shadow-none !m-0 !mb-0">
+                  <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0" id="letter-preview-container">
                     {/* Saved/Unsaved indicator */}
                     {!isFinalized && (
                       <div className="absolute top-2 right-2 no-print z-10">
@@ -521,8 +721,8 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                                onClick={() => setIsSigning(true)} 
                                className="h-full w-64 border-2 border-dashed border-slate-300 rounded bg-slate-50 flex items-center justify-center text-slate-400 gap-2 hover:bg-slate-100 hover:border-slate-400 transition-all duration-200 no-print group"
                             >
-                               <PenTool className="w-4 h-4 group-hover:text-blue-500" /> 
-                               <span className="group-hover:text-blue-600 font-medium">Click to Sign Document</span>
+                               <PenTool className="w-4 h-4 group-hover:text-teal-600" /> 
+                               <span className="group-hover:text-teal-700 font-medium">Click to Sign Document</span>
                             </button>
                           )}
                         </div>
@@ -543,7 +743,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                )}
                
                {viewMode === 'info-sheet' && (
-                  <Page watermark={!isFinalized} className="!shadow-none !m-0 !mb-0">
+                  <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0">
                      <div className="max-w-[90%] mx-auto pt-6 text-sm">
                         <h1 className="text-xl font-bold mb-6 text-center uppercase border-b-2 border-black pb-4">Annex 1: Information Sheet</h1>
                         <p className="font-bold text-justify mb-4">
@@ -599,7 +799,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                )}
 
                {viewMode === 'reply-form' && (
-                  <Page watermark={!isFinalized} className="!shadow-none !m-0 !mb-0">
+                  <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0">
                      <div className="max-w-[95%] mx-auto pt-4 text-sm">
                         <h1 className="text-xl font-bold mb-4 text-center uppercase">Annex 2: Reply Form</h1>
                         <div className="bg-slate-50 border border-slate-300 p-3 mb-4 text-xs">
@@ -682,12 +882,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                   </div>
                ) : pdfPreviewUrl ? (
                   <div className="w-full px-4">
-                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded">
+                    <div className="bg-teal-50 border-l-4 border-teal-500 p-4 mb-4 rounded">
                       <div className="flex items-start gap-3">
-                        <ShieldCheck className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <ShieldCheck className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" />
                         <div>
-                          <p className="font-bold text-blue-900 text-sm">Official HMCTS Form N1 Preview</p>
-                          <p className="text-blue-700 text-xs mt-1">
+                          <p className="font-bold text-teal-900 text-sm">Official HMCTS Form N1 Preview</p>
+                          <p className="text-teal-800 text-xs mt-1">
                             This is the actual court form (N1_1224, Dec 2024) with your data filled in.
                             What you see here is exactly what you'll download and submit to court.
                           </p>
@@ -696,16 +896,17 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                     </div>
                     {/* Edit Particulars button for N1 forms */}
                     {!isFinalized && (
-                      <button
+                      <Button
                         onClick={() => {
                           setEditedParticulars(data.generated?.content || '');
                           setShowParticularsModal(true);
                         }}
-                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium mb-4 transition-colors duration-200 no-print"
+                        variant="warning"
+                        icon={<PenTool className="w-4 h-4" />}
+                        className="mb-4 no-print"
                       >
-                        <PenTool className="w-4 h-4" />
                         Edit Particulars of Claim
-                      </button>
+                      </Button>
                     )}
                     <iframe
                       src={pdfPreviewUrl}
@@ -751,131 +952,6 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
                     </p>
                   </div>
                )}
-               {/* REMOVED: HTML recreation of N1 form - now showing actual PDF */}
-               <div className="hidden">
-               <Page watermark={false} className="!p-[10mm] !shadow-none !m-0 !mb-0 border-b border-slate-200">
-                  <div className="flex flex-col h-full text-xs leading-tight font-sans">
-                     {/* Header Area */}
-                     <div className="flex justify-between items-start mb-2">
-                         <div className="flex items-center gap-4 pt-2 pl-2">
-                             <div className="w-20 h-20 border border-slate-300 flex flex-col items-center justify-center text-center text-[8px] text-slate-400 bg-slate-50">
-                               <span className="font-serif text-2xl mb-1">♕</span>
-                               <span className="font-serif italic">Royal Arms</span>
-                             </div>
-                             <h1 className="text-4xl font-bold font-sans tracking-tight">Claim Form</h1>
-                         </div>
-                         {/* Grid Table */}
-                         <div className="w-[340px] border border-black grid grid-cols-[110px_1fr]">
-                             <div className="border-b border-black p-1 bg-blue-50 font-bold">In the</div>
-                             <div className="border-b border-black p-1 font-bold text-sm uppercase flex items-center">County Court Business Centre</div>
-                             <div className="border-b border-black p-1 bg-blue-50 font-bold">Claim no.</div>
-                             <div className="border-b border-black p-1"></div>
-                             <div className="border-b border-black p-1 bg-blue-50 font-bold">Fee Account no.</div>
-                             <div className="border-b border-black p-1"></div>
-                         </div>
-                     </div>
-
-                     <div className="grid grid-cols-[1fr_340px] gap-4 flex-grow h-full">
-                         {/* Left Column */}
-                         <div className="flex flex-col gap-2">
-                             <div className="border border-black p-2 min-h-[120px]">
-                                 <p className="font-bold uppercase mb-1 bg-blue-50 inline-block px-1 text-[10px]">Claimant(s) name(s) and address(es)</p>
-                                 <p className="font-bold text-sm">{data.claimant.name}</p>
-                                 <p>{data.claimant.address}</p>
-                                 <p>{data.claimant.postcode}</p>
-                             </div>
-                             <div className="border border-black p-2 min-h-[120px]">
-                                 <p className="font-bold uppercase mb-1 bg-blue-50 inline-block px-1 text-[10px]">Defendant(s) name(s) and address(es)</p>
-                                 <p className="font-bold text-sm">{data.defendant.name}</p>
-                                 <p>{data.defendant.address}</p>
-                                 <p>{data.defendant.postcode}</p>
-                             </div>
-                             <div className="border border-black p-2 flex-grow">
-                                 <p className="font-bold uppercase mb-1 bg-blue-50 inline-block px-1 text-[10px]">Brief details of claim</p>
-                                 <p className="italic mb-2 min-h-[40px] p-2 bg-yellow-50 border border-yellow-100 rounded text-sm">{data.generated?.briefDetails}</p>
-                                 <div className="mt-4 text-xs font-mono text-slate-600 space-y-1 pl-2 border-l-2 border-slate-200">
-                                   <p>Principal Debt: £{claimAmount.toFixed(2)}</p>
-                                   <p>Statutory Interest: £{totalInterest.toFixed(2)}</p>
-                                 </div>
-                             </div>
-                             <div className="border border-black p-2">
-                                 <p className="font-bold uppercase mb-1 bg-blue-50 inline-block px-1 text-[10px]">Value</p>
-                                 <p>The Claimant expects to recover <span className="font-bold">£{totalAmount}</span></p>
-                             </div>
-                             <div className="border border-black p-2 min-h-[80px]">
-                                 <p className="font-bold uppercase mb-1 bg-blue-50 inline-block px-1 text-[10px]">Defendant's name and address for service</p>
-                                 <p className="font-bold">{data.defendant.name}</p>
-                             </div>
-                         </div>
-
-                         {/* Right Column */}
-                         <div className="flex flex-col gap-2 h-full">
-                             <div className="border border-black bg-blue-50 p-1 text-center font-bold uppercase text-[10px]">For court use only</div>
-                             <div className="border border-black p-2 flex-grow bg-slate-50 flex flex-col gap-2"></div>
-                             <div className="border border-black">
-                                 <div className="grid grid-cols-[1fr_90px] text-sm">
-                                     <div className="p-1 border-r border-black font-bold bg-blue-50">Total amount</div>
-                                     <div className="p-1 font-bold text-right bg-blue-50">{ totalAmount }</div>
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
-                     <div className="mt-2 flex justify-between text-[9px]"><span>N1 Claim form (CPR Part 7) (10.20)</span><span>© Crown copyright 2023</span></div>
-                  </div>
-               </Page>
-
-               {/* Page 2: Particulars & Signature */}
-               <Page watermark={!isFinalized} className="!p-[15mm] !shadow-none !m-0 !mb-0">
-                  <h2 className="font-bold text-lg mb-4 uppercase border-b border-black pb-2">Particulars of Claim</h2>
-                  <div
-                      className={`whitespace-pre-wrap text-justify leading-relaxed mb-12 text-sm min-h-[400px] transition-all duration-200 ${
-                        !isFinalized
-                          ? 'hover:outline-2 hover:outline-dashed hover:outline-slate-300 hover:outline-offset-4 focus:outline-2 focus:outline-solid focus:outline-teal-500 focus:outline-offset-4 cursor-text rounded'
-                          : ''
-                      }`}
-                      contentEditable={!isFinalized}
-                      suppressContentEditableWarning
-                      title={!isFinalized ? 'Click to edit this content' : undefined}
-                  >
-                      {data.generated?.content}
-                  </div>
-
-                  <div className="border-t-2 border-black pt-6 mt-8">
-                      <h2 className="font-bold text-lg mb-4 uppercase">Statement of Truth</h2>
-                      <p className="italic mb-4 text-sm">
-                          I believe that the facts stated in these particulars of claim are true. 
-                          {data.claimant.type === 'Business' && " I am duly authorised by the claimant to sign this statement."}
-                      </p>
-
-                      <div className="grid grid-cols-2 gap-10 mt-10">
-                          <div>
-                              <div className="border-b border-black h-16 flex items-end pb-1">
-                                  {data.signature ? (
-                                    <img src={data.signature} alt="Signed" className="h-14 object-contain" />
-                                  ) : (
-                                    <button 
-                                       onClick={() => setIsSigning(true)} 
-                                       className="w-full h-full text-slate-400 flex items-center gap-2 text-xs hover:bg-slate-50 no-print"
-                                    >
-                                       <PenTool className="w-3 h-3" /> Click to Sign
-                                    </button>
-                                  )}
-                              </div>
-                              <p className="text-xs mt-1">Signature of Claimant</p>
-                          </div>
-                          <div>
-                              <div className="border-b border-black h-16 flex items-end pb-1 font-mono">{today}</div>
-                              <p className="text-xs mt-1">Date</p>
-                          </div>
-                      </div>
-
-                      <div className="mt-6 text-sm">
-                          <p className="mb-1"><span className="font-bold">Full name:</span> {data.claimant.name}</p>
-                          <p><span className="font-bold">Role:</span> {data.claimant.type === 'Business' ? 'Director / Authorised Signatory' : 'Claimant in Person'}</p>
-                      </div>
-                  </div>
-               </Page>
-               </div>{/* End hidden HTML N1 recreation */}
             </>
           )}
         </div>
@@ -916,54 +992,51 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, onBack, 
       />
 
       {/* Edit Particulars Modal for N1 forms */}
-      {showParticularsModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
-            <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-lg text-slate-900">Edit Particulars of Claim</h3>
-                <p className="text-sm text-slate-500 mt-1">Make corrections to the text that will appear on your N1 form</p>
-              </div>
-              <button
-                onClick={() => setShowParticularsModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <XCircle className="w-6 h-6 text-slate-400" />
-              </button>
-            </div>
-            <div className="p-4 flex-1 overflow-auto">
-              <textarea
-                value={editedParticulars}
-                onChange={(e) => setEditedParticulars(e.target.value)}
-                className="w-full h-80 p-4 border border-slate-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none"
-                placeholder="Enter the particulars of claim..."
-              />
-              <p className="text-xs text-slate-500 mt-2">
-                This text will be used in the "Particulars of Claim" section of your N1 form.
-                The PDF will regenerate automatically after saving.
-              </p>
-            </div>
-            <div className="p-4 border-t border-slate-200 flex justify-end gap-3 bg-slate-50 rounded-b-xl">
-              <button
-                onClick={() => setShowParticularsModal(false)}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onUpdateContent(editedParticulars);
-                  setShowParticularsModal(false);
-                }}
-                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold transition-colors flex items-center gap-2"
-              >
-                <CheckCircle className="w-4 h-4" />
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={showParticularsModal}
+        onClose={() => setShowParticularsModal(false)}
+        title="Edit Particulars of Claim"
+        description="Make corrections to the text that will appear on your N1 form."
+        maxWidthClassName="max-w-3xl"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowParticularsModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                onUpdateContent(editedParticulars);
+                setShowParticularsModal(false);
+              }}
+              icon={<CheckCircle className="w-4 h-4" />}
+            >
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        <textarea
+          value={editedParticulars}
+          onChange={(e) => setEditedParticulars(e.target.value)}
+          className="w-full h-80 p-4 border border-slate-300 rounded-xl font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none"
+          placeholder="Enter the particulars of claim..."
+        />
+        <p className="text-xs text-slate-500 mt-2">
+          This text will be used in the "Particulars of Claim" section of your N1 form. The PDF will regenerate automatically after saving.
+        </p>
+      </Modal>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setPendingPaymentAction(null);
+        }}
+        onPaymentSuccess={handlePaymentSuccess}
+        claimId={data.id}
+        documentType={data.generated?.documentType || data.selectedDocType}
+      />
     </div>
   );
-}
+};

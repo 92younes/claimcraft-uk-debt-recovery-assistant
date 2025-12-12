@@ -6,7 +6,9 @@
       "WebSearch",
       "WebFetch(domain:docs.nango.dev)",
       "WebFetch(domain:nango.dev)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "mcp__supabase__search_docs",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

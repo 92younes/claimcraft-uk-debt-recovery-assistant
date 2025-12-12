@@ -1,41 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { PartyForm } from './components/PartyForm';
+import { Button } from './components/ui/Button';
 import { Input, TextArea } from './components/ui/Input';
 import { Tooltip } from './components/ui/Tooltip';
 import { ProgressStepsCompact } from './components/ui/ProgressSteps';
 import { DocumentPreview } from './components/DocumentPreview';
 import { CsvImportModal } from './components/CsvImportModal';
+import { ConfirmModal } from './components/ConfirmModal';
 import { AssessmentReport } from './components/AssessmentReport';
 import { TimelineBuilder } from './components/TimelineBuilder';
 import { EvidenceUpload } from './components/EvidenceUpload';
 import { ChatInterface } from './components/ChatInterface';
 import { OnboardingModal } from './components/OnboardingModal';
 import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
-import { StatementOfTruthModal } from './components/StatementOfTruthModal';
-import { InterestRateConfirmModal } from './components/InterestRateConfirmModal';
 import { LitigantInPersonModal } from './components/LitigantInPersonModal';
 import { ViabilityBlockModal } from './components/ViabilityBlockModal';
 import { AccountingIntegration } from './components/AccountingIntegration';
 import { XeroInvoiceImporter } from './components/XeroInvoiceImporter';
+import { ConversationEntry } from './components/ConversationEntry';
+import { McolSidecar } from './components/McolSidecar';
+import { CourtFormDataModal } from './components/CourtFormDataModal';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
+import { CalendarView } from './pages/CalendarView';
+import { SettingsPage } from './pages/SettingsPage';
+import { DeadlineWidget } from './components/DeadlineWidget';
+import { getDeadlines, saveDeadline, deleteDeadline, deleteDeadlinesForClaim } from './services/storageService';
+import { getUpcomingDeadlines, markDeadlineComplete } from './services/deadlineService';
 import { analyzeEvidence, startClarificationChat, sendChatMessage, getClaimStrengthAssessment, extractDataFromChat } from './services/geminiService';
 import { DocumentBuilder } from './services/documentBuilder';
 import { NangoClient } from './services/nangoClient';
 import { searchCompaniesHouse } from './services/companiesHouse';
-import { assessClaimViability, calculateCourtFee, calculateCompensation } from './services/legalRules';
+import { assessClaimViability, calculateCourtFee, calculateCompensation, getLbaResponsePeriodDays } from './services/legalRules';
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData, getUserProfile, saveUserProfile } from './services/storageService';
+import { verifyPayment } from './services/paymentService';
 import { profileToClaimantParty } from './services/userProfileService';
-import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, AccountingConnection, ExtractedClaimData, UserProfile } from './types';
+import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, ConversationMessage, AccountingConnection, ExtractedClaimData, UserProfile, Deadline, DeadlineStatus, CourtFormData } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS, getCountyFromPostcode } from './constants';
 import { validateDateRelationship, validateInterestCalculation, validateUniqueInvoice } from './utils/validation';
-import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, ChevronUp, ChevronDown, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent } from 'lucide-react';
+import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, ChevronUp, ChevronDown, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent, Save } from 'lucide-react';
+
+// Backend API URL - Issue 4 fix
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 // New view state
-type ViewState = 'landing' | 'onboarding' | 'dashboard' | 'wizard' | 'privacy' | 'terms';
+type ViewState = 'landing' | 'onboarding' | 'dashboard' | 'wizard' | 'conversation' | 'privacy' | 'terms' | 'calendar' | 'settings';
 
 enum Step {
   SOURCE = 1,
@@ -70,6 +82,9 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Deadline/Calendar State
+  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
+
   // Wizard State
   const [step, setStep] = useState<Step>(Step.SOURCE);
   const [maxStepReached, setMaxStepReached] = useState<Step>(Step.SOURCE);
@@ -82,6 +97,7 @@ const App: React.FC = () => {
   // Refine State (Step 7)
   const [showRefineInput, setShowRefineInput] = useState(false);
   const [refineInstruction, setRefineInstruction] = useState('');
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false); // For AI flow in Step 2
@@ -92,17 +108,15 @@ const App: React.FC = () => {
   const [showXeroImporter, setShowXeroImporter] = useState(false);
 
   // Compliance Modal State
-  const [showSoTModal, setShowSoTModal] = useState(false);
-  const [showInterestModal, setShowInterestModal] = useState(false);
   const [showLiPModal, setShowLiPModal] = useState(false);
   const [showAdvancedDocs, setShowAdvancedDocs] = useState(false);
+
+  // Transition State
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Chat readiness state (AI determines when enough info is collected)
   const [canProceed, setCanProceed] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-
-  // Phase 2: Inline interest verification (replaces InterestRateConfirmModal)
-  const [hasVerifiedInterest, setHasVerifiedInterest] = useState(false);
 
   // AI Data Extraction State (for DATA_REVIEW step)
   const [extractedData, setExtractedData] = useState<ExtractedClaimData | null>(null);
@@ -117,14 +131,106 @@ const App: React.FC = () => {
   const [viabilityIssues, setViabilityIssues] = useState<string[]>([]);
   const [hasAcknowledgedViability, setHasAcknowledgedViability] = useState(false);
   const [hasAcknowledgedLbaWarning, setHasAcknowledgedLbaWarning] = useState(false);
-  const [lbaAlreadySent, setLbaAlreadySent] = useState(false); // Manual override: user confirms they already sent an LBA
-  const [lbaSentDate, setLbaSentDate] = useState<string>(''); // Date when LBA was sent (for 30-day warning)
   const [chatError, setChatError] = useState<string | null>(null);
 
+  // Form Validity State (for Step.DETAILS)
+  const [isClaimantFormValid, setIsClaimantFormValid] = useState(true);
+  const [isDefendantFormValid, setIsDefendantFormValid] = useState(true);
+
+  // Mailroom & MCOL State
+  const [showMcolSidecar, setShowMcolSidecar] = useState(false);
+
+  // Court Form Data Modal State (N225A, N180, N225)
+  const [showCourtFormModal, setShowCourtFormModal] = useState(false);
+  const [isSendingMail, setIsSendingMail] = useState(false);
+  const [mailSuccess, setMailSuccess] = useState<string | null>(null); // Stores tracking ID
+  const [mailServiceAvailable, setMailServiceAvailable] = useState(false); // Tracks if mail service is configured
+
+  // Accessibility: Ref for focus management on step changes
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // Focus step heading when step changes (for screen readers)
+  useEffect(() => {
+    if (view === 'wizard' && stepHeadingRef.current) {
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        stepHeadingRef.current?.focus();
+      }, 100);
+    }
+  }, [step, view]);
+
+  const parseAddressForMail = (fullAddress: string, city: string, postcode: string) => {
+    // Split by comma OR newline to handle different user input formats
+    const parts = fullAddress.split(/[,\n]+/).map(p => p.trim()).filter(p => p.length > 0);
+    return {
+      address1: parts[0] || '',
+      address2: parts.slice(1).join(', ') || '', 
+      city: city,
+      postcode: postcode
+    };
+  };
+
+  const sendPhysicalLetter = async () => {
+    if (!claimData.generated?.content) {
+      alert("Please generate the document first.");
+      return;
+    }
+
+    const addressData = parseAddressForMail(
+      claimData.defendant.address, 
+      claimData.defendant.city, 
+      claimData.defendant.postcode
+    );
+
+    setIsSendingMail(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/mail/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: {
+            name: claimData.defendant.name,
+            ...addressData
+          },
+          html: `
+            <h1>Letter Before Action</h1>
+            <p><strong>Ref:</strong> ${claimData.invoice.invoiceNumber}</p>
+            <hr/>
+            <div style="white-space: pre-wrap;">${claimData.generated.content}</div>
+          `
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setMailSuccess(data.trackingId);
+        // Update claim status locally
+        setClaimData(prev => ({
+          ...prev,
+          status: 'sent',
+          timeline: [...prev.timeline, {
+            date: new Date().toISOString(),
+            description: `Physical LBA sent via Mailroom (Tracking: ${data.trackingId})`,
+            type: 'lba_sent'
+          }]
+        }));
+      } else {
+        alert('Failed to send: ' + data.message);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error connecting to mail server');
+    } finally {
+      setIsSendingMail(false);
+    }
+  };
+
   // Helper to reset all wizard-specific state when starting/resuming a claim
+  // Issue 1 fix: Don't reset hasVerifiedInterest, lbaAlreadySent, lbaSentDate as they're now in claimData
   const resetWizardState = () => {
+    setStep(Step.SOURCE);
+    setMaxStepReached(Step.SOURCE);
     setCanProceed(false);
-    setHasVerifiedInterest(false);
     setExtractedData(null);
     setRecommendationReason('');
     setExtractedFields([]);
@@ -135,11 +241,14 @@ const App: React.FC = () => {
     setViabilityIssues([]);
     setHasAcknowledgedViability(false);
     setHasAcknowledgedLbaWarning(false);
-    setLbaAlreadySent(false);
-    setLbaSentDate('');
     setChatError(null);
     setIsEditingAnalysis(false);
     setIsFinalized(false);
+    // Reset form validity to true initially (will update on mount of PartyForm)
+    setIsClaimantFormValid(true);
+    setIsDefendantFormValid(true);
+    setShowMcolSidecar(false);
+    setMailSuccess(null);
   };
 
   // Initialize Nango on mount
@@ -164,7 +273,7 @@ const App: React.FC = () => {
 
   // Load data on mount
   useEffect(() => {
-    // Load local claims and user profile async
+    // Load local claims, user profile, and deadlines async
     const loadData = async () => {
         const storedClaims = await getStoredClaims();
         setDashboardClaims(storedClaims);
@@ -173,12 +282,38 @@ const App: React.FC = () => {
         const profile = await getUserProfile();
         setUserProfile(profile);
 
+        // Load deadlines
+        const storedDeadlines = await getDeadlines();
+        setDeadlines(storedDeadlines);
+
         // If we have claims, auto-direct to dashboard for better UX
         if (storedClaims.length > 0) {
             setView('dashboard');
         }
     };
     loadData();
+  }, []);
+
+  // Check mail service availability on mount
+  useEffect(() => {
+    const checkMailService = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000) // 3 second timeout
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setMailServiceAvailable(data.services?.mail === true);
+        } else {
+          setMailServiceAvailable(false);
+        }
+      } catch {
+        // Server not running or network error - mail not available
+        setMailServiceAvailable(false);
+      }
+    };
+    checkMailService();
   }, []);
 
   // Validate API keys on mount
@@ -339,17 +474,76 @@ const App: React.FC = () => {
     } else {
       // Reset all wizard state for fresh claim
       resetWizardState();
-      // Returning user: pre-fill claimant from profile and go to wizard
+      // Returning user: pre-fill claimant from profile and go to conversation entry
       const claimantFromProfile = profileToClaimantParty(profile);
       setClaimData({
         ...INITIAL_STATE,
         id: Math.random().toString(36).substr(2, 9),
         claimant: claimantFromProfile
       });
+      // NEW: Go to conversation entry instead of wizard
+      setView('conversation');
+    }
+  };
+
+  // Start with manual wizard - skip AI assistant and go directly to step-by-step form
+  const handleStartManualWizard = async () => {
+    const profile = userProfile || await getUserProfile();
+
+    if (!profile) {
+      // First-time user: show full onboarding flow
+      setView('onboarding');
+    } else {
+      // Reset all wizard state for fresh claim
+      resetWizardState();
+      // Returning user: pre-fill claimant from profile
+      const claimantFromProfile = profileToClaimantParty(profile);
+      setClaimData({
+        ...INITIAL_STATE,
+        id: Math.random().toString(36).substr(2, 9),
+        claimant: claimantFromProfile
+      });
+      // Go directly to wizard Step.SOURCE
       setStep(Step.SOURCE);
-      setMaxStepReached(Step.SOURCE);
       setView('wizard');
     }
+  };
+
+  // Handle conversation entry completion - transition to wizard with pre-filled data
+  const handleConversationComplete = (extractedData: Partial<ClaimState>, messages: ConversationMessage[]) => {
+    // Show magic transition
+    setIsTransitioning(true);
+
+    // Map ConversationMessage to ChatMessage for history
+    const history: ChatMessage[] = messages.map(msg => ({
+      id: Date.now().toString() + Math.random().toString(),
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp
+    }));
+
+    // Merge extracted data with existing claim data (preserving claimant from profile)
+    setClaimData(prev => ({
+      ...prev,
+      ...extractedData,
+      // Merge nested objects properly
+      defendant: { ...prev.defendant, ...extractedData.defendant },
+      claimant: { ...prev.claimant, ...extractedData.claimant },
+      invoice: { ...prev.invoice, ...extractedData.invoice },
+      timeline: [...(prev.timeline || []), ...(extractedData.timeline || [])],
+      evidence: [...(prev.evidence || []), ...(extractedData.evidence || [])],
+      chatHistory: history,
+      source: 'upload' // Mark as uploaded/extracted
+    }));
+
+    // Delay transition to simulate "AI processing"
+    setTimeout(() => {
+        setIsTransitioning(false);
+        // Transition to wizard at DETAILS step (for verification)
+        setStep(Step.DETAILS);
+        setMaxStepReached(Step.DETAILS);
+        setView('wizard');
+    }, 2000);
   };
 
   // New onboarding flow complete handler
@@ -366,9 +560,8 @@ const App: React.FC = () => {
       id: Math.random().toString(36).substr(2, 9),
       claimant: claimantFromProfile
     });
-    setStep(Step.SOURCE);
-    setMaxStepReached(Step.SOURCE);
-    setView('wizard');
+    // Go directly to conversation entry to start the claim
+    setView('conversation');
   };
 
   // Phase 2: Combined onboarding handlers (replaces disclaimer + eligibility flow) - LEGACY
@@ -390,27 +583,53 @@ const App: React.FC = () => {
   const handleResumeClaim = (claim: ClaimState) => {
     // Reset wizard state to avoid stale data from previous claim
     resetWizardState();
-    setClaimData(claim);
+
+    // Auto-populate timeline if empty but invoice data exists
+    let updatedClaim = claim;
+    if (claim.timeline.length === 0 && claim.invoice.dateIssued) {
+      const events: TimelineEvent[] = [];
+
+      // Add invoice sent event
+      events.push({
+        date: claim.invoice.dateIssued,
+        description: `Invoice #${claim.invoice.invoiceNumber || 'N/A'} sent for £${claim.invoice.totalAmount?.toFixed(2) || '0.00'}`,
+        type: 'invoice'
+      });
+
+      // Add payment due event if due date exists
+      if (claim.invoice.dueDate) {
+        events.push({
+          date: claim.invoice.dueDate,
+          description: `Payment due for Invoice #${claim.invoice.invoiceNumber || 'N/A'}`,
+          type: 'payment_due'
+        });
+      }
+
+      updatedClaim = { ...claim, timeline: events };
+    }
+
+    setClaimData(updatedClaim);
 
     // Smart heuristic to jump to the correct step based on claim completeness
+    // Use updatedClaim to account for auto-populated timeline
     let resumeStep: Step;
-    if (claim.status === 'sent') {
+    if (updatedClaim.status === 'sent') {
       resumeStep = Step.PREVIEW;
       setIsFinalized(true);
-    } else if (claim.generated) {
+    } else if (updatedClaim.generated) {
       resumeStep = Step.DRAFT;
-    } else if (!claim.claimant.name || !claim.defendant.name || !claim.invoice.totalAmount) {
+    } else if (!updatedClaim.claimant.name || !updatedClaim.defendant.name || !updatedClaim.invoice.totalAmount) {
       // Missing essential party/invoice details
       resumeStep = Step.DETAILS;
-    } else if (!claim.assessment) {
+    } else if (!updatedClaim.assessment) {
       // Ensure assessment is run before proceeding
       resumeStep = Step.DETAILS;
-    } else if (claim.timeline.length < 1) {
+    } else if (updatedClaim.timeline.length < 1) {
       // Need at least the invoice event
       resumeStep = Step.TIMELINE;
-    } else if (!claim.selectedDocType) {
+    } else if (!updatedClaim.selectedDocType) {
        // No document selected yet - check if they are in consultation or need to start
-       if (claim.chatHistory.length > 0) {
+       if (updatedClaim.chatHistory.length > 0) {
          resumeStep = Step.QUESTIONS;
        } else {
          resumeStep = Step.TIMELINE;
@@ -425,10 +644,82 @@ const App: React.FC = () => {
     setView('wizard');
   };
 
+  // Create Demo Claim for Empty State
+  const handleCreateDemoClaim = async () => {
+    setIsProcessing(true);
+    const demoClaim: ClaimState = {
+        ...INITIAL_STATE,
+        id: Math.random().toString(36).substr(2, 9),
+        source: 'manual',
+        status: 'draft',
+        lastModified: Date.now(),
+        claimant: {
+            ...INITIAL_STATE.claimant,
+            name: userProfile?.businessName || 'Your Business Ltd',
+            type: PartyType.BUSINESS,
+            email: userProfile?.email || 'accounts@yourbusiness.com',
+            address: '123 High Street\nLondon',
+            postcode: 'SW1A 1AA',
+            city: 'London'
+        },
+        defendant: {
+            ...INITIAL_STATE.defendant,
+            name: 'Acme Trading Corp',
+            type: PartyType.BUSINESS,
+            address: 'Industrial Estate, Unit 5\nManchester',
+            postcode: 'M1 1AB',
+            city: 'Manchester'
+        },
+        invoice: {
+            ...INITIAL_STATE.invoice,
+            invoiceNumber: 'INV-2024-001',
+            dateIssued: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 45 days ago
+            dueDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 15 days ago
+            totalAmount: 1500.00,
+            description: 'Web Design and Development Services'
+        },
+        interest: {
+            ...INITIAL_STATE.interest,
+            daysOverdue: 15,
+            dailyRate: 0.52,
+            totalInterest: 7.80
+        },
+        compensation: 70.00,
+        timeline: [
+            {
+                date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                type: 'invoice',
+                description: 'Invoice INV-2024-001 sent for £1,500.00'
+            },
+            {
+                date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                type: 'payment_due',
+                description: 'Payment due date reached'
+            },
+            {
+                date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                type: 'chaser',
+                description: 'Polite reminder email sent'
+            }
+        ]
+    };
+
+    await saveClaimToStorage(demoClaim);
+    const stored = await getStoredClaims();
+    setDashboardClaims(stored);
+    setView('dashboard');
+    setIsProcessing(false);
+  };
+
   const handleDeleteClaim = async (id: string) => {
     try {
+      // Delete associated deadlines first
+      await deleteDeadlinesForClaim(id);
+      // Then delete the claim
       await deleteClaimFromStorage(id);
+      // Update state
       setDashboardClaims(prev => prev.filter(c => c.id !== id));
+      setDeadlines(prev => prev.filter(d => d.claimId !== id));
     } catch (error) {
       console.error('Failed to delete claim:', error);
       setError('Failed to delete claim. Please try again.');
@@ -522,9 +813,79 @@ const App: React.FC = () => {
     setView('dashboard');
   };
 
-  const handleEnterApp = () => {
+  const handleEnterApp = async () => {
+    // Check for existing profile
+    const profile = userProfile || await getUserProfile();
+
+    if (!profile) {
+      // First-time user: show onboarding
+      setView('onboarding');
+    } else if (dashboardClaims.length === 0) {
+      // Returning user with no claims: go to conversation to start first claim
+      resetWizardState();
+      const claimantFromProfile = profileToClaimantParty(profile);
+      setClaimData({
+        ...INITIAL_STATE,
+        id: Math.random().toString(36).substr(2, 9),
+        claimant: claimantFromProfile
+      });
+      setView('conversation');
+    } else {
+      // Returning user with claims: go to dashboard
       setView('dashboard');
+    }
   };
+
+  // --- Calendar/Deadline Handlers ---
+  const handleCalendarClick = () => {
+    setView('calendar');
+  };
+
+  // --- Settings Handlers ---
+  const handleSettingsClick = async () => {
+    // Ensure we have a loaded profile before entering Settings.
+    // This avoids routing issues if the user clicks quickly before initial load completes.
+    const profile = userProfile || await getUserProfile();
+    if (profile) {
+      setUserProfile(profile);
+      setView('settings');
+      return;
+    }
+    // No accepted profile yet -> route to onboarding gate
+    setView('onboarding');
+  };
+
+  const handleSettingsSave = async (updatedProfile: UserProfile) => {
+    await saveUserProfile(updatedProfile);
+    setUserProfile(updatedProfile);
+    setView('dashboard');
+  };
+
+  const handleDeadlineClick = (deadline: Deadline) => {
+    // Find the associated claim and open it
+    const claim = dashboardClaims.find(c => c.id === deadline.claimId);
+    if (claim) {
+      setClaimData(claim);
+      setStep(Step.SOURCE);
+      setView('wizard');
+    }
+  };
+
+  const handleCompleteDeadline = async (deadline: Deadline) => {
+    const updatedDeadline = markDeadlineComplete(deadline);
+    await saveDeadline(updatedDeadline);
+
+    // Refresh deadlines
+    const storedDeadlines = await getDeadlines();
+    setDeadlines(storedDeadlines);
+  };
+
+  const handleViewAllDeadlines = () => {
+    setView('calendar');
+  };
+
+  // Get count of upcoming deadlines for sidebar badge
+  const upcomingDeadlinesCount = getUpcomingDeadlines(dashboardClaims, deadlines, 7).length;
 
   // --- Wizard Logic (Existing) ---
   useEffect(() => {
@@ -635,7 +996,11 @@ const App: React.FC = () => {
     // CRITICAL FIX: Use correct interest rate based on party types
     // B2B = Late Payment of Commercial Debts (Interest) Act 1998 (BoE + 8% = 12.75%)
     // B2C = County Courts Act 1984 s.69 (8% per annum)
-    const isB2B = claimantType === PartyType.BUSINESS && defendantType === PartyType.BUSINESS;
+    // Note: Sole Traders are businesses for the purpose of the 1998 Act
+    const isClaimantBusiness = claimantType === PartyType.BUSINESS || claimantType === PartyType.SOLE_TRADER;
+    const isDefendantBusiness = defendantType === PartyType.BUSINESS || defendantType === PartyType.SOLE_TRADER;
+    const isB2B = isClaimantBusiness && isDefendantBusiness;
+    
     const interestRate = isB2B ? LATE_PAYMENT_ACT_RATE : 8.0; // 12.75% for B2B, 8% for B2C
 
     const annualRate = interestRate / 100;
@@ -649,10 +1014,21 @@ const App: React.FC = () => {
     };
   };
 
-  const updateClaimant = (p: Party) => setClaimData(prev => ({ ...prev, claimant: p }));
-  const updateDefendant = (d: Party) => setClaimData(prev => ({ ...prev, defendant: d }));
-  const updateInvoice = (field: string, val: string | number) => 
-    setClaimData(prev => ({ ...prev, invoice: { ...prev.invoice, [field]: val } }));
+  const updateInvoice = (field: string, val: string | number) => {
+    setClaimData(prev => {
+        const newState = { ...prev, invoice: { ...prev.invoice, [field]: val }, assessment: null };
+        
+        // Sync invoice date with timeline if it exists
+        if (field === 'dateIssued' && newState.timeline.length > 0) {
+            const newTimeline = newState.timeline.map(e => 
+                e.type === 'invoice' ? { ...e, date: val as string } : e
+            );
+            newState.timeline = newTimeline;
+        }
+        
+        return newState;
+    });
+  };
   const updateTimeline = (events: TimelineEvent[]) => 
     setClaimData(prev => ({ ...prev, timeline: events }));
 
@@ -829,28 +1205,25 @@ const App: React.FC = () => {
       const issues: Array<{ type: 'statute_barred' | 'defendant_dissolved' | 'exceeds_track' | 'other'; message: string }> = [];
 
       // Check for specific viability issues
-      if (assessment.checks) {
-        const limitationCheck = assessment.checks.find((c: any) => c.name === 'Limitation Act 1980');
-        if (limitationCheck && !limitationCheck.passed) {
+      if (assessment) {
+        if (assessment.limitationCheck && !assessment.limitationCheck.passed) {
           issues.push({
             type: 'statute_barred',
-            message: 'This claim may be statute-barred under the Limitation Act 1980. Claims for breach of contract must generally be brought within 6 years of the cause of action.'
+            message: assessment.limitationCheck.message || 'This claim may be statute-barred under the Limitation Act 1980.'
           });
         }
 
-        const solvencyCheck = assessment.checks.find((c: any) => c.name === 'Solvency Check');
-        if (solvencyCheck && !solvencyCheck.passed) {
+        if (assessment.solvencyCheck && !assessment.solvencyCheck.passed) {
           issues.push({
             type: 'defendant_dissolved',
-            message: 'The defendant company appears to be dissolved, in liquidation, or insolvent. Recovery may be impossible or severely limited.'
+            message: assessment.solvencyCheck.message || 'The defendant company appears to be dissolved or insolvent.'
           });
         }
 
-        const valueCheck = assessment.checks.find((c: any) => c.name === 'Claim Value Check');
-        if (valueCheck && !valueCheck.passed) {
+        if (assessment.valueCheck && !assessment.valueCheck.passed) {
           issues.push({
             type: 'exceeds_track',
-            message: 'This claim exceeds the Small Claims Track limit of £10,000. You may need legal representation and costs will be significantly higher.'
+            message: assessment.valueCheck.message || 'This claim exceeds the Small Claims Track limit of £10,000.'
           });
         }
       }
@@ -878,21 +1251,22 @@ const App: React.FC = () => {
     setChatError(null);
     handleStepChange(Step.QUESTIONS);
 
-    // If chat is empty, seed it with the initial analysis
-    if (claimData.chatHistory.length === 0) {
-        try {
-            const initialMsg = await startClarificationChat(claimData);
-            const newMsg: ChatMessage = {
-                id: Date.now().toString(),
-                role: 'ai',
-                content: initialMsg,
-                timestamp: Date.now()
-            };
-            setClaimData(prev => ({ ...prev, chatHistory: [newMsg] }));
-        } catch (e) {
-            setError("Failed to start chat.");
-        }
+    // Always start/continue chat to ensure context (e.g. missing addresses) is addressed
+    // If history exists, AI will generate a continuation message
+    try {
+        const hasHistory = claimData.chatHistory.length > 0;
+        const initialMsg = await startClarificationChat(claimData, hasHistory);
+        const newMsg: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'ai',
+            content: initialMsg,
+            timestamp: Date.now()
+        };
+        setClaimData(prev => ({ ...prev, chatHistory: [...prev.chatHistory, newMsg] }));
+    } catch (e) {
+        setError("Failed to start chat.");
     }
+    
     setIsProcessing(false);
   };
 
@@ -917,7 +1291,7 @@ const App: React.FC = () => {
          e.description.toLowerCase().includes('lba') ||
          e.description.toLowerCase().includes('formal demand')))
     );
-    const hasLBA = timelineHasLBA || lbaAlreadySent;
+    const hasLBA = timelineHasLBA || claimData.lbaAlreadySent;
 
     // Set default document type based on LBA status
     setClaimData(prev => ({
@@ -925,8 +1299,8 @@ const App: React.FC = () => {
       selectedDocType: hasLBA ? DocumentType.FORM_N1 : DocumentType.LBA
     }));
 
-    // Skip to Data Review
-    handleStepChange(Step.DATA_REVIEW);
+    // Skip to Strategy (Recommendation) directly
+    handleStepChange(Step.RECOMMENDATION);
   };
 
   const handleSendMessage = async (text: string) => {
@@ -973,6 +1347,9 @@ const App: React.FC = () => {
       setExtractedData(extracted);
       setRecommendationReason(extracted.documentReason);
       setExtractedFields(extracted.extractedFields);
+
+      // Issue 3 fix: Compute merged state first, then use it for AI assessment
+      let mergedData: ClaimState = claimData;
 
       // Merge extracted data with existing data (don't overwrite user-entered data)
       setClaimData(prev => {
@@ -1024,12 +1401,15 @@ const App: React.FC = () => {
         // Set recommended document type
         merged.selectedDocType = extracted.recommendedDocument;
 
+        // Store merged data for AI assessment
+        mergedData = merged;
+
         return merged;
       });
 
-      // 2. AI Strength Assessment (MOVED HERE from before chat)
+      // 2. AI Strength Assessment - Issue 3 fix: Use mergedData instead of stale claimData
       try {
-         const aiStrength = await getClaimStrengthAssessment(claimData);
+         const aiStrength = await getClaimStrengthAssessment(mergedData);
          setClaimData(prev => ({
             ...prev,
             assessment: {
@@ -1131,7 +1511,45 @@ const App: React.FC = () => {
     };
   };
 
-  const handleDraftClaim = async () => {
+  // Helper: Check if the document type requires court form data modal
+  const requiresCourtFormData = (docType: DocumentType): boolean => {
+    return [
+      DocumentType.ADMISSION,           // N225A
+      DocumentType.DIRECTIONS_QUESTIONNAIRE, // N180
+      DocumentType.DEFAULT_JUDGMENT     // N225
+    ].includes(docType);
+  };
+
+  // Handler for court form data submission
+  const handleCourtFormDataSubmit = (data: CourtFormData) => {
+    setClaimData(prev => ({
+      ...prev,
+      courtFormData: data,
+      hasVerifiedInterest: true
+    }));
+    setShowCourtFormModal(false);
+    handleStepChange(Step.DRAFT);
+  };
+
+  // Handler for proceeding to draft - checks if court form data is needed
+  const handleProceedToDraft = () => {
+    if (requiresCourtFormData(claimData.selectedDocType)) {
+      setShowCourtFormModal(true);
+    } else {
+      setClaimData(prev => ({ ...prev, hasVerifiedInterest: true }));
+      handleStepChange(Step.DRAFT);
+    }
+  };
+
+  const handleDraftClaim = async (forceRegenerate = false) => {
+    // Check for existing draft to prevent accidental overwrite
+    const isForced = typeof forceRegenerate === 'boolean' ? forceRegenerate : false;
+    
+    if (claimData.generated && !isForced) {
+      setShowRegenerateConfirm(true);
+      return;
+    }
+
     // Pre-validate claim data
     const validation = validateClaimData(claimData);
     if (!validation.isValid) {
@@ -1163,7 +1581,7 @@ const App: React.FC = () => {
     };
 
     // Phase 2: Check inline interest verification (replaces modal)
-    if (!hasVerifiedInterest) {
+    if (!claimData.hasVerifiedInterest) {
       setError("Please verify the interest rate calculation before generating documents.");
       return;
     }
@@ -1194,10 +1612,13 @@ const App: React.FC = () => {
           refineInstruction,
           claimData
         );
-        setClaimData(prev => ({
-            ...prev,
-            generated: { ...prev.generated!, content: refined }
-        }));
+        setClaimData(prev => {
+            if (!prev.generated) return prev;
+            return {
+                ...prev,
+                generated: { ...prev.generated, content: refined }
+            };
+        });
         setRefineInstruction('');
         setShowRefineInput(false);
      } catch (e) {
@@ -1221,10 +1642,69 @@ const App: React.FC = () => {
       setIsFinalized(true);
       // Auto save on confirm
       await saveClaimToStorage(updatedClaim);
-      
+
       // Update dashboard state immediately so it's reflected if they exit
       const stored = await getStoredClaims();
       setDashboardClaims(stored);
+  };
+
+  // Handle payment completion from DocumentPreview
+  const handlePaymentComplete = async (paymentIntentId: string) => {
+    try {
+      // Verify payment server-side before trusting
+      const verification = await verifyPayment(paymentIntentId);
+
+      if (verification.paid) {
+        // Update local state
+        const updatedClaim = {
+          ...claimData,
+          hasPaid: true,
+          paymentId: paymentIntentId,
+          paidAt: new Date().toISOString()
+        };
+        setClaimData(updatedClaim);
+
+        // Persist to localStorage
+        await saveClaimToStorage(updatedClaim);
+
+        // Update dashboard state
+        const stored = await getStoredClaims();
+        setDashboardClaims(stored);
+
+        console.log('Payment completed successfully:', paymentIntentId);
+      } else {
+        console.error('Payment verification failed - status:', verification.status);
+      }
+    } catch (error) {
+      console.error('Failed to verify payment:', error);
+    }
+  };
+
+  // Issue 2 fix: Use functional update pattern to avoid stale closures
+  const handleClaimantChange = (newParty: Party) => {
+    setClaimData(prev => {
+      const typeChanged = prev.claimant.type !== newParty.type;
+      return {
+        ...prev,
+        claimant: newParty,
+        assessment: null, // Reset assessment if party changes
+        // Reset verified interest if type changes (Issue 1 & 2 fix)
+        hasVerifiedInterest: typeChanged ? false : prev.hasVerifiedInterest
+      };
+    });
+  };
+
+  const handleDefendantChange = (newParty: Party) => {
+    setClaimData(prev => {
+      const typeChanged = prev.defendant.type !== newParty.type;
+      return {
+        ...prev,
+        defendant: newParty,
+        assessment: null,
+        // Reset verified interest if type changes (Issue 1 & 2 fix)
+        hasVerifiedInterest: typeChanged ? false : prev.hasVerifiedInterest
+      };
+    });
   };
 
   const renderWizardStep = () => {
@@ -1234,9 +1714,9 @@ const App: React.FC = () => {
         const hasExistingData = claimData.source !== 'none' || claimData.invoice.totalAmount > 0 || claimData.defendant.name;
 
         return (
-          <div className="max-w-3xl mx-auto animate-fade-in py-8">
+          <div className="max-w-7xl mx-auto animate-fade-in py-6">
              {/* Header */}
-             <div className="mb-8">
+             <div className="mb-6">
                 <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">
                   {hasExistingData ? 'Evidence & Documents' : 'New Claim'}
                 </h2>
@@ -1249,10 +1729,10 @@ const App: React.FC = () => {
 
              {/* Option Cards - only show if no existing data */}
              {!hasExistingData && (
-               <div className="grid md:grid-cols-2 gap-4 mb-8">
+               <div className="grid md:grid-cols-2 gap-4 mb-6">
                   <button
                     onClick={handleOpenAccountingModal}
-                    className={`p-6 rounded-xl transition-all flex flex-col items-center gap-3 border hover:shadow-md hover:border-teal-300 ${
+                    className={`p-6 rounded-xl transition-all flex flex-col items-center gap-3 border hover:shadow-md hover:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-500/30 ${
                       accountingConnection ? 'bg-teal-50 border-teal-200' : 'bg-white border-slate-200'
                     }`}
                   >
@@ -1267,7 +1747,7 @@ const App: React.FC = () => {
 
                   <button
                     onClick={handleManualEntry}
-                    className="p-6 bg-white border border-slate-200 hover:border-teal-300 rounded-xl transition-all flex flex-col items-center gap-3 hover:shadow-md"
+                    className="p-6 bg-white border border-slate-200 hover:border-teal-300 rounded-xl transition-all flex flex-col items-center gap-3 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                   >
                       <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
                           <Keyboard className="w-5 h-5 text-slate-600"/>
@@ -1301,13 +1781,12 @@ const App: React.FC = () => {
              {/* Continue button when claim already has data */}
              {hasExistingData && (
                <div className="mt-6 flex justify-end">
-                 <button
+                 <Button
                    onClick={() => handleStepChange(Step.DETAILS)}
-                   className="bg-teal-600 hover:bg-teal-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-1"
+                   rightIcon={<ArrowRight className="w-5 h-5" />}
                  >
                    Continue to Claim Details
-                   <ArrowRight className="w-5 h-5" />
-                 </button>
+                 </Button>
                </div>
              )}
           </div>
@@ -1317,30 +1796,45 @@ const App: React.FC = () => {
       case Step.DETAILS:
         // Logic: If Source is Manual OR User has clicked "Edit Analysis", show full form.
         // Otherwise show Analysis Summary.
-        if (claimData.source === 'manual' || isEditingAnalysis) {
+        
+        // Check if critical fields are missing (force edit mode)
+        const isMissingCriticalData = !claimData.claimant.name || !claimData.defendant.name || !claimData.invoice.totalAmount;
+        
+        if (claimData.source === 'manual' || isEditingAnalysis || isMissingCriticalData) {
             return (
-                <div className="space-y-8 animate-fade-in py-10 max-w-5xl mx-auto pb-32">
-                    <button
+                <div className="space-y-6 animate-fade-in py-6 max-w-7xl mx-auto pb-24">
+                    <Button
+                      variant="ghost"
+                      icon={<ArrowLeft className="w-4 h-4" />}
                       onClick={() => handleStepChange(Step.SOURCE)}
-                      className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+                      className="w-fit"
                     >
-                      <ArrowLeft className="w-4 h-4" />
                       Back to Data Source
-                    </button>
-                    <div className="text-center mb-8">
+                    </Button>
+                    <div className="text-center mb-6">
                         <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Claim Details</h2>
                         <p className="text-slate-500">Please ensure all details are correct before legal assessment.</p>
                     </div>
-                    <div className="grid xl:grid-cols-2 gap-8">
-                        <PartyForm title="Claimant (You)" party={claimData.claimant} onChange={updateClaimant} />
-                        <PartyForm title="Defendant (Debtor)" party={claimData.defendant} onChange={updateDefendant} />
+                    <div className="grid xl:grid-cols-2 gap-6">
+                        <PartyForm 
+                          title="Claimant (You)" 
+                          party={claimData.claimant} 
+                          onChange={handleClaimantChange}
+                          onValidationChange={setIsClaimantFormValid}
+                        />
+                        <PartyForm 
+                          title="Defendant (Debtor)" 
+                          party={claimData.defendant} 
+                          onChange={handleDefendantChange}
+                          onValidationChange={setIsDefendantFormValid}
+                        />
                     </div>
-                    <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100">
                             <h2 className="text-xl font-bold text-slate-800 font-display">Claim Financials</h2>
                             <Tooltip content="Enter the invoice amount and dates to calculate statutory interest and court fees automatically">
                               <div className="cursor-help">
-                                <HelpCircle className="w-4 h-4 text-slate-400 hover:text-blue-600" />
+                                <HelpCircle className="w-4 h-4 text-slate-400 hover:text-teal-600" />
                               </div>
                             </Tooltip>
                         </div>
@@ -1417,56 +1911,89 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Sticky Footer for Actions */}
-                    <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-dark-800/95 backdrop-blur-md border-t border-dark-700 p-4 z-30 flex justify-end pr-8 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
-                        <button onClick={runAssessment} disabled={!claimData.invoice.totalAmount || !claimData.claimant.name || !claimData.defendant.name || !claimData.invoice.dateIssued} className="bg-teal-600 hover:bg-teal-500 text-white px-12 py-4 rounded-xl shadow-lg font-bold text-lg flex items-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1 hover:shadow-teal-500/25 hover:shadow-xl">
-                            {isProcessing ? <Loader2 className="animate-spin" /> : <>Assess Claim Strength <ArrowRight className="w-5 h-5" /></>}
-                        </button>
+                    <div className="sticky bottom-0 z-30 mt-6">
+                      <div className="bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+                        <div className="max-w-7xl mx-auto flex justify-end">
+                          <Button
+                            onClick={runAssessment}
+                            disabled={
+                              isProcessing ||
+                              !isClaimantFormValid ||
+                              !isDefendantFormValid ||
+                              !claimData.invoice.totalAmount ||
+                              !claimData.invoice.dateIssued
+                            }
+                            isLoading={isProcessing}
+                            rightIcon={!isProcessing && <ArrowRight className="w-5 h-5" />}
+                            className="px-10"
+                          >
+                            Assess Claim Strength
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                 </div>
             );
         } else {
             // AI/Xero Analysis Summary View
             return (
-                <div className="max-w-3xl mx-auto animate-fade-in py-10">
-                    <button
+                <div className="max-w-7xl mx-auto animate-fade-in py-6">
+                    <Button
+                      variant="ghost"
+                      icon={<ArrowLeft className="w-4 h-4" />}
                       onClick={() => handleStepChange(Step.SOURCE)}
-                      className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+                      className="w-fit"
                     >
-                      <ArrowLeft className="w-4 h-4" />
                       Back to Data Source
-                    </button>
-                    <div className="flex items-center gap-4 mb-8">
+                    </Button>
+                <div className="flex items-center gap-4 mb-6">
                         <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center shadow-sm"><CheckCircle className="w-6 h-6 text-green-600" /></div>
                         <div><h2 className="text-3xl font-bold text-slate-900 font-display">Analysis Complete</h2><p className="text-slate-600">We've extracted the key facts. Please verify.</p></div>
                     </div>
-                    <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 text-left mb-8 relative overflow-hidden">
-                        <div className="grid grid-cols-2 gap-8 mb-8 relative z-10">
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-200 text-left mb-6 relative overflow-hidden">
+                        <div className="grid grid-cols-2 gap-6 mb-6 relative z-10">
                             <div className="p-4 bg-slate-50 rounded-lg border border-slate-100"><span className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 block">Creditor</span><p className="font-bold text-lg text-slate-900">{claimData.claimant.name || "Unknown"}</p><p className="text-sm text-slate-500">{claimData.claimant.city}</p></div>
                             <div className="text-right p-4 bg-slate-50 rounded-lg border border-slate-100"><span className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 block">Debtor</span><p className="font-bold text-lg text-slate-900">{claimData.defendant.name || "Unknown"}</p></div>
                         </div>
                         <div className="border-t border-slate-100 pt-6 flex justify-between items-center relative z-10">
                             <div><span className="text-xs font-bold text-slate-400 uppercase block tracking-wide">Claim Value</span><span className="text-3xl font-bold text-slate-900 font-display">£{claimData.invoice.totalAmount.toFixed(2)}</span></div>
-                            <button onClick={() => setIsEditingAnalysis(true)} className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"><Pencil className="w-3 h-3" /> Edit Details</button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setIsEditingAnalysis(true)}
+                              icon={<Pencil className="w-3 h-3" />}
+                              className="text-slate-600 hover:text-teal-700"
+                            >
+                              Edit Details
+                            </Button>
                         </div>
                     </div>
-                    <div className="flex justify-end"><button onClick={runAssessment} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 rounded-xl font-bold shadow-lg flex items-center gap-3 transition-all transform hover:-translate-y-0.5">
-                        {isProcessing ? <Loader2 className="animate-spin" /> : <>Run Legal Viability Check <ArrowRight className="w-5 h-5"/></>}
-                    </button></div>
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={runAssessment}
+                        isLoading={isProcessing}
+                        rightIcon={!isProcessing && <ArrowRight className="w-5 h-5" />}
+                        className="px-8 py-3"
+                      >
+                        Run Legal Viability Check
+                      </Button>
+                    </div>
                 </div>
             );
         }
 
       case Step.VIABILITY:
         return (
-            <div className="py-10 pb-32">
-                <div className="max-w-4xl mx-auto mb-6">
-                    <button
-                        onClick={() => handleStepChange(Step.DETAILS)}
-                        className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+            <div className="py-6 pb-20">
+                <div className="max-w-7xl mx-auto mb-6">
+                    <Button
+                      variant="ghost"
+                      icon={<ArrowLeft className="w-4 h-4" />}
+                      onClick={() => handleStepChange(Step.DETAILS)}
+                      className="w-fit"
                     >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Details
-                    </button>
+                      Back to Details
+                    </Button>
                 </div>
                 {claimData.assessment && (
                     <AssessmentReport
@@ -1479,38 +2006,39 @@ const App: React.FC = () => {
 
       case Step.TIMELINE:
         return (
-            <div className="space-y-8 py-10 pb-32">
-                <div className="max-w-4xl mx-auto">
-                    <button
-                        onClick={() => handleStepChange(Step.VIABILITY)}
-                        className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+            <div className="space-y-6 py-6 pb-20">
+                <div className="max-w-7xl mx-auto">
+                    <Button
+                      variant="ghost"
+                      icon={<ArrowLeft className="w-4 h-4" />}
+                      onClick={() => handleStepChange(Step.VIABILITY)}
+                      className="w-fit mb-2"
                     >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Assessment
-                    </button>
+                      Back to Assessment
+                    </Button>
                 </div>
                 <TimelineBuilder
                     events={claimData.timeline}
                     onChange={(newEvents) => {
-                      updateTimeline(newEvents);
-                      
-                      // Auto-detect LBA sent from timeline events
-                      const lbaEvent = newEvents.find(e => 
-                        e.type === 'lba_sent' || 
+                      // Auto-detect LBA sent from timeline events - Issue 1 fix
+                      const lbaEvent = newEvents.find(e =>
+                        e.type === 'lba_sent' ||
                         (e.type === 'chaser' && e.description.toLowerCase().includes('letter before action'))
                       );
-                      
-                      if (lbaEvent) {
-                        setLbaAlreadySent(true);
-                        setLbaSentDate(lbaEvent.date);
-                      }
+
+                      setClaimData(prev => ({
+                        ...prev,
+                        timeline: newEvents,
+                        lbaAlreadySent: !!lbaEvent,
+                        lbaSentDate: lbaEvent?.date || ''
+                      }));
                     }}
                     invoiceDate={claimData.invoice.dateIssued}
                 />
 
                 {/* Timeline validation warning */}
                 {claimData.timeline.length === 0 && (
-                  <div className="max-w-4xl mx-auto bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                  <div className="max-w-7xl mx-auto bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="font-bold text-amber-900 text-sm">Timeline Empty</h4>
@@ -1522,20 +2050,44 @@ const App: React.FC = () => {
                 )}
 
                 {/* LBA Status Check - Moved here for earlier capture */}
-                <div className="max-w-4xl mx-auto bg-slate-50 border border-slate-200 rounded-xl p-5">
+                <div className="max-w-7xl mx-auto bg-slate-50 border border-slate-200 rounded-xl p-5">
                   <label className="flex items-start gap-3 cursor-pointer group">
                     <input
                       type="checkbox"
-                      checked={lbaAlreadySent}
+                      checked={claimData.lbaAlreadySent || false}
                       onChange={(e) => {
-                        setLbaAlreadySent(e.target.checked);
-                        if (!e.target.checked) setLbaSentDate('');
-                        
-                        // If unchecked, should we remove LBA event? 
-                        // For now, let's just sync the state. Users can delete the event manually if needed.
-                        if (e.target.checked && !lbaSentDate) {
+                        const isChecked = e.target.checked;
+
+                        if (!isChecked) {
+                           // Optionally remove the LBA event from timeline if it exists
+                           const newTimeline = claimData.timeline.filter(ev => ev.type !== 'lba_sent');
+                           setClaimData(prev => ({
+                             ...prev,
+                             timeline: newTimeline,
+                             lbaAlreadySent: false,
+                             lbaSentDate: ''
+                           }));
+                        } else {
                            // If checked manually without a date, default to today or let them pick
-                           setLbaSentDate(new Date().toISOString().split('T')[0]);
+                           // We will add the timeline event when the date is set or confirmed
+                           if (!claimData.lbaSentDate) {
+                               const today = new Date().toISOString().split('T')[0];
+
+                               // Add timeline event automatically
+                               const newEvent: TimelineEvent = {
+                                   date: today,
+                                   description: 'Letter Before Action (LBA) sent to defendant',
+                                   type: 'lba_sent'
+                               };
+                               setClaimData(prev => ({
+                                 ...prev,
+                                 timeline: [...prev.timeline, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+                                 lbaAlreadySent: true,
+                                 lbaSentDate: today
+                               }));
+                           } else {
+                               setClaimData(prev => ({ ...prev, lbaAlreadySent: true }));
+                           }
                         }
                       }}
                       className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
@@ -1551,23 +2103,47 @@ const App: React.FC = () => {
                     </div>
                   </label>
 
-                  {lbaAlreadySent && (
+                  {claimData.lbaAlreadySent && (
                     <div className="mt-4 pl-8 space-y-3 animate-fade-in">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          Date LBA was sent
-                        </label>
-                        <input
-                          type="date"
-                          value={lbaSentDate}
-                          onChange={(e) => setLbaSentDate(e.target.value)}
-                          max={new Date().toISOString().split('T')[0]}
-                          className="w-full max-w-xs px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                        />
-                      </div>
-                      {lbaSentDate && (() => {
-                        const daysSince = Math.floor((Date.now() - new Date(lbaSentDate).getTime()) / (1000 * 60 * 60 * 24));
-                        const isReady = daysSince >= 30;
+                      <Input
+                        label="Date LBA was sent"
+                        type="date"
+                        value={claimData.lbaSentDate || ''}
+                        onChange={(e) => {
+                          const newDate = e.target.value;
+
+                          // Update the timeline event if it exists, or create it
+                          const existingIndex = claimData.timeline.findIndex(ev => ev.type === 'lba_sent');
+
+                          if (existingIndex >= 0) {
+                              const newTimeline = [...claimData.timeline];
+                              newTimeline[existingIndex] = { ...newTimeline[existingIndex], date: newDate };
+                              setClaimData(prev => ({
+                                ...prev,
+                                timeline: newTimeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+                                lbaSentDate: newDate
+                              }));
+                          } else {
+                              const newEvent: TimelineEvent = {
+                                  date: newDate,
+                                  description: 'Letter Before Action (LBA) sent to defendant',
+                                  type: 'lba_sent'
+                              };
+                              setClaimData(prev => ({
+                                ...prev,
+                                timeline: [...prev.timeline, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+                                lbaSentDate: newDate
+                              }));
+                          }
+                        }}
+                        max={new Date().toISOString().split('T')[0]}
+                        noMargin
+                        wrapperClassName="max-w-xs"
+                      />
+                      {claimData.lbaSentDate && (() => {
+                        const daysSince = Math.floor((Date.now() - new Date(claimData.lbaSentDate).getTime()) / (1000 * 60 * 60 * 24));
+                        const requiredDays = getLbaResponsePeriodDays(claimData.defendant.type);
+                        const isReady = daysSince >= requiredDays;
                         return (
                           <div className={`flex items-center gap-2 text-sm ${isReady ? 'text-teal-600' : 'text-amber-600'}`}>
                             {isReady ? (
@@ -1578,7 +2154,7 @@ const App: React.FC = () => {
                             ) : (
                               <>
                                 <AlertTriangle className="w-4 h-4" />
-                                <span>{daysSince} days since LBA - wait {30 - daysSince} more days for compliance</span>
+                                <span>{daysSince} days since LBA - wait {requiredDays - daysSince} more days for compliance (Standard for {claimData.defendant.type === 'individual' ? 'individuals' : 'businesses'}: {requiredDays} days)</span>
                               </>
                             )}
                           </div>
@@ -1589,25 +2165,41 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Sticky Footer for Actions */}
-                <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-dark-800/95 backdrop-blur-md border-t border-dark-700 p-4 z-30 flex justify-end pr-8 gap-4 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
-                    {/* Optional: Skip AI for power users */}
-                    <button
-                        onClick={handleSkipAIConsultation}
-                        disabled={claimData.timeline.length < 1}
-                        className="text-slate-400 hover:text-white text-sm font-medium flex items-center justify-center gap-2 py-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Skip AI Consultation
-                        <ArrowRight className="w-3 h-3" />
-                    </button>
-                    <button
-                        onClick={() => handleStartChat()}
-                        disabled={claimData.timeline.length < 1}
-                        className="bg-teal-600 hover:bg-teal-500 text-white px-8 py-3 rounded-xl disabled:bg-slate-600 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 font-medium shadow-lg transform hover:-translate-y-1 hover:shadow-teal-500/25 hover:shadow-xl"
-                    >
-                        <MessageSquareText className="w-5 h-5"/>
-                        Start AI Case Consultation
-                        <ArrowRight className="w-4 h-4"/>
-                    </button>
+                <div className="sticky bottom-0 z-30 mt-8">
+                  <div className="bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+                    <div className="max-w-7xl mx-auto flex justify-end gap-4">
+                      {/* Optional: Skip AI for power users */}
+                      <Tooltip
+                        content={claimData.timeline.length < 1 ? "Add at least one timeline event to continue" : ""}
+                        wrapDisabled
+                        position="top"
+                      >
+                        <Button
+                          variant="secondary"
+                          onClick={handleSkipAIConsultation}
+                          disabled={claimData.timeline.length < 1}
+                          rightIcon={<ArrowRight className="w-3 h-3" />}
+                        >
+                          Skip AI Consultation
+                        </Button>
+                      </Tooltip>
+                      <Tooltip
+                        content={claimData.timeline.length < 1 ? "Add at least one timeline event to continue" : ""}
+                        wrapDisabled
+                        position="top"
+                      >
+                        <Button
+                          onClick={() => handleStartChat()}
+                          disabled={claimData.timeline.length < 1}
+                          icon={<MessageSquareText className="w-5 h-5" />}
+                          rightIcon={<ArrowRight className="w-4 h-4" />}
+                          className="px-8"
+                        >
+                          Start AI Case Consultation
+                        </Button>
+                      </Tooltip>
+                    </div>
+                  </div>
                 </div>
             </div>
         );
@@ -1630,16 +2222,17 @@ const App: React.FC = () => {
         const aiWasSkipped = !showChatHistory || extractedFields.length === 0;
 
         return (
-          <div className="space-y-6 animate-fade-in py-10 max-w-5xl mx-auto pb-32">
-            <button
+          <div className="space-y-6 animate-fade-in py-6 max-w-7xl mx-auto pb-20">
+            <Button
+              variant="ghost"
+              icon={<ArrowLeft className="w-4 h-4" />}
               onClick={() => handleStepChange(aiWasSkipped ? Step.TIMELINE : Step.QUESTIONS)}
-              className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+              className="w-fit"
             >
-              <ArrowLeft className="w-4 h-4" />
               {aiWasSkipped ? 'Back to Timeline' : 'Back to Consultation'}
-            </button>
+            </Button>
 
-            <div className="text-center mb-8">
+            <div className="text-center mb-5">
               <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Review Your Claim Details</h2>
               <p className="text-slate-500">
                 {aiWasSkipped
@@ -1660,17 +2253,17 @@ const App: React.FC = () => {
               {/* Claimant */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2 mb-2 px-1">
-                  <User className="w-5 h-5 text-blue-600" />
+                  <User className="w-5 h-5 text-teal-600" />
                   <h3 className="font-bold text-slate-900">Claimant (You)</h3>
                   {extractedFields.some(f => f.startsWith('claimant')) ? (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
+                    <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">AI Extracted</span>
                   ) : aiWasSkipped ? (
                     <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Manually Entered</span>
                   ) : null}
                 </div>
                 <PartyForm
                   party={claimData.claimant}
-                  onChange={(p) => setClaimData(prev => ({ ...prev, claimant: p }))}
+                  onChange={handleClaimantChange}
                   title="Claimant"
                 />
               </div>
@@ -1681,14 +2274,14 @@ const App: React.FC = () => {
                   <User className="w-5 h-5 text-red-600" />
                   <h3 className="font-bold text-slate-900">Defendant (Debtor)</h3>
                   {extractedFields.some(f => f.startsWith('defendant')) ? (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
+                    <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">AI Extracted</span>
                   ) : aiWasSkipped ? (
                     <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Manually Entered</span>
                   ) : null}
                 </div>
                 <PartyForm
                   party={claimData.defendant}
-                  onChange={(p) => setClaimData(prev => ({ ...prev, defendant: p }))}
+                  onChange={handleDefendantChange}
                   title="Defendant"
                 />
               </div>
@@ -1700,7 +2293,7 @@ const App: React.FC = () => {
                 <FileText className="w-5 h-5 text-green-600" />
                 <h3 className="font-bold text-slate-900">Invoice Details</h3>
                 {extractedFields.some(f => f.startsWith('invoice')) ? (
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
+                  <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">AI Extracted</span>
                 ) : aiWasSkipped ? (
                   <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Manually Entered</span>
                 ) : null}
@@ -1729,10 +2322,10 @@ const App: React.FC = () => {
             {/* Timeline */}
             <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
-                <Calendar className="w-5 h-5 text-purple-600" />
+                <Calendar className="w-5 h-5 text-teal-600" />
                 <h3 className="font-bold text-slate-900">Timeline Events</h3>
                 {extractedFields.some(f => f.startsWith('timeline')) ? (
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">AI Extracted</span>
+                  <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">AI Extracted</span>
                 ) : aiWasSkipped ? (
                   <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Manually Entered</span>
                 ) : null}
@@ -1759,7 +2352,7 @@ const App: React.FC = () => {
                 {chatHistoryExpanded && (
                   <div className="px-6 pb-4 max-h-64 overflow-y-auto">
                     {claimData.chatHistory.map((msg, i) => (
-                      <div key={i} className={`py-2 ${msg.role === 'user' ? 'text-blue-700' : 'text-slate-700'}`}>
+                      <div key={i} className={`py-2 ${msg.role === 'user' ? 'text-teal-700' : 'text-slate-700'}`}>
                         <span className="font-medium">{msg.role === 'user' ? 'You: ' : 'AI: '}</span>
                         <span className="text-sm">{msg.content}</span>
                       </div>
@@ -1770,14 +2363,26 @@ const App: React.FC = () => {
             )}
 
             {/* Sticky Footer for Actions */}
-            <div className="fixed bottom-0 right-0 left-0 md:left-72 bg-dark-800/95 backdrop-blur-md border-t border-dark-700 p-4 z-30 flex justify-end pr-8 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
-              <button
-                onClick={() => handleStepChange(Step.RECOMMENDATION)}
-                className="bg-teal-600 hover:bg-teal-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-1 hover:shadow-teal-500/25 hover:shadow-xl"
-              >
-                Continue to Document Selection
-                <ArrowRight className="w-5 h-5" />
-              </button>
+                <div className="sticky bottom-0 z-30 mt-6">
+              <div className="bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+                <div className="max-w-7xl mx-auto flex justify-end">
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleStepChange(claimData.chatHistory.length > 0 ? Step.DATA_REVIEW : Step.TIMELINE)}
+                    className="mr-auto"
+                    icon={<ArrowLeft className="w-4 h-4" />}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    onClick={() => handleStepChange(Step.RECOMMENDATION)}
+                    rightIcon={<ArrowRight className="w-5 h-5" />}
+                    className="px-8"
+                  >
+                    Continue to Document Selection
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -1792,9 +2397,12 @@ const App: React.FC = () => {
                e.description.toLowerCase().includes('lba') ||
                e.description.toLowerCase().includes('formal demand')))
         );
-        const hasLBA = timelineHasLBA || lbaAlreadySent;
+        const hasLBA = timelineHasLBA || claimData.lbaAlreadySent;
 
         const recommendedDoc = hasLBA ? DocumentType.FORM_N1 : DocumentType.LBA;
+        
+        // Calculate back step target based on whether AI was skipped
+        const backStep = claimData.chatHistory.length > 0 ? Step.DATA_REVIEW : Step.TIMELINE;
 
         // Document configurations with metadata
         const documentConfigs = [
@@ -1830,7 +2438,7 @@ const App: React.FC = () => {
                 title: 'Form N1 (Claim Form)',
                 description: `Official court claim form. Commences legal proceedings. Court fee: £${claimData.courtFee}.`,
                 when: 'After 30-day LBA period',
-                badge: hasLBA ? { text: 'NEXT STEP', color: 'bg-blue-500' } : null
+                badge: hasLBA ? { text: 'NEXT STEP', color: 'bg-teal-600' } : null
               }
             ]
           },
@@ -1924,23 +2532,24 @@ const App: React.FC = () => {
           .find(doc => doc.type === claimData.selectedDocType);
 
         return (
-          <div className="space-y-8 animate-fade-in py-10 max-w-6xl mx-auto">
-            <button
+          <div className="space-y-6 animate-fade-in py-6 max-w-7xl mx-auto">
+            <Button
+              variant="ghost"
+              icon={<ArrowLeft className="w-4 h-4" />}
               onClick={() => handleStepChange(Step.DATA_REVIEW)}
-              className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+              className="w-fit"
             >
-              <ArrowLeft className="w-4 h-4" />
               Back to Data Review
-            </button>
+            </Button>
 
-            <div className="text-center mb-8">
+            <div className="text-center mb-5">
                 <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Recommended Document</h2>
                 <p className="text-slate-500">Based on your case details, we recommend the following document</p>
             </div>
 
             {/* Prominent Recommended Document Card */}
             {recommendedDocConfig && (
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-2xl mb-8">
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-2xl mb-6">
                 <div className="flex items-start gap-6">
                   <div className="p-4 bg-white/10 rounded-xl">
                     <recommendedDocConfig.icon className="w-10 h-10" />
@@ -1964,16 +2573,14 @@ const App: React.FC = () => {
                       </div>
                     )}
 
-                    <button
-                      onClick={() => {
-                        setHasVerifiedInterest(true);
-                        handleStepChange(Step.DRAFT);
-                      }}
-                      className="bg-white text-slate-900 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-100 transition-all shadow-lg"
+                    <Button
+                      onClick={handleProceedToDraft}
+                      variant="secondary"
+                      className="bg-white text-slate-900 hover:bg-slate-50 border-white/20"
+                      rightIcon={<ArrowRight className="w-5 h-5" />}
                     >
                       Generate {recommendedDocConfig.title}
-                      <ArrowRight className="w-5 h-5" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1993,7 +2600,7 @@ const App: React.FC = () => {
               </button>
 
               {showAdvancedDocs && (
-                <div className="p-6 space-y-8">
+                <div className="p-5 space-y-6">
                   {documentConfigs.map((stageGroup) => (
                     <div key={stageGroup.stage} className="space-y-4">
                       {/* Stage Header */}
@@ -2028,7 +2635,7 @@ const App: React.FC = () => {
 
                               {/* Icon & Title */}
                               <div className="flex items-center gap-3 mb-3">
-                                <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/10' : 'bg-blue-50 text-blue-600'}`}>
+                                <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/10' : 'bg-teal-50 text-teal-600'}`}>
                                   <Icon className="w-5 h-5" />
                                 </div>
                                 <h4 className="font-bold text-sm">{doc.title}</h4>
@@ -2040,7 +2647,7 @@ const App: React.FC = () => {
                               </p>
 
                               {/* When to use */}
-                              <div className={`text-xs font-medium flex items-center gap-1 ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
+                              <div className={`text-xs font-medium flex items-center gap-1 ${isSelected ? 'text-amber-300' : 'text-teal-700'}`}>
                                 <Calendar className="w-3 h-3" /> {doc.when}
                               </div>
                             </div>
@@ -2055,29 +2662,32 @@ const App: React.FC = () => {
 
             {/* LBA Override Toggle - shown when timeline doesn't have LBA but user may have sent one externally */}
             {!timelineHasLBA && (() => {
-              const daysSinceLba = lbaSentDate
-                ? Math.floor((Date.now() - new Date(lbaSentDate).getTime()) / (1000 * 60 * 60 * 24))
+              const daysSinceLba = claimData.lbaSentDate
+                ? Math.floor((Date.now() - new Date(claimData.lbaSentDate).getTime()) / (1000 * 60 * 60 * 24))
                 : 0;
 
               return (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-4">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-4 h-4 text-blue-600" />
+                <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 flex items-start gap-4">
+                  <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-teal-700" />
                   </div>
                   <div className="flex-1">
                     <label className="flex items-start gap-3 cursor-pointer group">
                       <input
                         type="checkbox"
-                        checked={lbaAlreadySent}
+                        checked={claimData.lbaAlreadySent || false}
                         onChange={(e) => {
-                          setLbaAlreadySent(e.target.checked);
-                          if (!e.target.checked) setLbaSentDate('');
+                          setClaimData(prev => ({
+                            ...prev,
+                            lbaAlreadySent: e.target.checked,
+                            lbaSentDate: e.target.checked ? prev.lbaSentDate : ''
+                          }));
                         }}
-                        className="mt-1 w-5 h-5 rounded border-blue-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        className="mt-1 w-5 h-5 rounded border-teal-300 text-teal-600 focus:ring-2 focus:ring-teal-500 cursor-pointer"
                       />
                       <div>
-                        <span className="font-semibold text-blue-900">I have already sent a Letter Before Action</span>
-                        <p className="text-sm text-blue-700 mt-1">
+                        <span className="font-semibold text-teal-900">I have already sent a Letter Before Action</span>
+                        <p className="text-sm text-teal-800 mt-1">
                           Check this if you sent an LBA outside of this system. This will enable Form N1 as an option.
                           You should keep evidence of your LBA for court.
                         </p>
@@ -2085,21 +2695,20 @@ const App: React.FC = () => {
                     </label>
 
                     {/* Date input when checkbox is checked */}
-                    {lbaAlreadySent && (
+                    {claimData.lbaAlreadySent && (
                       <div className="mt-4 ml-8">
-                        <label className="block text-sm font-medium text-blue-900 mb-1">
-                          Date LBA was sent:
-                        </label>
-                        <input
+                        <Input
+                          label="Date LBA was sent"
                           type="date"
-                          value={lbaSentDate}
-                          onChange={(e) => setLbaSentDate(e.target.value)}
+                          value={claimData.lbaSentDate || ''}
+                          onChange={(e) => setClaimData(prev => ({ ...prev, lbaSentDate: e.target.value }))}
                           max={new Date().toISOString().split('T')[0]}
-                          className="block w-48 rounded-lg border-blue-300 bg-white px-3 py-2 text-slate-900 focus:ring-2 focus:ring-blue-500"
+                          noMargin
+                          wrapperClassName="max-w-[12rem]"
                         />
 
                         {/* 30-day warning */}
-                        {lbaSentDate && daysSinceLba < 30 && (
+                        {claimData.lbaSentDate && daysSinceLba < 30 && (
                           <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
                             <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                             <p className="text-sm text-amber-800">
@@ -2110,7 +2719,7 @@ const App: React.FC = () => {
                           </div>
                         )}
 
-                        {lbaSentDate && daysSinceLba >= 30 && (
+                        {claimData.lbaSentDate && daysSinceLba >= 30 && (
                           <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
                             <p className="text-sm text-green-800">
@@ -2207,18 +2816,22 @@ const App: React.FC = () => {
                       </ul>
                     </div>
                     <div className="flex gap-3">
-                      <button
+                      <Button
                         onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: DocumentType.FORM_N1 }))}
-                        className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+                        variant="primary"
+                        className="bg-slate-900 hover:bg-slate-800"
+                        size="sm"
                       >
                         Switch to Form N1
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: DocumentType.PART_36_OFFER }))}
-                        className="px-4 py-2 bg-white border border-amber-300 text-amber-900 rounded-lg text-sm font-medium hover:bg-amber-50 transition-colors"
+                        variant="secondary"
+                        className="border-amber-300 text-amber-900 hover:bg-amber-50"
+                        size="sm"
                       >
                         Make Part 36 Offer
-                      </button>
+                      </Button>
                     </div>
                     <p className="text-xs text-amber-700 mt-3">
                       You can still proceed with generating another LBA if needed (e.g., to a different party or with updated terms).
@@ -2230,31 +2843,31 @@ const App: React.FC = () => {
 
             {/* Phase 2: Inline Interest Rate Verification (replaces modal) */}
             {claimData.selectedDocType && (
-              <div className="mt-8 bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+              <div className="mt-6 bg-teal-50 border-2 border-teal-200 rounded-xl p-5">
                 <div className="flex items-start gap-4 mb-4">
-                  <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-teal-600 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Percent className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-bold text-blue-900 text-lg mb-2">Interest Rate Verification Required</h3>
+                    <h3 className="font-bold text-teal-900 text-lg mb-2">Interest Rate Verification Required</h3>
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="bg-white border border-blue-200 rounded-lg p-3">
+                      <div className="bg-white border border-teal-200 rounded-lg p-3">
                         <p className="text-xs text-slate-500 uppercase font-bold mb-1">Claimant (You)</p>
                         <p className="font-bold text-slate-900 capitalize">{claimData.claimant.type}</p>
                       </div>
-                      <div className="bg-white border border-blue-200 rounded-lg p-3">
+                      <div className="bg-white border border-teal-200 rounded-lg p-3">
                         <p className="text-xs text-slate-500 uppercase font-bold mb-1">Defendant (Debtor)</p>
                         <p className="font-bold text-slate-900 capitalize">{claimData.defendant.type}</p>
                       </div>
                     </div>
-                    <div className="bg-white border border-blue-200 rounded-lg p-3 mb-4">
+                    <div className="bg-white border border-teal-200 rounded-lg p-3 mb-4">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-slate-600">Invoice Amount:</span>
                         <span className="font-bold text-slate-900">£{claimData.invoice.totalAmount.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-slate-600">Interest Rate:</span>
-                        <span className="font-bold text-blue-600">
+                        <span className="font-bold text-teal-700">
                           {claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS ? '12.75%' : '8%'} p.a.
                         </span>
                       </div>
@@ -2267,11 +2880,11 @@ const App: React.FC = () => {
                     <label className="flex items-start gap-3 cursor-pointer group">
                       <input
                         type="checkbox"
-                        checked={hasVerifiedInterest}
-                        onChange={(e) => setHasVerifiedInterest(e.target.checked)}
-                        className="mt-1 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        checked={claimData.hasVerifiedInterest || false}
+                        onChange={(e) => setClaimData(prev => ({ ...prev, hasVerifiedInterest: e.target.checked }))}
+                        className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-2 focus:ring-teal-500 cursor-pointer"
                       />
-                      <span className="text-sm text-blue-900">
+                      <span className="text-sm text-teal-900">
                         <span className="font-bold">I verify that:</span> The party types are correct, and I understand the interest rate is based on{' '}
                         {claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS
                           ? 'Late Payment of Commercial Debts Act 1998 (B2B)'
@@ -2284,23 +2897,46 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Generate Button */}
-            <div className="flex justify-end pt-4 border-t border-slate-200">
-                <button
-                  onClick={handleDraftClaim}
-                  disabled={isProcessing || !claimData.selectedDocType || !hasVerifiedInterest || (claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && !hasAcknowledgedLbaWarning)}
-                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-12 py-4 rounded-xl shadow-lg hover:shadow-2xl font-bold text-lg flex items-center gap-3 transition-all transform hover:-translate-y-1 disabled:transform-none"
-                >
-                    {isProcessing ? <Loader2 className="animate-spin"/> : <><Wand2 className="w-5 h-5" /> Generate Document</>}
-                </button>
+            <div className="sticky bottom-0 z-30 mt-6">
+              <div className="bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+                <div className="max-w-7xl mx-auto flex justify-end">
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleStepChange(claimData.chatHistory.length > 0 ? Step.DATA_REVIEW : Step.TIMELINE)}
+                    className="mr-auto"
+                    icon={<ArrowLeft className="w-4 h-4" />}
+                  >
+                    Back
+                  </Button>
+                  <Tooltip
+                    content={
+                      !claimData.selectedDocType ? "Select a document type first" :
+                      !claimData.hasVerifiedInterest ? "Verify the interest calculation to continue" :
+                      (claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && !hasAcknowledgedLbaWarning) ? "Acknowledge LBA warning to proceed" :
+                      ""
+                    }
+                    wrapDisabled
+                    position="top"
+                  >
+                    <Button
+                      onClick={() => handleDraftClaim(false)}
+                      disabled={!claimData.selectedDocType || !claimData.hasVerifiedInterest || (claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && !hasAcknowledgedLbaWarning)}
+                      isLoading={isProcessing}
+                      icon={!isProcessing && <Wand2 className="w-5 h-5" />}
+                    >
+                      Generate Document
+                    </Button>
+                  </Tooltip>
+                </div>
+              </div>
             </div>
           </div>
         );
       }
       case Step.DRAFT:
         return (
-            <div className="max-w-5xl mx-auto animate-fade-in py-10">
-                 <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 flex flex-col h-[calc(100vh-140px)] relative">
+            <div className="max-w-7xl mx-auto animate-fade-in py-6">
+                 <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-200 flex flex-col h-[calc(100vh-140px)] relative">
                     <div className="flex justify-between items-center mb-6">
                         <div>
                           <h2 className="text-2xl font-bold text-slate-900 font-display">Draft: {claimData.selectedDocType}</h2>
@@ -2311,13 +2947,14 @@ const App: React.FC = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                             <button 
+                             <Button
+                               variant={showRefineInput ? 'primary' : 'secondary'}
                                onClick={() => setShowRefineInput(!showRefineInput)}
-                               className={`flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-lg border transition-all shadow-sm ${showRefineInput ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-700 bg-white border-slate-200 hover:border-slate-300'}`}
+                               icon={<Sparkles className={`w-3 h-3 ${showRefineInput ? 'text-white' : 'text-teal-600'}`} />}
+                               className={showRefineInput ? 'bg-slate-900 hover:bg-slate-800' : ''}
                              >
-                                <Sparkles className={`w-3 h-3 ${showRefineInput ? 'text-amber-400' : 'text-blue-600'}`} /> 
-                                {showRefineInput ? 'Close Director Mode' : 'Refine with AI'}
-                             </button>
+                               {showRefineInput ? 'Close Director Mode' : 'Refine with AI'}
+                             </Button>
                         </div>
                     </div>
 
@@ -2338,25 +2975,27 @@ const App: React.FC = () => {
                                     onKeyDown={(e) => e.key === 'Enter' && handleRefineDraft()}
                                     autoFocus
                                 />
-                                <button 
+                                <Button
                                     onClick={handleRefineDraft}
-                                    disabled={isProcessing || !refineInstruction}
-                                    className="bg-amber-500 text-slate-900 px-6 py-2 rounded-lg font-bold hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                                    disabled={!refineInstruction}
+                                    isLoading={isProcessing}
+                                    className="bg-amber-500 text-slate-900 hover:bg-amber-400"
                                 >
-                                    {isProcessing ? <Loader2 className="animate-spin w-4 h-4"/> : "Execute"}
-                                </button>
+                                    Execute
+                                </Button>
                             </div>
                         </div>
                     )}
                     
                     {/* N1 Brief Details Editor */}
                     {claimData.selectedDocType === DocumentType.FORM_N1 && claimData.generated && (
-                       <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                       <div className="mb-6 bg-teal-50 p-4 rounded-xl border border-teal-100">
                           <label className="block text-sm font-bold text-slate-800 mb-2">N1 Form Summary (Max 30 words)</label>
                           <p className="text-xs text-slate-500 mb-2">This text appears in the "Brief details of claim" box on the front page.</p>
-                          <input 
-                            type="text"
-                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-sans text-sm"
+                          <Input
+                            label="Brief details of claim"
+                            hideLabel
+                            noMargin
                             value={claimData.generated.briefDetails || ''}
                             onChange={(e) => setClaimData(prev => prev.generated ? ({...prev, generated: {...prev.generated!, briefDetails: e.target.value}}) : prev)}
                             maxLength={200}
@@ -2366,12 +3005,27 @@ const App: React.FC = () => {
 
                     {claimData.generated && (
                         <textarea 
-                            className="w-full flex-grow p-8 border border-slate-200 bg-slate-50/50 rounded-lg font-serif text-base leading-relaxed text-slate-800 focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors resize-none shadow-inner" 
+                            className="w-full flex-grow p-6 border border-slate-200 bg-slate-50/50 rounded-xl font-serif text-base leading-relaxed text-slate-800 focus:ring-2 focus:ring-teal-500 focus:bg-white transition-colors resize-none shadow-inner" 
                             value={claimData.generated.content} 
                             onChange={(e) => setClaimData(prev => prev.generated ? ({...prev, generated: {...prev.generated!, content: e.target.value}}) : prev)}
                         />
                     )}
-                    <div className="flex justify-between mt-6 pt-6 border-t border-slate-100"><button onClick={() => handleStepChange(Step.RECOMMENDATION)} className="text-slate-500 font-medium hover:text-slate-800 transition-colors flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back to Selection</button><button onClick={handlePrePreview} disabled={isProcessing} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all">{isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <>Finalize & Preview <ArrowRight className="w-5 h-5" /></>}</button></div>
+            <div className="flex justify-between mt-6 pt-6 border-t border-slate-100">
+                <Button
+                    variant="ghost"
+                    onClick={() => handleStepChange(Step.RECOMMENDATION)}
+                    icon={<ArrowLeft className="w-4 h-4" />}
+                >
+                    Back to Selection
+                </Button>
+                <Button
+                    onClick={handlePrePreview}
+                    isLoading={isProcessing}
+                    rightIcon={!isProcessing && <ArrowRight className="w-5 h-5" />}
+                >
+                    Finalize & Preview
+                </Button>
+            </div>
                  </div>
             </div>
         );
@@ -2386,6 +3040,13 @@ const App: React.FC = () => {
             ...p,
             generated: p.generated ? { ...p.generated, content } : null
           }))}
+          onSendPhysicalMail={mailServiceAvailable ? sendPhysicalLetter : undefined}
+          onOpenMcol={() => {
+            setShowMcolSidecar(true);
+            window.open('https://www.moneyclaim.gov.uk/web/mcol/welcome', '_blank');
+          }}
+          mailSuccess={!!mailSuccess}
+          onPaymentComplete={handlePaymentComplete}
         />;
     }
   };
@@ -2397,6 +3058,20 @@ const App: React.FC = () => {
 
   if (view === 'terms') {
     return <TermsOfService onBack={() => setView('landing')} />;
+  }
+
+  // Calendar now renders in main layout with sidebar
+
+  if (view === 'settings' && userProfile) {
+    return (
+      <SettingsPage
+        profile={userProfile}
+        onSave={handleSettingsSave}
+        onBack={() => setView('dashboard')}
+        onExportAllData={handleExportAllData}
+        onDeleteAllData={handleDeleteAllData}
+      />
+    );
   }
 
   if (view === 'onboarding') {
@@ -2430,7 +3105,7 @@ const App: React.FC = () => {
                     onClick={handleEnterApp}
                     className="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white transition-all text-sm font-semibold shadow-sm"
                 >
-                    Sign In
+                    {userProfile ? 'Continue' : 'Get Started'}
                 </button>
             </div>
          </div>
@@ -2439,7 +3114,7 @@ const App: React.FC = () => {
          <div className="relative pt-40 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-slate-50">
             {/* Abstract Background Elements */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[800px] bg-teal-100/40 blur-[130px] rounded-full pointer-events-none"></div>
-            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-blue-100/40 blur-[120px] rounded-full pointer-events-none"></div>
+            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-teal-100/40 blur-[120px] rounded-full pointer-events-none"></div>
             
             <div className="container mx-auto px-4 relative z-10 flex flex-col items-center text-center">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-teal-100 text-teal-700 text-xs font-bold uppercase tracking-widest mb-8 hover:border-teal-200 transition-all cursor-default shadow-sm animate-fade-in">
@@ -2448,7 +3123,7 @@ const App: React.FC = () => {
                 
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-bold tracking-tight mb-8 leading-[1.1] md:leading-[1.1] text-slate-900 animate-fade-in-up animation-delay-100">
                   Recover Unpaid Debts <br/>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">Without the Lawyers</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-emerald-600">Without the Lawyers</span>
                 </h1>
                 
                 <p className="text-lg md:text-xl text-slate-600 max-w-2xl mb-12 font-light leading-relaxed animate-fade-in-up animation-delay-200">
@@ -2507,6 +3182,9 @@ const App: React.FC = () => {
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Upfront Legal Fees</p>
                   </div>
                </div>
+               <p className="mt-8 text-center text-xs text-slate-400">
+                 Metrics shown are illustrative unless otherwise stated.
+               </p>
             </div>
          </div>
 
@@ -2529,8 +3207,8 @@ const App: React.FC = () => {
                      },
                      { 
                         icon: PoundSterling, 
-                        color: "text-blue-600", 
-                        bg: "bg-blue-50",
+                        color: "text-emerald-600", 
+                        bg: "bg-emerald-50",
                         title: "Smart Calculations",
                         desc: "Automatically calculate statutory interest (8% + Base), compensation fees (£40-£100), and court fees."
                      },
@@ -2557,8 +3235,8 @@ const App: React.FC = () => {
                      },
                      { 
                         icon: MessageSquareText, 
-                        color: "text-blue-600", 
-                        bg: "bg-blue-50",
+                        color: "text-violet-600", 
+                        bg: "bg-violet-50",
                         title: "AI Consultation",
                         desc: "Not sure about next steps? Chat with our legal AI to get instant guidance on strategy."
                      }
@@ -2633,25 +3311,68 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 font-sans text-slate-900 selection:bg-violet-200 selection:text-violet-900 overflow-hidden">
+      {/* Skip Navigation Link - Accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:bg-teal-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
+
       <div className="md:hidden flex-shrink-0">
          <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
       </div>
 
       {/* Desktop Sidebar */}
       <div className="w-72 flex-shrink-0 hidden md:block h-full">
-        <Sidebar view={view} currentStep={step} maxStepReached={maxStepReached} onDashboardClick={handleExitWizard} onStepSelect={setStep} />
+        <Sidebar
+          view={view}
+          currentStep={step}
+          maxStepReached={maxStepReached}
+          onDashboardClick={handleExitWizard}
+          onCalendarClick={handleCalendarClick}
+          onSettingsClick={handleSettingsClick}
+          onLegalClick={() => setView('terms')}
+          onStepSelect={setStep}
+          upcomingDeadlinesCount={upcomingDeadlinesCount}
+          userProfile={userProfile}
+        />
       </div>
 
       {/* Mobile Sidebar Drawer */}
       <div className={`fixed inset-0 z-40 md:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-         <div className="absolute inset-0 bg-dark-900/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
-         <div className={`absolute left-0 top-0 bottom-0 w-72 bg-dark-900 transition-transform duration-300 shadow-dark-xl ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-             <Sidebar view={view} currentStep={step} maxStepReached={maxStepReached} onDashboardClick={handleExitWizard} onCloseMobile={() => setIsMobileMenuOpen(false)} onStepSelect={setStep} />
+         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
+         <div className={`absolute left-0 top-0 bottom-0 w-72 bg-white transition-transform duration-300 shadow-2xl border-r border-slate-200 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+             <Sidebar
+               view={view}
+               currentStep={step}
+               maxStepReached={maxStepReached}
+               onDashboardClick={handleExitWizard}
+               onCalendarClick={handleCalendarClick}
+               onSettingsClick={handleSettingsClick}
+               onLegalClick={() => setView('terms')}
+               onCloseMobile={() => setIsMobileMenuOpen(false)}
+               onStepSelect={setStep}
+               upcomingDeadlinesCount={upcomingDeadlinesCount}
+               userProfile={userProfile}
+             />
          </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto relative scroll-smooth bg-slate-50">
-         <div className="md:pl-8 md:pr-8 md:pt-8 pb-20 min-h-full">
+      <main
+        id="main-content"
+        className={`flex-1 relative scroll-smooth bg-slate-50 ${view === 'conversation' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        tabIndex={-1}
+      >
+         <div
+           className={`${
+             view === 'conversation'
+               ? 'h-full p-0'
+               : view === 'wizard'
+                 ? 'md:px-8 md:pt-4 pb-10'
+                 : 'md:pl-8 md:pr-8 md:pt-8 pb-20'
+           } min-h-full`}
+         >
             {view === 'dashboard' && <Dashboard
               claims={dashboardClaims}
               onCreateNew={handleStartNewClaim}
@@ -2662,42 +3383,121 @@ const App: React.FC = () => {
               onConnectAccounting={handleOpenAccountingModal}
               onExportAllData={handleExportAllData}
               onDeleteAllData={handleDeleteAllData}
+              onCreateDemo={handleCreateDemoClaim}
+              onStartManualWizard={handleStartManualWizard}
+              deadlines={deadlines}
+              onDeadlineClick={handleDeadlineClick}
+              onCompleteDeadline={handleCompleteDeadline}
+              onViewAllDeadlines={handleViewAllDeadlines}
             />}
+            {view === 'calendar' && (
+              <CalendarView
+                deadlines={deadlines}
+                claims={dashboardClaims}
+                onBack={() => setView('dashboard')}
+                onDeadlineClick={handleDeadlineClick}
+                onCompleteDeadline={handleCompleteDeadline}
+              />
+            )}
+            {/* Magic Transition Screen */}
+            {isTransitioning && (
+                <div className="absolute inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center text-white animate-fade-in">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-500 to-teal-400 flex items-center justify-center mb-6 shadow-2xl shadow-teal-500/30 animate-pulse">
+                        <Sparkles className="w-8 h-8 text-white" />
+                    </div>
+                    <h2 className="text-3xl font-bold font-display mb-2">Structuring Your Claim</h2>
+                    <p className="text-slate-400 mb-8 text-lg">Organizing evidence and preparing legal assessment...</p>
+                    
+                    <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-teal-500 rounded-full animate-[loading_1.5s_ease-in-out_infinite]"></div>
+                    </div>
+                    
+                    <div className="mt-8 grid grid-cols-1 gap-3 text-sm text-slate-500 opacity-80">
+                         <div className="flex items-center gap-2 animate-fade-in-up animation-delay-100">
+                             <CheckCircle className="w-4 h-4 text-teal-500" /> Calculating interest
+                         </div>
+                         <div className="flex items-center gap-2 animate-fade-in-up animation-delay-300">
+                             <CheckCircle className="w-4 h-4 text-teal-500" /> Verifying dates
+                         </div>
+                         <div className="flex items-center gap-2 animate-fade-in-up animation-delay-500">
+                             <CheckCircle className="w-4 h-4 text-teal-500" /> Draft preparation
+                         </div>
+                    </div>
+                </div>
+            )}
+            {view === 'conversation' && (
+              <ConversationEntry
+                userProfile={userProfile}
+                onComplete={handleConversationComplete}
+              />
+            )}
             {view === 'wizard' && (
-              <div>
+              <div className="flex flex-col min-h-full">
+                {/* Accessibility: Screen reader announcement for step changes */}
+                <h2
+                  ref={stepHeadingRef}
+                  tabIndex={-1}
+                  className="sr-only"
+                  aria-live="polite"
+                >
+                  Step {step} of {WIZARD_STEPS.length}: {WIZARD_STEPS[step - 1]?.label}
+                </h2>
+
+                {/* Header with Save & Exit */}
+                <div className="max-w-7xl mx-auto px-4 md:px-0 w-full flex justify-between items-center pt-4 pb-1">
+                   <h2 className="text-xl md:text-2xl font-bold text-slate-900 font-display hidden md:block" aria-hidden="true">
+                      {step === Step.SOURCE ? 'New Claim' : 'Continue Claim'}
+                   </h2>
+                   <div className="flex items-center gap-3 ml-auto">
+                      <button
+                        onClick={handleExitWizard}
+                        className="group flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm hover:shadow-md"
+                        title="Save progress and return to dashboard"
+                      >
+                        <Save className="w-4 h-4 text-slate-400 group-hover:text-teal-500 transition-colors" />
+                        <span className="font-medium">Save & Exit</span>
+                      </button>
+                   </div>
+                </div>
+
                 {/* Error Banner */}
                 {error && (
-                  <div className="max-w-4xl mx-auto px-4 md:px-0 mb-6 animate-fade-in">
+                  <div className="max-w-7xl mx-auto px-4 md:px-0 mb-6 animate-fade-in">
                     <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-start gap-4">
                       <AlertCircle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <h4 className="font-bold text-red-900 mb-2">Missing Information</h4>
                         <div className="text-red-800 text-sm whitespace-pre-line mb-4">{error}</div>
                         <div className="flex gap-3">
-                          <button
+                          <Button
+                            variant="danger"
+                            size="sm"
                             onClick={() => {
                               setError(null);
                               handleStepChange(Step.DETAILS);
                             }}
-                            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
                           >
                             Go to Claim Details
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => {
                               setError(null);
                               handleStepChange(Step.TIMELINE);
                             }}
-                            className="bg-white text-red-700 border border-red-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors"
+                            className="border-red-300 text-red-700 hover:bg-red-50"
                           >
                             Go to Timeline
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setError(null)}
-                            className="text-red-600 hover:text-red-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                            className="text-red-700 hover:text-red-900"
                           >
                             Dismiss
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -2705,7 +3505,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Progress Indicator - Mobile & Desktop */}
-                <div className="max-w-5xl mx-auto px-4 md:px-0 mb-6">
+                <div className="max-w-7xl mx-auto px-4 md:px-0 mb-4">
                   <div className="hidden md:block">
                     {/* Desktop - Hidden on mobile as sidebar shows progress */}
                   </div>
@@ -2740,6 +3540,13 @@ const App: React.FC = () => {
         }}
         onConnectionChange={handleAccountingConnectionChange}
       />
+
+      {showMcolSidecar && (
+        <McolSidecar 
+          claim={claimData} 
+          onClose={() => setShowMcolSidecar(false)} 
+        />
+      )}
       <XeroInvoiceImporter
         isOpen={showXeroImporter}
         onClose={() => setShowXeroImporter(false)}
@@ -2748,25 +3555,6 @@ const App: React.FC = () => {
       />
 
       {/* Compliance Modals */}
-      <InterestRateConfirmModal
-        isOpen={showInterestModal}
-        onClose={() => {
-          setShowInterestModal(false);
-          setPendingAction(null);
-        }}
-        onConfirm={() => {
-          setShowInterestModal(false);
-          if (pendingAction) {
-            pendingAction();
-          }
-        }}
-        claimantType={claimData.claimant.type}
-        debtorType={claimData.defendant.type}
-        interestRate={claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS ? LATE_PAYMENT_ACT_RATE : 8.0}
-        totalInterest={claimData.interest.totalInterest}
-        invoiceAmount={claimData.invoice.totalAmount}
-      />
-
       <LitigantInPersonModal
         isOpen={showLiPModal}
         onClose={() => {
@@ -2775,44 +3563,21 @@ const App: React.FC = () => {
         }}
         onProceed={async () => {
           setShowLiPModal(false);
-          // Proceed with document generation
-          setIsProcessing(true);
-          setProcessingText(`Generating ${claimData.selectedDocType}...`);
-          try {
-            const result = await DocumentBuilder.generateDocument(claimData);
-            setClaimData(prev => ({ ...prev, generated: result }));
-            handleStepChange(Step.DRAFT);
-            if (result.validation?.warnings && result.validation.warnings.length > 0) {
-              console.warn('Document warnings:', result.validation.warnings);
-            }
-          } catch (e: any) {
-            setError(e.message || "Document generation failed. Please check your data and try again.");
-            console.error('Draft generation error:', e);
-          } finally {
-            setIsProcessing(false);
+          if (pendingAction) {
+            await pendingAction();
+            setPendingAction(null);
           }
         }}
         claimValue={claimData.invoice.totalAmount + claimData.interest.totalInterest + claimData.compensation + claimData.courtFee}
       />
 
-      <StatementOfTruthModal
-        isOpen={showSoTModal}
-        onClose={() => {
-          setShowSoTModal(false);
-          setPendingAction(null);
-        }}
-        onConfirm={() => {
-          setShowSoTModal(false);
-          if (pendingAction) {
-            pendingAction();
-          }
-        }}
-        documentType={
-          claimData.selectedDocType === DocumentType.FORM_N1 ? 'Form N1 (Claim Form)' :
-          claimData.selectedDocType === DocumentType.DEFAULT_JUDGMENT ? 'Default Judgment (N225)' :
-          claimData.selectedDocType === DocumentType.ADMISSION ? 'Admission (N225A)' :
-          'Court Document'
-        }
+      {/* Court Form Data Modal (N225A, N180, N225) */}
+      <CourtFormDataModal
+        isOpen={showCourtFormModal}
+        onClose={() => setShowCourtFormModal(false)}
+        onSubmit={handleCourtFormDataSubmit}
+        documentType={claimData.selectedDocType}
+        existingData={claimData.courtFormData}
       />
 
       {/* Viability Warning Modal */}
@@ -2822,8 +3587,22 @@ const App: React.FC = () => {
         onProceed={() => {
           setHasAcknowledgedViability(true);
           setShowViabilityWarning(false);
+          // Auto-advance to the next step since user has acknowledged
+          handleStepChange(Step.VIABILITY);
         }}
         issues={viabilityIssues}
+      />
+      <ConfirmModal
+        isOpen={showRegenerateConfirm}
+        onClose={() => setShowRegenerateConfirm(false)}
+        onConfirm={() => {
+          setShowRegenerateConfirm(false);
+          handleDraftClaim(true);
+        }}
+        title="Regenerate Document?"
+        message="You already have a generated draft. Regenerating will overwrite any manual edits you may have made. Are you sure you want to continue?"
+        confirmText="Yes, Regenerate"
+        variant="warning"
       />
     </div>
   );

@@ -6,13 +6,33 @@ interface TooltipProps {
   children: React.ReactElement;
   position?: 'top' | 'bottom' | 'left' | 'right';
   delay?: number;
+  /** When true, wraps children in a span to enable hover on disabled elements */
+  wrapDisabled?: boolean;
+}
+
+function mergeRefs<T>(...refs: Array<React.Ref<T> | undefined>) {
+  return (value: T) => {
+    refs.forEach((ref) => {
+      if (!ref) return;
+      if (typeof ref === 'function') {
+        ref(value);
+      } else {
+        try {
+          (ref as React.MutableRefObject<T | null>).current = value;
+        } catch {
+          // ignore
+        }
+      }
+    });
+  };
 }
 
 export const Tooltip: React.FC<TooltipProps> = ({
   content,
   children,
   position = 'top',
-  delay = 200
+  delay = 200,
+  wrapDisabled = false
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
@@ -68,13 +88,44 @@ export const Tooltip: React.FC<TooltipProps> = ({
     };
   }, []);
 
-  const childWithHandlers = React.cloneElement(children, {
-    ref: triggerRef,
-    onMouseEnter: showTooltip,
-    onMouseLeave: hideTooltip,
-    onFocus: showTooltip,
-    onBlur: hideTooltip,
-  });
+  // For disabled elements, wrap in a span so mouse events still fire
+  const triggerElement = wrapDisabled ? (
+    <span
+      ref={triggerRef as React.Ref<HTMLSpanElement>}
+      onMouseEnter={showTooltip}
+      onMouseLeave={hideTooltip}
+      onFocus={showTooltip}
+      onBlur={hideTooltip}
+      className="inline-block"
+    >
+      {children}
+    </span>
+  ) : (
+    React.cloneElement(children, {
+      ref: mergeRefs(triggerRef as unknown as React.Ref<HTMLElement>, (children as any).ref),
+      onMouseEnter: (e: React.MouseEvent) => {
+        children.props.onMouseEnter?.(e);
+        showTooltip();
+      },
+      onMouseLeave: (e: React.MouseEvent) => {
+        children.props.onMouseLeave?.(e);
+        hideTooltip();
+      },
+      onFocus: (e: React.FocusEvent) => {
+        children.props.onFocus?.(e);
+        showTooltip();
+      },
+      onBlur: (e: React.FocusEvent) => {
+        children.props.onBlur?.(e);
+        hideTooltip();
+      },
+    })
+  );
+
+  // Don't show tooltip if no content
+  if (!content) {
+    return wrapDisabled ? <>{children}</> : children;
+  }
 
   const tooltipElement = isVisible ? (
     <div
@@ -105,7 +156,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
 
   return (
     <>
-      {childWithHandlers}
+      {triggerElement}
       {typeof document !== 'undefined' && tooltipElement && createPortal(tooltipElement, document.body)}
     </>
   );

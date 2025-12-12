@@ -25,8 +25,11 @@ export const calculateCourtFee = (amount: number): number => {
  * Fixed compensation for debt recovery costs.
  */
 export const calculateCompensation = (amount: number, claimantType: PartyType, defendantType: PartyType): number => {
-  // Only applies B2B
-  if (claimantType !== PartyType.BUSINESS || defendantType !== PartyType.BUSINESS) {
+  // Only applies B2B (Business/Sole Trader vs Business/Sole Trader)
+  const isClaimantBusiness = claimantType === PartyType.BUSINESS || claimantType === PartyType.SOLE_TRADER;
+  const isDefendantBusiness = defendantType === PartyType.BUSINESS || defendantType === PartyType.SOLE_TRADER;
+
+  if (!isClaimantBusiness || !isDefendantBusiness) {
     return 0;
   }
 
@@ -41,16 +44,20 @@ export const calculateCompensation = (amount: number, claimantType: PartyType, d
  */
 export const assessClaimViability = (state: ClaimState): AssessmentResult => {
   const now = new Date();
-  const invoiceDate = new Date(state.invoice.dateIssued);
-  const diffTime = Math.abs(now.getTime() - invoiceDate.getTime());
-  const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
   
   // 1. Limitation Act 1980 Check
+  const invoiceDate = new Date(state.invoice.dateIssued);
+  // If due date is available, limitation runs from then. Otherwise, estimate due date as issued + 30 days.
+  const limitationStart = state.invoice.dueDate ? new Date(state.invoice.dueDate) : new Date(invoiceDate.getTime() + (30 * 24 * 60 * 60 * 1000));
+  
+  const diffTime = Math.abs(now.getTime() - limitationStart.getTime());
+  const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
+
   const limitationCheck = {
     passed: diffYears < LIMITATION_PERIOD_YEARS,
     message: diffYears < LIMITATION_PERIOD_YEARS 
       ? "Within the 6-year statutory limitation period (Limitation Act 1980)."
-      : "Claim is statute-barred (older than 6 years). You likely cannot recover this debt."
+      : "Claim is statute-barred (older than 6 years from due date). You likely cannot recover this debt."
   };
 
   // 2. Value Check (CPR Part 27)
@@ -96,4 +103,81 @@ export const assessClaimViability = (state: ClaimState): AssessmentResult => {
     solvencyCheck,
     recommendation
   };
+};
+
+// ==========================================
+// Deadline Calculation Rules
+// ==========================================
+
+/**
+ * Get the appropriate LBA response period based on defendant type
+ * Pre-Action Protocol for Debt Claims:
+ * - Business to Business: 14 days minimum
+ * - Business to Consumer: 30 days recommended
+ */
+export const getLbaResponsePeriodDays = (defendantType: PartyType): number => {
+  return defendantType === PartyType.INDIVIDUAL ? 30 : 14;
+};
+
+/**
+ * Calculate when the LBA response period expires
+ */
+export const calculateLbaExpiryDate = (lbaDate: string, defendantType: PartyType): Date => {
+  const days = getLbaResponsePeriodDays(defendantType);
+  const date = new Date(lbaDate);
+  date.setDate(date.getDate() + days);
+  return date;
+};
+
+/**
+ * Check if LBA response period has expired
+ */
+export const hasLbaExpired = (lbaDate: string, defendantType: PartyType): boolean => {
+  const expiryDate = calculateLbaExpiryDate(lbaDate, defendantType);
+  return new Date() > expiryDate;
+};
+
+/**
+ * CPR Part 7 - Acknowledgment of Service deadline
+ * Defendant has 14 days from service to acknowledge
+ */
+export const calculateAcknowledgmentDeadline = (serviceDate: string): Date => {
+  const date = new Date(serviceDate);
+  date.setDate(date.getDate() + 14);
+  return date;
+};
+
+/**
+ * CPR Part 15 - Defence filing deadline
+ * 14 days after acknowledgment, or 28 days total from service if no acknowledgment
+ */
+export const calculateDefenceDeadline = (serviceDate: string, hasAcknowledged: boolean, acknowledgmentDate?: string): Date => {
+  if (hasAcknowledged && acknowledgmentDate) {
+    // 14 days from acknowledgment date
+    const date = new Date(acknowledgmentDate);
+    date.setDate(date.getDate() + 14);
+    return date;
+  }
+  // 28 days from service if no acknowledgment
+  const date = new Date(serviceDate);
+  date.setDate(date.getDate() + 28);
+  return date;
+};
+
+/**
+ * CPR Part 12 - Default Judgment
+ * Can apply for default judgment if no defence filed within time limit
+ */
+export const canApplyForDefaultJudgment = (defenceDeadline: Date): boolean => {
+  return new Date() > defenceDeadline;
+};
+
+/**
+ * Enforcement waiting period after judgment
+ * Generally recommended to wait 14 days before enforcement
+ */
+export const calculateEnforcementDate = (judgmentDate: string): Date => {
+  const date = new Date(judgmentDate);
+  date.setDate(date.getDate() + 14);
+  return date;
 };

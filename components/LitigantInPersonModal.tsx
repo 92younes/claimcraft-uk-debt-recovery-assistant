@@ -13,7 +13,9 @@
  */
 
 import React, { useState } from 'react';
-import { Scale, AlertTriangle, HelpCircle, CheckCircle, DollarSign, X } from 'lucide-react';
+import { Scale, AlertTriangle, HelpCircle, CheckCircle, DollarSign } from 'lucide-react';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface LitigantInPersonModalProps {
   isOpen: boolean;
@@ -53,36 +55,48 @@ export const LitigantInPersonModal: React.FC<LitigantInPersonModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-orange-600 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <Scale className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold font-display">Litigant in Person Warning</h2>
-              <p className="text-amber-100 text-sm mt-0.5">Self-Representation Risks</p>
-            </div>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
-          >
-            <X className="w-5 h-5 text-white" />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Litigant in Person Warning"
+      description="Self-representation risks"
+      maxWidthClassName="max-w-2xl"
+      headerClassName="bg-gradient-to-r from-amber-600 to-orange-600 text-white border-b-0"
+      titleClassName="text-white"
+      descriptionClassName="text-amber-100"
+      closeButtonClassName="text-white hover:text-white hover:bg-white/20"
+      titleIcon={(
+        <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+          <Scale className="w-8 h-8 text-white" />
         </div>
-
-        {/* Content */}
-        <div className="p-6 md:p-8 space-y-6">
+      )}
+      footer={(
+        <div className="w-full flex gap-3">
+          <Button
+            variant="secondary"
+            onClick={handleClose}
+            className="flex-1"
+          >
+            Cancel - Seek Legal Advice
+          </Button>
+          <Button
+            onClick={handleProceed}
+            disabled={!acknowledgesRisks || !understandsCosts}
+            className="flex-1"
+          >
+            {acknowledgesRisks && understandsCosts ? 'Proceed as Litigant in Person' : 'Complete Acknowledgments Above'}
+          </Button>
+        </div>
+      )}
+    >
+      <div className="p-6 md:p-8 space-y-6">
           {/* What is a Litigant in Person */}
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5">
+          <div className="bg-teal-50 border-2 border-teal-200 rounded-xl p-5">
             <div className="flex items-start gap-3">
-              <HelpCircle className="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
+              <HelpCircle className="w-6 h-6 text-teal-600 shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-bold text-blue-900 text-lg mb-2">What is a Litigant in Person (LiP)?</h3>
-                <p className="text-sm text-blue-900">
+                <h3 className="font-bold text-teal-900 text-lg mb-2">What is a Litigant in Person (LiP)?</h3>
+                <p className="text-sm text-teal-900">
                   A Litigant in Person (LiP) is someone who represents themselves in legal proceedings without a solicitor
                   or barrister. While you have the right to self-represent, it comes with significant challenges and risks.
                 </p>
@@ -242,12 +256,12 @@ export const LitigantInPersonModal: React.FC<LitigantInPersonModalProps> = ({
           </div>
 
           {/* Cost-Benefit Analysis */}
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5">
-            <h3 className="font-bold text-blue-900 text-lg mb-3">Cost-Benefit Analysis:</h3>
+          <div className="bg-teal-50 border-2 border-teal-200 rounded-xl p-5">
+            <h3 className="font-bold text-teal-900 text-lg mb-3">Cost-Benefit Analysis:</h3>
             <div className="grid md:grid-cols-2 gap-4 text-sm">
-              <div className="bg-white border border-blue-200 rounded-lg p-4">
-                <p className="font-bold text-blue-900 mb-2">💼 With Solicitor:</p>
-                <ul className="space-y-1 text-blue-800">
+              <div className="bg-white border border-teal-200 rounded-lg p-4">
+                <p className="font-bold text-teal-900 mb-2">💼 With Solicitor:</p>
+                <ul className="space-y-1 text-teal-800">
                   <li>• Upfront cost: £1,500-£5,000+</li>
                   <li>• Recoverable if you win</li>
                   <li>• Professional handling</li>
@@ -255,9 +269,9 @@ export const LitigantInPersonModal: React.FC<LitigantInPersonModalProps> = ({
                   <li>• Minimal time commitment</li>
                 </ul>
               </div>
-              <div className="bg-white border border-blue-200 rounded-lg p-4">
-                <p className="font-bold text-blue-900 mb-2">🙋 Self-Represented:</p>
-                <ul className="space-y-1 text-blue-800">
+              <div className="bg-white border border-teal-200 rounded-lg p-4">
+                <p className="font-bold text-teal-900 mb-2">🙋 Self-Represented:</p>
+                <ul className="space-y-1 text-teal-800">
                   <li>• No upfront solicitor fees</li>
                   <li>• Your time NOT recoverable</li>
                   <li>• Risk of procedural errors</li>
@@ -269,12 +283,12 @@ export const LitigantInPersonModal: React.FC<LitigantInPersonModalProps> = ({
           </div>
 
           {/* This Software's Limitations */}
-          <div className="bg-purple-50 border-2 border-purple-300 rounded-xl p-5">
-            <h3 className="font-bold text-purple-900 text-lg mb-3">Important: This Software's Limitations</h3>
-            <p className="text-sm text-purple-900 mb-2">
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-5">
+            <h3 className="font-bold text-amber-900 text-lg mb-3">Important: This Software's Limitations</h3>
+            <p className="text-sm text-amber-900 mb-2">
               ClaimCraft UK assists with <span className="font-bold">initial document generation ONLY</span>:
             </p>
-            <ul className="space-y-1.5 text-sm text-purple-900 ml-4 list-disc">
+            <ul className="space-y-1.5 text-sm text-amber-900 ml-4 list-disc">
               <li>✅ We can help you draft and file Form N1</li>
               <li>✅ We can generate pre-action letters</li>
               <li>❌ We CANNOT represent you if defendant files a defence</li>
@@ -291,7 +305,7 @@ export const LitigantInPersonModal: React.FC<LitigantInPersonModalProps> = ({
                 type="checkbox"
                 checked={acknowledgesRisks}
                 onChange={(e) => setAcknowledgesRisks(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-2 focus:ring-teal-500 cursor-pointer"
               />
               <span className="text-sm text-slate-900 group-hover:text-slate-700">
                 <span className="font-bold">I understand the risks of self-representation</span> including
@@ -304,7 +318,7 @@ export const LitigantInPersonModal: React.FC<LitigantInPersonModalProps> = ({
                 type="checkbox"
                 checked={understandsCosts}
                 onChange={(e) => setUnderstandsCosts(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-2 focus:ring-teal-500 cursor-pointer"
               />
               <span className="text-sm text-slate-900 group-hover:text-slate-700">
                 <span className="font-bold">I understand</span> that if this case becomes contested, I may need
@@ -313,25 +327,7 @@ export const LitigantInPersonModal: React.FC<LitigantInPersonModalProps> = ({
               </span>
             </label>
           </div>
-        </div>
-
-        {/* Footer - Action Buttons */}
-        <div className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-200 p-6 rounded-b-2xl flex gap-3">
-          <button
-            onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition-colors duration-200"
-          >
-            Cancel - Seek Legal Advice
-          </button>
-          <button
-            onClick={handleProceed}
-            disabled={!acknowledgesRisks || !understandsCosts}
-            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors duration-200 shadow-sm disabled:shadow-none"
-          >
-            {acknowledgesRisks && understandsCosts ? 'Proceed as Litigant in Person' : 'Complete Acknowledgments Above'}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, X, ShieldAlert, ArrowRight } from 'lucide-react';
+import { Modal } from './ui/Modal';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -25,9 +26,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const [eligibilityStep, setEligibilityStep] = useState(0);
   const [disqualifiedReason, setDisqualifiedReason] = useState<string | null>(null);
 
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedElement = useRef<HTMLElement | null>(null);
-
   // Simplified eligibility: only jurisdiction check
   // Debt age and solvency are now validated in Step 2 with actual claim data
   const eligibilityQuestions = [
@@ -42,24 +40,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-
-    previouslyFocusedElement.current = document.activeElement as HTMLElement;
-    modalRef.current?.focus();
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onDecline();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
-      previouslyFocusedElement.current?.focus();
-    };
+    // Reset state each time the modal opens so users always start at the disclaimer.
+    setStage('disclaimer');
+    setEligibilityStep(0);
+    setDisqualifiedReason(null);
   }, [isOpen, onDecline]);
 
   if (!isOpen) return null;
@@ -67,20 +51,18 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const currentQuestion = eligibilityQuestions[eligibilityStep];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in"
-      role="dialog"
-      aria-modal="true"
+    <Modal
+      isOpen={isOpen}
+      onClose={onDecline}
+      title="ClaimCraft UK Onboarding"
+      hideHeader
+      bodyClassName="p-0"
+      maxWidthClassName="max-w-2xl"
+      closeOnOverlayClick={false}
     >
-      <div
-        ref={modalRef}
-        tabIndex={-1}
-        className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto focus:outline-none border border-slate-200"
-      >
-
-        {/* STAGE 1: DISCLAIMER */}
-        {stage === 'disclaimer' && (
-          <>
+      {/* STAGE 1: DISCLAIMER */}
+      {stage === 'disclaimer' && (
+        <>
             {/* Header */}
             <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white p-6 rounded-t-2xl">
               <div className="flex items-start gap-4">
@@ -200,12 +182,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-          </>
-        )}
+        </>
+      )}
 
-        {/* STAGE 2: ELIGIBILITY CHECK */}
-        {stage === 'eligibility' && (
-          <>
+      {/* STAGE 2: ELIGIBILITY CHECK */}
+      {stage === 'eligibility' && (
+        <>
             <div className="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6 rounded-t-2xl">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
@@ -275,7 +257,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 };

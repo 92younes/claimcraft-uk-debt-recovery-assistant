@@ -6,9 +6,11 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Download, CheckSquare, Square, Loader, AlertCircle, Filter, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Download, CheckSquare, Square, Loader, AlertCircle, Filter, CheckCircle, AlertTriangle } from 'lucide-react';
 import { XeroPuller, parseXeroDate } from '../services/xeroPuller';
 import { ClaimState, Party, XeroInvoice } from '../types';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface XeroInvoiceImporterProps {
   isOpen: boolean;
@@ -174,39 +176,51 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
     } else if (daysOverdue >= 30) {
       return { icon: AlertCircle, color: 'bg-amber-100 text-amber-700 border-amber-300', label: `${daysOverdue}d` };
     } else {
-      return { icon: AlertCircle, color: 'bg-blue-100 text-blue-700 border-blue-300', label: `${daysOverdue}d` };
+      return { icon: AlertCircle, color: 'bg-slate-100 text-slate-700 border-slate-300', label: `${daysOverdue}d` };
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
-        {/* Header */}
-        <div className="bg-white border-b border-slate-200 p-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 font-display tracking-tight flex items-center gap-3">
-              <Download className="w-6 h-6 text-teal-600" />
-              Import Overdue Invoices from Xero
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              {isLoading
-                ? 'Loading invoices...'
-                : `Found ${invoiceRows.length} overdue invoice${invoiceRows.length === 1 ? '' : 's'} in your Xero account`
-              }
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors duration-200"
-          >
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Import Overdue Invoices from Xero"
+      description={
+        isLoading
+          ? 'Loading invoices...'
+          : `Found ${invoiceRows.length} overdue invoice${invoiceRows.length === 1 ? '' : 's'} in your Xero account`
+      }
+      maxWidthClassName="max-w-4xl"
+      bodyClassName="p-0"
+      titleIcon={(
+        <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
+          <Download className="w-6 h-6 text-teal-600" />
         </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      )}
+      footer={
+        !isLoading && invoiceRows.length > 0 ? (
+          <div className="w-full flex items-center justify-between gap-4">
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={isImporting || selectionSummary.count === 0}
+              isLoading={isImporting}
+              icon={!isImporting && <Download className="w-4 h-4" />}
+              className="min-w-[220px] justify-center"
+            >
+              {isImporting
+                ? `Importing ${selectionSummary.count}...`
+                : `Import ${selectionSummary.count} Invoice${selectionSummary.count === 1 ? '' : 's'}`}
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
+      <div className="p-6 space-y-4">
           {/* Error Message */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
@@ -344,47 +358,16 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
               {filteredRows.length === 0 && (
                 <div className="text-center py-10">
                   <p className="text-slate-600">No invoices match this filter</p>
-                  <button
-                    onClick={() => setFilter('all')}
-                    className="mt-2 text-teal-600 font-medium hover:underline"
-                  >
-                    Show all invoices
-                  </button>
+                  <div className="mt-2 flex justify-center">
+                    <Button variant="link" onClick={() => setFilter('all')}>
+                      Show all invoices
+                    </Button>
+                  </div>
                 </div>
               )}
             </>
           )}
         </div>
-
-        {/* Footer */}
-        {!isLoading && invoiceRows.length > 0 && (
-          <div className="bg-slate-50 border-t border-slate-200 p-6 flex items-center justify-between gap-4">
-            <button
-              onClick={onClose}
-              className="px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition-colors duration-200"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleImport}
-              disabled={isImporting || selectionSummary.count === 0}
-              className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]"
-            >
-              {isImporting ? (
-                <>
-                  <Loader className="w-4 h-4 animate-spin" />
-                  Importing {selectionSummary.count}...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Import {selectionSummary.count} Invoice{selectionSummary.count === 1 ? '' : 's'}
-                </>
-              )}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+    </Modal>
   );
 };

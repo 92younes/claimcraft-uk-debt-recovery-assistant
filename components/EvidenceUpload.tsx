@@ -1,8 +1,9 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Upload, X, FileText, Image as ImageIcon, Loader2, Tag, AlertCircle } from 'lucide-react';
+import { Upload, X, FileText, Image as ImageIcon, Loader2, Tag, AlertCircle, Search } from 'lucide-react';
 import { EvidenceFile } from '../types';
 import { validateFileType, getFileTypeError } from '../utils/validation';
+import { Button } from './ui/Button';
 
 interface EvidenceUploadProps {
   files: EvidenceFile[];
@@ -98,7 +99,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
           disabled={isProcessing}
           ref={fileInputRef}
         />
-        <div className="py-8 px-4 border-2 border-dashed border-slate-300 rounded-xl hover:border-teal-400 hover:bg-teal-50/30 transition-all duration-200 flex flex-col items-center justify-center text-center">
+        <div className="py-6 px-4 border-2 border-dashed border-slate-300 rounded-xl hover:border-teal-400 hover:bg-teal-50/30 transition-all duration-200 flex flex-col items-center justify-center text-center">
           <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-105 transition-transform duration-200">
             <Upload className="w-5 h-5 text-teal-500" />
           </div>
@@ -126,7 +127,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
               <div className="flex items-center gap-3">
                 {f.type.includes('pdf') ?
                   <FileText className="w-4 h-4 text-red-500" /> :
-                  <ImageIcon className="w-4 h-4 text-blue-500" />
+                  <ImageIcon className="w-4 h-4 text-teal-600" />
                 }
                 <div>
                   <p className="text-sm font-medium text-slate-700 truncate max-w-[200px]">{f.name}</p>
@@ -140,33 +141,29 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
                   </div>
                 </div>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => onRemoveFile(idx)}
-                className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 h-auto"
                 disabled={isProcessing}
-              >
-                <X className="w-4 h-4" />
-              </button>
+                icon={<X className="w-4 h-4" />}
+              />
             </div>
           ))}
         </div>
       )}
 
       {/* Analyze Button - Teal themed */}
-      <button
+      <Button
         onClick={onAnalyze}
         disabled={files.length === 0 || isProcessing}
-        className="w-full bg-teal-500 hover:bg-teal-600 disabled:bg-slate-200 disabled:text-slate-400 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all duration-200"
+        isLoading={isProcessing}
+        fullWidth
+        className="py-3"
       >
-        {isProcessing ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Analyzing...
-          </>
-        ) : (
-          'Analyze Documents'
-        )}
-      </button>
+        Analyze Documents
+      </Button>
     </div>
   );
 };

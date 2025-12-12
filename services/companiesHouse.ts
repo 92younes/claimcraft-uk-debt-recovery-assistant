@@ -24,7 +24,7 @@ import { Party, PartyType } from "../types";
  */
 
 // Backend proxy URL (avoids CORS and keeps API key secure)
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // Mock data for development/testing when API key not available
 const MOCK_DB: Record<string, Partial<Party>> = {

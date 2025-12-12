@@ -7,6 +7,7 @@ import { AddressStep } from './steps/AddressStep';
 import { DeclarationsStep } from './steps/DeclarationsStep';
 import { VerificationStep } from './steps/VerificationStep';
 import { UserProfile, INITIAL_USER_PROFILE, INITIAL_USER_ADDRESS } from '../../types';
+import { Button } from '../ui/Button';
 import {
   validateAccountTypeStep,
   validateBusinessDetailsStep,
@@ -17,15 +18,20 @@ import {
 } from '../../services/userProfileService';
 
 interface OnboardingFlowProps {
-  onComplete: (profile: UserProfile) => void;
-  onCancel: () => void;
+  onComplete: (profile: UserProfile) => void | Promise<void>;
+  onCancel?: () => void;
   existingProfile?: UserProfile | null;
+  isEditMode?: boolean;
+  /** Fullscreen is used for initial onboarding; embedded is used in Settings */
+  layout?: 'fullscreen' | 'embedded';
 }
 
 export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   onComplete,
   onCancel,
-  existingProfile
+  existingProfile,
+  isEditMode = false,
+  layout = 'fullscreen'
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -46,12 +52,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   // Focus management
   useEffect(() => {
     modalRef.current?.focus();
-    document.body.style.overflow = 'hidden';
+
+    if (layout === 'fullscreen') {
+      document.body.style.overflow = 'hidden';
+    }
 
     return () => {
-      document.body.style.overflow = 'unset';
+      if (layout === 'fullscreen') {
+        document.body.style.overflow = 'unset';
+      }
     };
-  }, []);
+  }, [layout]);
 
   // Validate current step whenever data changes
   useEffect(() => {
@@ -213,7 +224,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   };
 
   return (
-    <div className="flex h-screen bg-white">
+    <div
+      className={`flex bg-white ${
+        layout === 'fullscreen'
+          ? 'h-screen'
+          : 'rounded-2xl border border-slate-200 shadow-sm overflow-hidden'
+      }`}
+    >
       {/* Sidebar */}
       <OnboardingSidebar
         currentStep={currentStep}
@@ -224,7 +241,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 md:p-12">
+        <div className={`flex-1 overflow-y-auto ${layout === 'fullscreen' ? 'p-8 md:p-12' : 'p-6 md:p-8'}`}>
           <div className="max-w-2xl mx-auto">
             {renderStepContent()}
           </div>
@@ -234,28 +251,21 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         {!disqualified && (
           <div className="border-t border-slate-200 bg-slate-50 px-8 py-4">
             <div className="max-w-2xl mx-auto flex justify-between items-center">
-              <button
+              <Button
+                variant="secondary"
                 onClick={handleBack}
                 disabled={currentStep === 1}
-                className={`
-                  flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-colors
-                  ${currentStep === 1
-                    ? 'text-slate-300 cursor-not-allowed'
-                    : 'text-slate-700 hover:bg-slate-100'
-                  }
-                `}
+                icon={<ArrowLeft className="w-4 h-4" />}
               >
-                <ArrowLeft className="w-4 h-4" />
                 Go back
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={handleNext}
-                className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                rightIcon={<ArrowRight className="w-4 h-4" />}
               >
-                {currentStep === 5 ? 'Complete Setup' : 'Continue'}
-                <ArrowRight className="w-4 h-4" />
-              </button>
+                {currentStep === 5 ? (isEditMode ? 'Save Changes' : 'Complete Setup') : 'Continue'}
+              </Button>
             </div>
           </div>
         )}

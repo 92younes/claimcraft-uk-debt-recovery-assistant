@@ -16,6 +16,8 @@
 
 import React, { useState } from 'react';
 import { Percent, Building2, User, AlertTriangle, CheckCircle, X, AlertCircle } from 'lucide-react';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface InterestRateConfirmModalProps {
   isOpen: boolean;
@@ -62,40 +64,40 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <Percent className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold font-display">Interest Rate Confirmation</h2>
-              <p className="text-blue-100 text-sm mt-0.5">Verify Before Proceeding</p>
-            </div>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Interest Rate Confirmation"
+      description="Verify the party types and interest rate before proceeding."
+      maxWidthClassName="max-w-2xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClose} className="flex-1">
+            {!rateIsCorrect ? 'Back - Fix Party Types' : 'Cancel - Review Party Types'}
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={!canProceed}
+            variant={rateIsCorrect ? 'primary' : 'secondary'}
+            className={!rateIsCorrect ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none hover:bg-slate-100' : 'flex-1'}
           >
-            <X className="w-5 h-5 text-white" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-6">
+            {!rateIsCorrect ? 'Cannot Proceed - Rate Incorrect' : hasVerified ? 'Confirm & Proceed' : 'Complete Verification Above'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-6">
           {/* Party Types Summary */}
           <div className="bg-slate-50 border-2 border-slate-200 rounded-xl p-5">
             <h3 className="font-bold text-slate-900 text-lg mb-4">Current Party Classification:</h3>
             <div className="grid grid-cols-2 gap-4">
               {/* Claimant */}
-              <div className="bg-white border-2 border-blue-200 rounded-lg p-4">
+              <div className="bg-white border-2 border-teal-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   {claimantType === 'company' ? (
-                    <Building2 className="w-5 h-5 text-blue-600" />
+                    <Building2 className="w-5 h-5 text-teal-600" />
                   ) : (
-                    <User className="w-5 h-5 text-blue-600" />
+                    <User className="w-5 h-5 text-teal-600" />
                   )}
                   <span className="text-xs font-bold text-slate-500 uppercase">Claimant (You)</span>
                 </div>
@@ -103,12 +105,12 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
               </div>
 
               {/* Debtor */}
-              <div className="bg-white border-2 border-purple-200 rounded-lg p-4">
+              <div className="bg-white border-2 border-teal-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   {debtorType === 'company' ? (
-                    <Building2 className="w-5 h-5 text-purple-600" />
+                    <Building2 className="w-5 h-5 text-teal-600" />
                   ) : (
-                    <User className="w-5 h-5 text-purple-600" />
+                    <User className="w-5 h-5 text-teal-600" />
                   )}
                   <span className="text-xs font-bold text-slate-500 uppercase">Defendant (Debtor)</span>
                 </div>
@@ -144,7 +146,7 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-slate-600">Interest Rate:</span>
-                <span className="font-bold text-lg text-blue-600">{interestRate}% per annum</span>
+                <span className="font-bold text-lg text-teal-700">{interestRate}% per annum</span>
               </div>
               <div className="h-px bg-slate-200"></div>
               <div className="flex justify-between items-center">
@@ -155,15 +157,15 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
           </div>
 
           {/* Legal Explanation */}
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5">
-            <h3 className="font-bold text-blue-900 text-lg mb-3">Interest Rate Rules:</h3>
-            <div className="space-y-3 text-sm text-blue-900">
-              <div className="bg-white border border-blue-200 rounded-lg p-3">
+          <div className="bg-teal-50 border-2 border-teal-200 rounded-xl p-5">
+            <h3 className="font-bold text-teal-900 text-lg mb-3">Interest Rate Rules:</h3>
+            <div className="space-y-3 text-sm text-teal-900">
+              <div className="bg-white border border-teal-200 rounded-lg p-3">
                 <p className="font-bold flex items-center gap-2 mb-1">
                   <Building2 className="w-4 h-4" />
                   Business-to-Business (B2B): 12.75%
                 </p>
-                <p className="text-xs text-blue-800">
+                <p className="text-xs text-teal-800">
                   When BOTH parties are companies/LLPs - Late Payment of Commercial Debts Act 1998
                   (4.75% Bank of England base rate + 8% statutory = 12.75% total)
                 </p>
@@ -173,12 +175,12 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
                 Rate based on BoE base rate as of Jan 2025. Verify current rate at bankofengland.co.uk before filing.
               </p>
 
-              <div className="bg-white border border-blue-200 rounded-lg p-3">
+              <div className="bg-white border border-teal-200 rounded-lg p-3">
                 <p className="font-bold flex items-center gap-2 mb-1">
                   <User className="w-4 h-4" />
                   Business-to-Consumer (B2C) or Mixed: 8%
                 </p>
-                <p className="text-xs text-blue-800">
+                <p className="text-xs text-teal-800">
                   When either party is an individual - County Courts Act 1984 s.69
                 </p>
               </div>
@@ -236,7 +238,7 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
                 type="checkbox"
                 checked={hasVerified}
                 onChange={(e) => setHasVerified(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-2 focus:ring-teal-500 cursor-pointer"
               />
               <span className="text-sm text-slate-900 group-hover:text-slate-700">
                 <span className="font-bold">I confirm that:</span>
@@ -249,25 +251,7 @@ export const InterestRateConfirmModal: React.FC<InterestRateConfirmModalProps> =
               </span>
             </label>
           </div>
-        </div>
-
-        {/* Footer - Action Buttons */}
-        <div className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-200 p-6 rounded-b-2xl flex gap-3">
-          <button
-            onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition-colors duration-200"
-          >
-            {!rateIsCorrect ? 'Back - Fix Party Types' : 'Cancel - Review Party Types'}
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!canProceed}
-            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors duration-200 shadow-sm disabled:shadow-none"
-          >
-            {!rateIsCorrect ? 'Cannot Proceed - Rate Incorrect' : hasVerified ? 'Confirm & Proceed' : 'Complete Verification Above'}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

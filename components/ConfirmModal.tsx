@@ -1,5 +1,7 @@
 import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import { Button } from './ui/Button';
+import { Modal } from './ui/Modal';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -24,74 +26,43 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const variantStyles = {
-    danger: {
-      header: 'bg-red-600',
-      icon: 'bg-red-100 text-red-600',
-      button: 'bg-red-600 hover:bg-red-700'
-    },
-    warning: {
-      header: 'bg-amber-500',
-      icon: 'bg-amber-100 text-amber-600',
-      button: 'bg-amber-500 hover:bg-amber-600'
-    },
-    info: {
-      header: 'bg-white text-slate-900 border-b border-slate-200',
-      icon: 'bg-teal-50 text-teal-600',
-      title: 'text-slate-900',
-      close: 'text-slate-400 hover:bg-slate-100',
-      button: 'bg-teal-600 hover:bg-teal-700'
-    }
-  };
-
-  const styles = variantStyles[variant];
-
   const handleConfirm = () => {
     onConfirm();
     onClose();
   };
 
+  const iconContainerClass =
+    variant === 'danger'
+      ? 'bg-red-100 text-red-600'
+      : variant === 'warning'
+        ? 'bg-amber-100 text-amber-600'
+        : 'bg-teal-50 text-teal-600';
+
+  const confirmVariant = variant === 'danger' ? 'danger' : variant === 'warning' ? 'warning' : 'primary';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-slide-up border border-slate-200">
-        {/* Header */}
-        <div className={`${styles.header} p-6 flex items-center justify-between`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 ${styles.icon} rounded-xl flex items-center justify-center`}>
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <h2 className={`text-2xl font-bold font-display ${variant === 'info' ? 'text-slate-900' : 'text-white'}`}>{title}</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className={`p-2 rounded-lg transition-colors duration-200 ${variant === 'info' ? 'hover:bg-slate-100 text-slate-400' : 'hover:bg-white/20 text-white'}`}
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      maxWidthClassName="max-w-md"
+      titleIcon={(
+        <div className={`w-12 h-12 ${iconContainerClass} rounded-xl flex items-center justify-center`}>
+          <AlertTriangle className="w-6 h-6" />
         </div>
-
-        {/* Content */}
-        <div className="p-6 md:p-8">
-          <p className="text-base text-slate-600 leading-relaxed">{message}</p>
-        </div>
-
-        {/* Footer */}
-        <div className="bg-slate-50 border-t border-slate-200 p-6 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 rounded-xl font-medium transition-colors duration-200"
-          >
+      )}
+      footer={(
+        <div className="w-full flex gap-3">
+          <Button variant="secondary" onClick={onClose} className="flex-1">
             {cancelText}
-          </button>
-          <button
-            onClick={handleConfirm}
-            className={`flex-1 px-6 py-3 ${styles.button} text-white rounded-xl font-semibold transition-colors duration-200 shadow-sm`}
-          >
+          </Button>
+          <Button variant={confirmVariant} onClick={handleConfirm} className="flex-1">
             {confirmText}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      )}
+    >
+      <p className="text-base text-slate-600 leading-relaxed">{message}</p>
+    </Modal>
   );
 };

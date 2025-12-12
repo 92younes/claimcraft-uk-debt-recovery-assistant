@@ -26,7 +26,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({ progress }) => {
   // const percentage = Math.round((completedCount / totalCount) * 100);
 
   return (
-    <div className="bg-slate-50 border-l border-slate-200 w-72 p-6 hidden lg:block overflow-y-auto h-full flex-shrink-0">
+    <div className="bg-slate-50 border-r border-slate-200 w-72 p-6 hidden lg:block overflow-y-auto h-full flex-shrink-0">
       <div className="mb-6">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Required Information</h3>
       </div>

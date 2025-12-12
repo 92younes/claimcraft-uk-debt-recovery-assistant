@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { AlertTriangle, X, AlertCircle, Scale, FileWarning } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Scale, FileWarning } from 'lucide-react';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface ViabilityIssue {
   type: 'statute_barred' | 'defendant_dissolved' | 'exceeds_track' | 'other';
@@ -63,27 +65,38 @@ export const ViabilityBlockModal: React.FC<ViabilityBlockModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden animate-slide-up border border-slate-200">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-red-600 to-red-500 text-white p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold font-display">Claim Viability Warning</h2>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5 text-white" />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Claim Viability Warning"
+      description="Our assessment found serious issues that may make this claim unviable."
+      maxWidthClassName="max-w-lg"
+      titleIcon={(
+        <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+          <AlertTriangle className="w-6 h-6 text-red-600" />
         </div>
-
-        {/* Content */}
-        <div className="p-6 md:p-8 space-y-6">
+      )}
+      footer={(
+        <div className="w-full flex gap-3">
+          <Button
+            variant="secondary"
+            onClick={handleClose}
+            className="flex-1"
+          >
+            Go Back
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleProceed}
+            disabled={!hasAcknowledged}
+            className="flex-1"
+          >
+            Proceed Anyway
+          </Button>
+        </div>
+      )}
+    >
+      <div className="space-y-6">
           <p className="text-base text-slate-600 leading-relaxed">
             Our legal assessment has identified serious issues that may make this claim unviable or inadvisable:
           </p>
@@ -129,7 +142,7 @@ export const ViabilityBlockModal: React.FC<ViabilityBlockModalProps> = ({
               type="checkbox"
               checked={hasAcknowledged}
               onChange={(e) => setHasAcknowledged(e.target.checked)}
-              className="mt-1 w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500"
+              className="mt-1 w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-2 focus:ring-red-500/30"
             />
             <span className="text-sm text-slate-700 leading-relaxed">
               I understand that this claim has significant viability issues and may be unsuccessful.
@@ -137,29 +150,7 @@ export const ViabilityBlockModal: React.FC<ViabilityBlockModalProps> = ({
               any costs or consequences that may arise.
             </span>
           </label>
-        </div>
-
-        {/* Footer */}
-        <div className="bg-slate-50 border-t border-slate-200 p-6 flex gap-3">
-          <button
-            onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 rounded-xl font-medium transition-colors duration-200"
-          >
-            Go Back
-          </button>
-          <button
-            onClick={handleProceed}
-            disabled={!hasAcknowledged}
-            className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-colors duration-200 shadow-sm ${
-              hasAcknowledged
-                ? 'bg-red-600 hover:bg-red-700 text-white'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            Proceed Anyway
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

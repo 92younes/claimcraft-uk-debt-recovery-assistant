@@ -10,9 +10,9 @@ interface AssessmentReportProps {
 
 export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, onContinue }) => {
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in">
+    <div className="max-w-7xl mx-auto animate-fade-in">
       {/* Header Section - Horizontal Layout */}
-      <div className="flex items-center gap-6 mb-6 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex items-center gap-5 mb-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <div className={`w-16 h-16 flex-shrink-0 rounded-2xl flex items-center justify-center shadow-sm ${assessment.isViable ? 'bg-teal-100' : 'bg-amber-100'}`}>
            {assessment.isViable ? <Scale className="w-8 h-8 text-teal-600" /> : <AlertTriangle className="w-8 h-8 text-amber-600" />}
         </div>
@@ -24,7 +24,7 @@ export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, 
 
       {/* AI Claim Strength Assessment */}
       {assessment.strength && (
-         <div className={`p-5 rounded-xl shadow-sm mb-6 relative overflow-hidden border ${
+         <div className={`p-4 rounded-xl shadow-sm mb-4 relative overflow-hidden border ${
             assessment.strength === ClaimStrength.HIGH ? 'bg-teal-50 border-teal-200' :
             assessment.strength === ClaimStrength.MEDIUM ? 'bg-amber-50 border-amber-200' :
             'bg-red-50 border-red-200'
@@ -85,7 +85,7 @@ export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, 
       )}
 
       {/* 3-Column Grid for Checks */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Limitation Act Check */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-3">
           <div className="flex justify-between items-start">

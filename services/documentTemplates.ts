@@ -40,9 +40,9 @@ Compensation (Late Payment Act 1998): £[COMPENSATION]
 
 **WHAT YOU MUST DO NOW**
 
-In accordance with the Pre-Action Protocol for Debt Claims, you must respond to this letter within 30 days of the date of this letter.
+In accordance with the Pre-Action Protocol for Debt Claims, you must respond to this letter within [LBA_RESPONSE_DAYS] days of the date of this letter.
 
-If you dispute this debt, you must set out your reasons in writing within 30 days. If you fail to respond or do not pay the outstanding sum in full, court proceedings will be commenced against you without further notice.
+If you dispute this debt, you must set out your reasons in writing within [LBA_RESPONSE_DAYS] days. If you fail to respond or do not pay the outstanding sum in full, court proceedings will be commenced against you without further notice.
 
 This may result in:
 - A County Court Judgment (CCJ) being registered against you

@@ -1,9 +1,11 @@
 
 import React, { useState, useRef } from 'react';
-import { X, Upload, FileSpreadsheet, Download, Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, Download, Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { ClaimState, INITIAL_STATE, PartyType, INITIAL_PARTY, INITIAL_INVOICE } from '../types';
 import { getCountyFromPostcode } from '../constants';
 import { validateImportedClaim, ImportValidationResult } from '../utils/validation';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface CsvImportModalProps {
   isOpen: boolean;
@@ -135,7 +137,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
         }
 
         const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-        const claims: ClaimState[] = [];
+        const claims: ParsedClaimWithValidation[] = [];
 
         // Helper to find index of column
         const getIdx = (keywords: string[]) => headers.findIndex(h => keywords.some(k => h.includes(k)));
@@ -190,7 +192,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
 
             // Calculate overdue status
             const dueDate = idxDue !== -1 ? row[idxDue] : '';
-            let status = 'draft' as const;
+            let status: 'draft' | 'overdue' = 'draft';
             if (dueDate) {
                 const today = new Date().toISOString().split('T')[0];
                 if (dueDate < today) {
@@ -278,23 +280,20 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
   const totalWarnings = parsedClaims.reduce((acc, p) => acc + p.validation.warnings.length, 0);
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200">
-
-        <div className="bg-white border-b border-slate-200 p-5 flex justify-between items-center text-slate-900">
-            <div className="flex items-center gap-3">
-                <div className="bg-teal-50 p-2 rounded-xl">
-                    <FileSpreadsheet className="w-6 h-6 text-teal-600" />
-                </div>
-                <div>
-                    <h2 className="font-bold text-xl font-display">Import Claims (CSV)</h2>
-                    <p className="text-xs text-slate-500">Bulk create drafts from spreadsheet</p>
-                </div>
-            </div>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-lg transition-colors"><X className="w-6 h-6" /></button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Import Claims (CSV)"
+      description="Bulk create drafts from a spreadsheet."
+      maxWidthClassName="max-w-2xl"
+      bodyClassName="p-0"
+      titleIcon={(
+        <div className="bg-teal-50 p-2 rounded-xl">
+          <FileSpreadsheet className="w-6 h-6 text-teal-600" />
         </div>
-
-        <div className="p-6 md:p-8 overflow-y-auto">
+      )}
+    >
+      <div className="p-6 md:p-8">
             {!parsedClaims.length ? (
                 <>
                     <div
@@ -318,13 +317,14 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                             onChange={handleFileSelect}
                             disabled={parsing}
                         />
-                        <button
+                        <div className="flex justify-center">
+                          <Button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={parsing}
-                            className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-sm transition-all duration-200 shadow-sm"
-                        >
+                          >
                             Select File
-                        </button>
+                          </Button>
+                        </div>
                     </div>
 
                     {error && (
@@ -339,9 +339,9 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                             <Download className="w-4 h-4 text-teal-500" /> Need a template?
                         </h3>
                         <p className="text-xs text-slate-500 mb-3">Download our standard CSV template to ensure your columns are mapped correctly.</p>
-                        <button onClick={downloadTemplate} className="text-teal-600 text-xs font-bold hover:text-teal-700 transition-colors">
-                            Download Template.csv
-                        </button>
+                        <Button variant="link" onClick={downloadTemplate}>
+                          Download Template.csv
+                        </Button>
                     </div>
                 </>
             ) : (
@@ -423,24 +423,24 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                     </div>
 
                     <div className="flex gap-3">
-                        <button
+                        <Button
                             onClick={() => { setParsedClaims([]); setSkippedRows([]); setError(null); }}
-                            className="flex-1 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors duration-200"
+                            variant="secondary"
+                            className="flex-1"
                         >
                             Cancel
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             onClick={handleFinalize}
                             disabled={parsedClaims.length === 0}
-                            className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1"
                         >
                             Import {parsedClaims.length} Claim{parsedClaims.length !== 1 ? 's' : ''}
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

@@ -2,21 +2,27 @@ import React, { useState, useId } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string;
+  label?: string;
+  hideLabel?: boolean;
   error?: string;
   success?: string;
   helpText?: string;
   icon?: React.ReactNode;
   showCharacterCount?: boolean;
+  noMargin?: boolean;
+  wrapperClassName?: string;
 }
 
 export const Input: React.FC<InputProps> = ({
   label,
+  hideLabel = false,
   error,
   success,
   helpText,
   icon,
   showCharacterCount,
+  noMargin = false,
+  wrapperClassName = '',
   className = '',
   required,
   maxLength,
@@ -41,27 +47,31 @@ export const Input: React.FC<InputProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 mb-5">
+    <div className={`flex flex-col gap-1.5 ${noMargin ? '' : 'mb-5'} ${wrapperClassName}`}>
       {/* Label */}
-      <div className="flex items-center justify-between">
-        <label
-          htmlFor={inputId}
-          className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
-        >
-          {label}
-          {required && <span className="text-teal-500" aria-label="required">*</span>}
-        </label>
+      {(label || required) && (
+        <div className="flex items-center justify-between">
+          {label && (
+            <label
+              htmlFor={inputId}
+              className={`${hideLabel ? 'sr-only' : 'text-sm font-medium text-slate-700'} flex items-center gap-1 mb-0.5`}
+            >
+              {label}
+              {required && <span className="text-teal-500" aria-label="required">*</span>}
+            </label>
+          )}
 
-        {/* Character Count */}
-        {showCharacterCount && maxLength && (
-          <span
-            className={`text-xs font-mono ${currentLength > maxLength * 0.9 ? 'text-amber-500 font-medium' : 'text-slate-400'}`}
-            aria-live="polite"
-          >
-            {currentLength}/{maxLength}
-          </span>
-        )}
-      </div>
+          {/* Character Count */}
+          {showCharacterCount && maxLength && (
+            <span
+              className={`text-xs font-mono ${currentLength > maxLength * 0.9 ? 'text-amber-500 font-medium' : 'text-slate-400'}`}
+              aria-live="polite"
+            >
+              {currentLength}/{maxLength}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Input Container */}
       <div className="relative">
@@ -144,17 +154,23 @@ export const Input: React.FC<InputProps> = ({
 };
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  label: string;
+  label?: string;
+  hideLabel?: boolean;
   options: { value: string; label: string }[];
   error?: string;
   helpText?: string;
+  noMargin?: boolean;
+  wrapperClassName?: string;
 }
 
 export const Select: React.FC<SelectProps> = ({
   label,
+  hideLabel = false,
   options,
   error,
   helpText,
+  noMargin = false,
+  wrapperClassName = '',
   className = '',
   required,
   ...props
@@ -165,14 +181,16 @@ export const Select: React.FC<SelectProps> = ({
   const hasError = !!error;
 
   return (
-    <div className="flex flex-col gap-1.5 mb-5">
-      <label
-        htmlFor={selectId}
-        className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
-      >
-        {label}
-        {required && <span className="text-teal-500" aria-label="required">*</span>}
-      </label>
+    <div className={`flex flex-col gap-1.5 ${noMargin ? '' : 'mb-5'} ${wrapperClassName}`}>
+      {(label || required) && label && (
+        <label
+          htmlFor={selectId}
+          className={`${hideLabel ? 'sr-only' : 'text-sm font-medium text-slate-700'} flex items-center gap-1 mb-0.5`}
+        >
+          {label}
+          {required && <span className="text-teal-500" aria-label="required">*</span>}
+        </label>
+      )}
       <select
         id={selectId}
         className={`
@@ -212,19 +230,25 @@ export const Select: React.FC<SelectProps> = ({
 };
 
 interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label: string;
+  label?: string;
+  hideLabel?: boolean;
   error?: string;
   success?: string;
   helpText?: string;
   showCharacterCount?: boolean;
+  noMargin?: boolean;
+  wrapperClassName?: string;
 }
 
 export const TextArea: React.FC<TextAreaProps> = ({
   label,
+  hideLabel = false,
   error,
   success,
   helpText,
   showCharacterCount,
+  noMargin = false,
+  wrapperClassName = '',
   className = '',
   required,
   maxLength,
@@ -242,25 +266,29 @@ export const TextArea: React.FC<TextAreaProps> = ({
   const hasSuccess = !!success && !hasError;
 
   return (
-    <div className="flex flex-col gap-1.5 mb-5">
-      <div className="flex items-center justify-between">
-        <label
-          htmlFor={textareaId}
-          className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-0.5"
-        >
-          {label}
-          {required && <span className="text-teal-500" aria-label="required">*</span>}
-        </label>
+    <div className={`flex flex-col gap-1.5 ${noMargin ? '' : 'mb-5'} ${wrapperClassName}`}>
+      {(label || required) && (
+        <div className="flex items-center justify-between">
+          {label && (
+            <label
+              htmlFor={textareaId}
+              className={`${hideLabel ? 'sr-only' : 'text-sm font-medium text-slate-700'} flex items-center gap-1 mb-0.5`}
+            >
+              {label}
+              {required && <span className="text-teal-500" aria-label="required">*</span>}
+            </label>
+          )}
 
-        {showCharacterCount && maxLength && (
-          <span
-            className={`text-xs font-mono ${currentLength > maxLength * 0.9 ? 'text-amber-500 font-medium' : 'text-slate-400'}`}
-            aria-live="polite"
-          >
-            {currentLength}/{maxLength}
-          </span>
-        )}
-      </div>
+          {showCharacterCount && maxLength && (
+            <span
+              className={`text-xs font-mono ${currentLength > maxLength * 0.9 ? 'text-amber-500 font-medium' : 'text-slate-400'}`}
+              aria-live="polite"
+            >
+              {currentLength}/{maxLength}
+            </span>
+          )}
+        </div>
+      )}
 
       <textarea
         id={textareaId}

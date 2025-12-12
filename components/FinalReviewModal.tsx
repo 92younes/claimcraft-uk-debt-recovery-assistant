@@ -13,7 +13,9 @@
  */
 
 import React, { useState } from 'react';
-import { CheckCircle, AlertTriangle, FileCheck, X, Eye, Loader2, Scale, CheckSquare } from 'lucide-react';
+import { CheckCircle, AlertTriangle, FileCheck, Eye, Loader2, Scale, CheckSquare } from 'lucide-react';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface ChecklistItem {
   id: string;
@@ -151,29 +153,43 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200">
-        {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6 rounded-t-2xl flex items-center justify-between z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <FileCheck className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold font-display">Final Review Checklist</h2>
-              <p className="text-teal-100 text-sm mt-0.5 leading-relaxed">Last Check Before Filing</p>
-            </div>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
-          >
-            <X className="w-5 h-5 text-white" />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Final Review Checklist"
+      description="Last check before filing"
+      maxWidthClassName="max-w-2xl"
+      bodyClassName="p-0"
+      headerClassName="bg-gradient-to-r from-teal-600 to-teal-500 text-white border-b-0"
+      titleClassName="text-white"
+      descriptionClassName="text-teal-100"
+      closeButtonClassName="text-white hover:text-white hover:bg-white/20"
+      titleIcon={(
+        <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+          <FileCheck className="w-8 h-8 text-white" />
         </div>
-
-        {/* Content */}
-        <div className="p-6 md:p-8 space-y-6">
+      )}
+      footer={(
+        <div className="w-full flex gap-3">
+          <Button variant="secondary" onClick={handleClose} className="flex-1">
+            Cancel - Review Document
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={!canProceed || isSubmitting}
+            isLoading={isSubmitting}
+            className="flex-1"
+          >
+            {isSubmitting
+              ? 'Generating PDF...'
+              : canProceed
+                ? 'Download Form'
+                : `Complete ${criticalItems.length - criticalItems.filter(i => checkedItems.has(i.id)).length} Critical Items`}
+          </Button>
+        </div>
+      )}
+    >
+      <div className="p-6 md:p-8 space-y-6">
           {/* Claim Summary */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
             <h3 className="font-bold text-slate-900 text-lg mb-4 flex items-center gap-2">
@@ -505,34 +521,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
               </p>
             </div>
           )}
-        </div>
-
-        {/* Footer - Action Buttons */}
-        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 p-6 rounded-b-2xl flex gap-3">
-          <button
-            onClick={handleClose}
-            className="flex-1 px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 text-slate-700 rounded-xl font-medium transition-colors duration-200"
-          >
-            Cancel - Review Document
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!canProceed || isSubmitting}
-            className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all duration-200 shadow-sm disabled:shadow-none flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating PDF...
-              </>
-            ) : canProceed ? (
-              'Download Form'
-            ) : (
-              `Complete ${criticalItems.length - criticalItems.filter(i => checkedItems.has(i.id)).length} Critical Items`
-            )}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

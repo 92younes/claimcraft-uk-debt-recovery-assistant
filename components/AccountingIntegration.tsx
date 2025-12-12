@@ -6,9 +6,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, Link as LinkIcon, Unlink, Download, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { Link as LinkIcon, Unlink, Download, CheckCircle, AlertCircle, Loader, Link } from 'lucide-react';
 import { NangoClient } from '../services/nangoClient';
 import { AccountingConnection } from '../types';
+import { Button } from './ui/Button';
+import { Modal } from './ui/Modal';
 
 type AccountingProvider = 'xero' | 'quickbooks' | 'freeagent' | 'sage';
 
@@ -21,10 +23,10 @@ interface ProviderConfig {
 
 // Only include integrations that are configured in your Nango dashboard
 const PROVIDERS: ProviderConfig[] = [
-  { id: 'xero', name: 'Xero', color: 'bg-blue-600', icon: 'X' }
+  { id: 'xero', name: 'Xero', color: 'bg-teal-600', icon: 'X' }
   // Add more providers here once configured in Nango:
   // { id: 'quickbooks', name: 'QuickBooks', color: 'bg-green-600', icon: 'Q' },
-  // { id: 'freeagent', name: 'FreeAgent', color: 'bg-purple-600', icon: 'F' },
+  // { id: 'freeagent', name: 'FreeAgent', color: 'bg-teal-600', icon: 'F' },
   // { id: 'sage', name: 'Sage', color: 'bg-teal-600', icon: 'S' }
 ];
 
@@ -186,24 +188,25 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-slate-200">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between rounded-t-2xl z-10">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 font-display tracking-tight">Accounting Integration</h2>
-            <p className="text-sm text-slate-500 mt-1 leading-relaxed">Connect your accounting system to import overdue invoices</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors duration-200"
-          >
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Accounting Integration"
+      description="Connect your accounting system to import overdue invoices."
+      maxWidthClassName="max-w-4xl"
+      bodyClassName="p-0"
+      titleIcon={(
+        <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
+          <Link className="w-6 h-6 text-teal-600" />
         </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-6">
+      )}
+      footer={(
+        <Button variant="secondary" onClick={onClose} fullWidth>
+          Close
+        </Button>
+      )}
+    >
+      <div className="p-6 space-y-6">
           {/* Error/Success Messages */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
@@ -290,44 +293,34 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                   <div className="flex gap-2">
                     {isConnected ? (
                       <>
-                        <button
+                        <Button
                           onClick={() => handleImport(provider.id)}
-                          className="flex-1 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-sm"
+                          icon={<Download className="w-4 h-4" />}
+                          className="flex-1"
                         >
-                          <Download className="w-4 h-4" />
                           Import
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleDisconnect(provider.id, provider.name)}
                           disabled={isDisconnecting}
-                          className="px-4 py-2 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          isLoading={isDisconnecting}
+                          variant="danger"
+                          icon={!isDisconnecting && <Unlink className="w-4 h-4" />}
                         >
-                          {isDisconnecting ? (
-                            <Loader className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Unlink className="w-4 h-4" />
-                          )}
-                        </button>
+                          Disconnect
+                        </Button>
                       </>
                     ) : (
                       <div className="space-y-2 w-full">
-                        <button
+                        <Button
                           onClick={() => handleConnect(provider.id)}
                           disabled={isConnecting}
-                          className="w-full bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          isLoading={isConnecting}
+                          icon={!isConnecting && <LinkIcon className="w-4 h-4" />}
+                          fullWidth
                         >
-                          {isConnecting ? (
-                            <>
-                              <Loader className="w-4 h-4 animate-spin" />
-                              Connecting...
-                            </>
-                          ) : (
-                            <>
-                              <LinkIcon className="w-4 h-4" />
-                              Connect New Account
-                            </>
-                          )}
-                        </button>
+                          {isConnecting ? 'Connecting...' : 'Connect New Account'}
+                        </Button>
 
                         {/* Show shared connection options for Xero */}
                         {provider.id === 'xero' && sharedConnections.length > 0 && (
@@ -345,10 +338,10 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                                   <button
                                     key={shared.connectionId}
                                     onClick={() => handleUseSharedConnection(shared)}
-                                    className="w-full p-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-left text-xs transition-colors"
+                                    className="w-full p-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg text-left text-xs transition-colors"
                                   >
-                                    <span className="font-medium text-blue-900">{shared.organizationName}</span>
-                                    <span className="text-blue-600 ml-2">(Use shared)</span>
+                                    <span className="font-medium text-teal-900">{shared.organizationName}</span>
+                                    <span className="text-teal-700 ml-2">(Use shared)</span>
                                   </button>
                                 ))}
                               </div>
@@ -392,18 +385,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
               <li>• Imported data is stored locally in your browser</li>
             </ul>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 p-6 rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="w-full px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition-colors duration-200"
-          >
-            Close
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

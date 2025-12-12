@@ -10,8 +10,9 @@ import { UserProfile, Party, PartyType, BusinessType } from '../types';
  */
 export const profileToClaimantParty = (profile: UserProfile): Party => {
   // Determine party type based on business type
+  // Sole traders are treated as businesses for Late Payment Act purposes
   const partyType = profile.businessType === BusinessType.SOLE_TRADER
-    ? PartyType.INDIVIDUAL
+    ? PartyType.SOLE_TRADER
     : PartyType.BUSINESS;
 
   return {

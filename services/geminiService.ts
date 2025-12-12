@@ -1,14 +1,36 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType, ClaimStrength, ExtractedClaimData, TimelineEvent, ChatResponse } from "../types";
+import { Type } from "@google/genai";
+import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType, ClaimStrength, ExtractedClaimData, TimelineEvent, ChatResponse, ClaimIntakeResult } from "../types";
 import { formatCurrency, formatTotalDebt, formatGrandTotal } from "../utils/calculations";
 import { getCountyFromPostcode } from "../constants";
 
-const getClient = () => {
-  const apiKey = import.meta.env.VITE_API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY (Gemini) is not defined. Please set VITE_API_KEY in your .env file.");
+// Get backend URL from environment or default to localhost
+const getBackendUrl = () => {
+  return import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+};
+
+// Helper to call Gemini through backend proxy
+const callGeminiProxy = async (params: {
+  model: string;
+  prompt: string;
+  files?: Array<{ data: string; mimeType: string }>;
+  config?: any;
+}): Promise<{ text: string; candidates?: any[] }> => {
+  const backendUrl = getBackendUrl();
+
+  const response = await fetch(`${backendUrl}/api/gemini`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Gemini API request failed: ${response.status}`);
   }
-  return new GoogleGenAI({ apiKey });
+
+  return response.json();
 };
 
 // Helper to convert numeric score to strength tier
@@ -38,15 +60,13 @@ const cleanJson = (text: string): string => {
 };
 
 // Helper to process multiple evidence files (PDFs/Images)
-export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{ 
-  claimant: Party, 
-  defendant: Party, 
-  invoice: InvoiceData, 
+export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
+  claimant: Party,
+  defendant: Party,
+  invoice: InvoiceData,
   timelineEvents: any[],
-  classifications: { fileName: string, type: string }[] 
+  classifications: { fileName: string, type: string }[]
 }> => {
-  const ai = getClient();
-  
   const prompt = `
     Analyze the provided evidence documents (Invoices, Contracts, Emails).
     Extract the following details for a UK Debt Claim.
@@ -69,17 +89,16 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
     Use 'Individual' or 'Business' based on entities (Ltd/Plc = Business).
   `;
 
-  const parts: any[] = files.map(f => ({
-    inlineData: {
-      data: f.data,
-      mimeType: f.type
-    }
+  // Convert files to the format expected by the proxy
+  const proxyFiles = files.map(f => ({
+    data: f.data,
+    mimeType: f.type
   }));
-  parts.push({ text: prompt });
 
-  const response = await ai.models.generateContent({
+  const response = await callGeminiProxy({
     model: 'gemini-2.5-flash',
-    contents: { parts },
+    prompt,
+    files: proxyFiles,
     config: {
       responseMimeType: 'application/json',
       responseSchema: {
@@ -131,9 +150,260 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
   }
 };
 
-export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ score: number, strength: ClaimStrength, analysis: string, weaknesses: string[] }> => {
-  const ai = getClient();
+/**
+ * Analyze claim input from conversation entry (description + optional files)
+ * Used by the new ConversationEntry component for Garfield-style intake
+ * Returns extracted data, acknowledgment, and follow-up questions if needed
+ */
+export const analyzeClaimInput = async (
+  description: string,
+  attachments: EvidenceFile[] = [],
+  previousMessages: { role: 'user' | 'ai'; content: string }[] = []
+): Promise<ClaimIntakeResult> => {
 
+  // Build context from previous messages if any
+  const conversationContext = previousMessages.length > 0
+    ? `\n\nPREVIOUS CONVERSATION:\n${previousMessages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n')}`
+    : '';
+
+  const prompt = `
+    You are a friendly UK debt recovery assistant. Analyze the user's input and any attached documents to understand their claim.
+
+    USER INPUT: "${description}"
+    ${conversationContext}
+    ${attachments.length > 0 ? `\n\nATTACHED DOCUMENTS: ${attachments.length} file(s) provided for analysis` : ''}
+
+    YOUR TASK:
+    1. Extract any claim-related information mentioned:
+       - Debtor name (who owes money)
+       - Amount owed
+       - Invoice number/reference
+       - Invoice date and due date
+       - Any timeline events (when invoice sent, chasers sent, etc.)
+       - Claimant details (user's business name if mentioned)
+       - Prior communications status (informal reminders, formal LBA, etc.)
+       - LBA status AND the date it was sent (if applicable)
+
+    2. Generate a KEY POINTS acknowledgment (brief, friendly):
+       Format it like:
+       "Here's what I understand:
+       **Amount Owed:** £X,XXX
+       **Debtor:** [Name]
+       **Invoice:** #[Number], due [Date] (if available)
+       **Status:** [X] days overdue (if calculable)"
+
+       Only include fields you actually found. Keep it concise.
+
+    3. Determine if you have enough to proceed (STRICT - all must be answered):
+       - READY if ALL of these are TRUE:
+         a) Amount AND debtor name are clear
+         b) You have EXPLICIT confirmation of prior communication status:
+            - EITHER: User confirmed they haven't sent ANY reminders yet (priorCommunications = 'none')
+            - OR: User confirmed they've sent informal reminders but no LBA (priorCommunications = 'informal_only')
+            - OR: User confirmed they've sent a formal LBA AND you know WHEN it was sent (priorCommunications = 'formal_lba')
+         c) You can confidently recommend a specific document type
+         d) You have NO critical unanswered questions
+       - NOT READY if:
+         - User gave vague answer like "I've been chasing them" (need explicit yes/no on LBA)
+         - Missing the LBA sent DATE if they say they sent one
+         - Missing amount OR debtor name
+         - You haven't asked about prior contact at all yet
+
+    4. FOLLOW-UP QUESTION PRIORITY (ask in this order until you have clear answers):
+       **FIRST**: Prior communications - "Have you sent any payment reminders or chaser emails to [Debtor name]?"
+       **SECOND**: LBA status - "Have you sent a formal Letter Before Action (LBA) giving them 30 days to respond?"
+       **THIRD**: LBA date (if they said yes to LBA) - "When did you send the LBA? Has it been more than 30 days?"
+       **FOURTH**: Evidence - "Do you have a written contract or proof that the service/goods were delivered?"
+
+       IMPORTANT:
+       - If user gives vague answer like "I've chased them a lot", ask for clarification: "Just to clarify - have you sent a FORMAL Letter Before Action (LBA) that gave them 30 days to respond, or were these informal reminders?"
+       - Do NOT mark ready until you have explicit answers to prior communications AND LBA status
+
+    5. DOCUMENT RECOMMENDATION LOGIC (when you have all the info):
+       - If NO prior contact at all → recommend "Polite Payment Reminder"
+       - If informal reminders sent but NO LBA → recommend "Letter Before Action"
+       - If LBA sent less than 30 days ago → recommend "Wait for 30-day period to expire"
+       - If LBA sent 30+ days ago with no response → recommend "Court Claim (Form N1)"
+       - If user prefers to settle → recommend "Part 36 Settlement Offer"
+
+    6. When READY, end your acknowledgment with a clear call-to-action:
+       "Based on what you've told me, I recommend starting with a **[Document Type]**.
+       Click the **Continue** button below to review the details and proceed."
+
+    7. Calculate confidence (0-100):
+       - 90+: Clear amount, debtor name, explicit LBA status with date, evidence status known
+       - 70-89: Amount and debtor clear, LBA status explicit but some details missing
+       - 50-69: Basic info present but LBA status vague or date unknown
+       - <50: Missing critical info (amount, debtor, or prior contact status unclear)
+
+    IMPORTANT RULES:
+    - Be warm and helpful, not robotic
+    - Don't ask for information already explicitly answered in the conversation
+    - If user uploaded an invoice, extract everything you can from it
+    - UK-specific: Look for postcodes, company numbers, Ltd/PLC indicators
+    - For dates, prefer DD/MM/YYYY format common in UK
+    - NEVER mark readyToProceed as true unless you have EXPLICIT answers about prior contact
+    - If user says "I've been chasing" or similar vague statements, ALWAYS ask for clarification
+  `;
+
+  // Convert attachments to proxy format
+  const proxyFiles = attachments.map(f => ({
+    data: f.data,
+    mimeType: f.type
+  }));
+
+  const response = await callGeminiProxy({
+    model: 'gemini-2.5-flash',
+    prompt,
+    files: proxyFiles.length > 0 ? proxyFiles : undefined,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          defendant: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              address: { type: Type.STRING },
+              city: { type: Type.STRING },
+              county: { type: Type.STRING },
+              postcode: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ['Individual', 'Business'] }
+            }
+          },
+          claimant: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              address: { type: Type.STRING },
+              city: { type: Type.STRING },
+              county: { type: Type.STRING },
+              postcode: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ['Individual', 'Business'] }
+            }
+          },
+          invoice: {
+            type: Type.OBJECT,
+            properties: {
+              invoiceNumber: { type: Type.STRING },
+              totalAmount: { type: Type.NUMBER },
+              dateIssued: { type: Type.STRING },
+              dueDate: { type: Type.STRING },
+              description: { type: Type.STRING }
+            }
+          },
+          timeline: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                date: { type: Type.STRING },
+                description: { type: Type.STRING },
+                type: { type: Type.STRING }
+              }
+            }
+          },
+          acknowledgment: { type: Type.STRING, description: "Friendly key points summary of what was understood. When readyToProceed is true, must end with document recommendation and 'Click the Continue button below'" },
+          followUpQuestions: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "1-2 targeted questions if more info needed. Priority: prior contact status, then LBA status, then LBA date, then evidence"
+          },
+          readyToProceed: { type: Type.BOOLEAN, description: "True only if amount + debtor + EXPLICIT prior contact/LBA status are known and can make document recommendation" },
+          confidence: { type: Type.NUMBER, description: "0-100 confidence in extraction" },
+          lbaStatus: { type: Type.STRING, enum: ['not_sent', 'sent_under_30_days', 'sent_over_30_days', 'unknown'], description: "Status of Letter Before Action. Use 'unknown' if user gave vague answer." },
+          lbaSentDate: { type: Type.STRING, description: "ISO date (YYYY-MM-DD) when LBA was sent, if applicable. Required if lbaStatus is 'sent_under_30_days' or 'sent_over_30_days'" },
+          priorCommunications: { type: Type.STRING, enum: ['none', 'informal_only', 'formal_lba', 'unknown'], description: "Level of prior contact: 'none' = no contact, 'informal_only' = reminders but no LBA, 'formal_lba' = sent formal LBA" },
+          hasContract: { type: Type.BOOLEAN, description: "Does user have a signed contract?" },
+          hasProofOfDelivery: { type: Type.BOOLEAN, description: "Does user have proof of delivery/service completion?" },
+          recommendedDocument: { type: Type.STRING, enum: ['Polite Payment Reminder', 'Letter Before Action', 'Court Claim (Form N1)', 'Part 36 Settlement Offer', 'Wait for 30-day period'], description: "Recommended document based on prior contact status" }
+        },
+        required: ['acknowledgment', 'readyToProceed', 'confidence']
+      }
+    }
+  });
+
+  try {
+    const result = JSON.parse(cleanJson(response.text || '{}'));
+
+    // Enhance with county lookup if postcode present
+    if (result.defendant?.postcode && !result.defendant?.county) {
+      result.defendant.county = getCountyFromPostcode(result.defendant.postcode);
+    }
+    if (result.claimant?.postcode && !result.claimant?.county) {
+      result.claimant.county = getCountyFromPostcode(result.claimant.postcode);
+    }
+
+    // Build extracted data in ClaimState-compatible format
+    const extractedData: Partial<ClaimState> = {};
+
+    if (result.defendant) {
+      extractedData.defendant = {
+        type: result.defendant.type === 'Business' ? PartyType.BUSINESS : PartyType.INDIVIDUAL,
+        name: result.defendant.name || '',
+        address: result.defendant.address || '',
+        city: result.defendant.city || '',
+        county: result.defendant.county || '',
+        postcode: result.defendant.postcode || '',
+        solvencyStatus: 'Unknown'
+      };
+    }
+
+    if (result.claimant) {
+      extractedData.claimant = {
+        type: result.claimant.type === 'Business' ? PartyType.BUSINESS : PartyType.INDIVIDUAL,
+        name: result.claimant.name || '',
+        address: result.claimant.address || '',
+        city: result.claimant.city || '',
+        county: result.claimant.county || '',
+        postcode: result.claimant.postcode || '',
+        solvencyStatus: 'Unknown'
+      };
+    }
+
+    if (result.invoice) {
+      extractedData.invoice = {
+        invoiceNumber: result.invoice.invoiceNumber || '',
+        totalAmount: result.invoice.totalAmount || 0,
+        dateIssued: result.invoice.dateIssued || '',
+        dueDate: result.invoice.dueDate || '',
+        currency: 'GBP',
+        description: result.invoice.description || ''
+      };
+    }
+
+    if (result.timeline && result.timeline.length > 0) {
+      extractedData.timeline = result.timeline;
+    }
+
+    return {
+      extractedData,
+      acknowledgment: result.acknowledgment || "I couldn't extract much from that. Could you tell me more about your claim?",
+      followUpQuestions: result.followUpQuestions || [],
+      readyToProceed: result.readyToProceed === true,
+      confidence: result.confidence || 50,
+      lbaStatus: result.lbaStatus || 'unknown',
+      lbaSentDate: result.lbaSentDate,
+      priorCommunications: result.priorCommunications || 'unknown',
+      hasContract: result.hasContract,
+      hasProofOfDelivery: result.hasProofOfDelivery,
+      recommendedDocument: result.recommendedDocument
+    };
+  } catch (e) {
+    console.error('[analyzeClaimInput] Parse error:', e);
+    return {
+      extractedData: {},
+      acknowledgment: "I had trouble understanding that. Could you tell me: who owes you money and how much?",
+      followUpQuestions: ["How much money are you owed?", "Who owes you this money (person or company name)?"],
+      readyToProceed: false,
+      confidence: 0,
+      priorCommunications: 'unknown'
+    };
+  }
+};
+
+export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ score: number, strength: ClaimStrength, analysis: string, weaknesses: string[] }> => {
   const prompt = `
     Act as an Expert Legal Assistant for UK Small Claims.
     Assess the "Winnability" (Probability of Success) of this claim on the **Balance of Probabilities** (Civil Standard >50%).
@@ -170,9 +440,9 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
     - weaknesses: string[] (List specific gaps, e.g., "Missing signed contract", "No proof of delivery", "Debt relies on verbal agreement")
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await callGeminiProxy({
     model: 'gemini-2.5-flash',
-    contents: prompt,
+    prompt,
     config: {
       responseMimeType: 'application/json',
       responseSchema: {
@@ -212,8 +482,7 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
   }
 };
 
-export const startClarificationChat = async (data: ClaimState): Promise<string> => {
-  const ai = getClient();
+export const startClarificationChat = async (data: ClaimState, hasHistory: boolean = false): Promise<string> => {
 
   // Safe Financials
   const principal = data.invoice.totalAmount || 0;
@@ -245,26 +514,33 @@ export const startClarificationChat = async (data: ClaimState): Promise<string> 
     - Timeline: ${JSON.stringify(data.timeline)}
     ${missingAddressContext}
 
-    Generate a friendly but professional opening message (2-3 sentences):
+    Generate a friendly but professional ${hasHistory ? 'continuation' : 'opening'} message (2-3 sentences):
+    ${hasHistory ? `
+    1. Acknowledge the user has verified their details in the wizard.
+    2. Transition back to the conversation.
+    3. ${hasMissingAddress ? 'Ask for the MISSING address information listed above.' : 'Ask ONE critical question about evidence (e.g., contract, proof of delivery).'}
+    ` : `
     1. Greet the user briefly (e.g., "Hello, I'm your AI legal assistant")
     2. Acknowledge their claim (mention the amount and defendant name if available)
-    3. ${hasMissingAddress ? 'Ask for the MISSING address information listed above - the court requires complete addresses including UK county.' : 'Ask ONE critical question to identify the biggest evidence gap (e.g., contract, proof of delivery, written agreement)'}
+    3. ${hasMissingAddress ? 'Ask for the MISSING address information listed above.' : 'Ask ONE critical question to identify the biggest evidence gap.'}
+    `}
 
-    ${hasMissingAddress ? 'Example: "Hello, I\'m your AI legal assistant. I see you have a claim for £5,000. Before we proceed, I need your complete address including the UK county (e.g., Greater London, Surrey, West Yorkshire) for the court forms."' : 'Example: "Hello, I\'m your AI legal assistant. I\'ve reviewed your £5,000 claim against XYZ Ltd for unpaid invoices. To assess your case strength, do you have a signed contract or written agreement with the defendant?"'}
+    ${hasMissingAddress ? 'Example: "I see we still need some address details for the court forms. Could you please provide..."' : 'Example: "Thanks for verifying those details. To assess your case strength, do you have a signed contract..."'}
 
     Keep it conversational and helpful, not robotic or interrogating.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await callGeminiProxy({
     model: 'gemini-2.5-flash',
-    contents: prompt
+    prompt
   });
 
-  return response.text || "Hello, I'm your AI legal assistant. To assess your case strength, do you have a written contract signed by the defendant?";
+  return response.text || (hasHistory 
+    ? "Thanks for verifying your details. Now, do you have a written contract signed by the defendant?"
+    : "Hello, I'm your AI legal assistant. To assess your case strength, do you have a written contract signed by the defendant?");
 };
 
 export const sendChatMessage = async (history: ChatMessage[], userMessage: string, data: ClaimState): Promise<ChatResponse> => {
-  const ai = getClient();
 
   // Inject calculated financials so the AI understands the full claim value
   const principal = data.invoice.totalAmount || 0;
@@ -343,29 +619,52 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
 
     YOUR GOAL: Gather enough information to recommend the RIGHT document for their situation.
 
-    DOCUMENT DETERMINATION QUESTIONS (ask these to determine the right document):
-    1. "Have you already started a court claim (filed Form N1)?" → If YES, ask if they need to request judgment or respond to a defence.
-    2. "If you have a judgment, do you need to enforce it?" → Not yet supported, but good context.
-    3. "Have you sent any payment reminders or chaser emails to the debtor?" → If NO, suggest starting with a Polite Reminder
-    4. "Have you sent a formal Letter Before Action (LBA) giving them 30 days to pay?" → Critical for court claim eligibility
-    5. "If you sent an LBA, when was it sent? Has 30 days passed?" → If YES to both, they can file Form N1
-    6. "Has the debtor acknowledged the debt or responded to your communications?" → Affects case strength
-    7. "Would you prefer to negotiate a settlement or proceed to court?" → If settlement, suggest Part 36 Offer
+    DOCUMENT DETERMINATION QUESTIONS (ask these IN ORDER to determine the right document):
+    **STEP 1 - Prior Contact Status:**
+    - "Have you sent any payment reminders or chaser emails to the debtor?"
+    - If NO → Recommend Polite Payment Reminder FIRST, then LBA if no response
+    - If YES (informal only) → Move to Step 2
+
+    **STEP 2 - LBA Status:**
+    - "Have you sent a formal Letter Before Action (LBA) giving them 30 days to pay?"
+    - If NO → Recommend Letter Before Action
+    - If YES → Move to Step 3
+
+    **STEP 3 - LBA Timing (CRITICAL):**
+    - "When did you send the LBA? What was the date?"
+    - Calculate if 30 days have passed
+    - If <30 days → "You need to wait for the 30-day period to expire before filing a court claim."
+    - If 30+ days → Recommend Court Claim (Form N1)
+
+    **STEP 4 - Evidence Questions (for case strength):**
+    - "Do you have a signed contract or written agreement?"
+    - "Do you have proof that the service/goods were delivered?"
+
+    **STEP 5 - Post-Filing (only if they mention court claim filed):**
+    - "Has the defendant responded to the claim?"
+    - No response after 14 days → Default Judgment (Form N225)
+    - Defendant admitted → Judgment on Admission (Form N225A)
+    - Defendant filed defence → Response to Defence
+
+    **STEP 6 - Settlement Preference:**
+    - "Would you prefer to negotiate a settlement or proceed to court?"
+    - If settlement preferred → Part 36 Settlement Offer
 
     COMMUNICATION PROTOCOL:
     1. **PRIORITY:** If addresses are MISSING, ask for them FIRST (including UK county).
-    2. **DOCUMENT FOCUS:** Ask about LBA status early - this determines the recommended document.
-    3. **BREVITY:** Keep responses to 2-4 sentences maximum.
-    4. **ACKNOWLEDGMENT:** Briefly acknowledge the user's answer before asking the next question.
-    5. **NO REPETITION:** Do NOT ask the same question twice. Track what you've learned.
-    6. **CLOSING:** When you have enough info, conclude with your recommendation:
-       - If NO LBA sent: "Based on our conversation, I recommend starting with a **Letter Before Action**. This is required before court proceedings. Click 'Continue' to review the details."
-       - If LBA sent 30+ days ago: "Since you've already sent an LBA and 30 days have passed, you're ready to file a **court claim (Form N1)**. Click 'Continue' to review the details."
-       - If already filed claim (no response): "If the defendant hasn't responded within 14 days of service, you can request a **Default Judgment (Form N225)**. Click 'Continue' to proceed."
-       - If already filed claim (admission): "If the defendant admitted the debt, you can request **Judgment on Admission (Form N225A)**. Click 'Continue' to proceed."
+    2. **QUESTION FLOW:** Follow the steps above IN ORDER. Don't skip ahead.
+    3. **VAGUE ANSWERS:** If user says "I've been chasing them", ask for clarification: "Just to clarify - were these informal reminders, or did you send a formal Letter Before Action (LBA) with a 30-day deadline?"
+    4. **BREVITY:** Keep responses to 2-4 sentences maximum.
+    5. **ACKNOWLEDGMENT:** Briefly acknowledge the user's answer before asking the next question.
+    6. **NO REPETITION:** Do NOT ask the same question twice. Track what you've learned.
+    7. **CLOSING:** When you have enough info, conclude with your recommendation:
+       - If NO prior contact: "Since you haven't contacted the debtor yet, I recommend starting with a **Polite Payment Reminder** to maintain the business relationship. Click 'Continue' to review the details."
+       - If informal reminders but NO LBA: "Based on our conversation, I recommend sending a formal **Letter Before Action**. This is required before court proceedings. Click 'Continue' to review the details."
+       - If LBA sent <30 days ago: "Since you sent the LBA on [date], you need to wait until [30-day date] before you can file a court claim. I'll note this deadline for you."
+       - If LBA sent 30+ days ago: "Since you've sent an LBA and 30 days have passed with no response, you're ready to file a **court claim (Form N1)**. Click 'Continue' to review the details."
        - If user wants settlement: "Given your preference to settle, I recommend a **Part 36 Settlement Offer**. Click 'Continue' to review the details."
-    7. **DISCLAIMER:** If asked for legal advice, state: "I'm a legal assistant, not a solicitor. This is procedural guidance, not legal advice."
-    8. **TONE:** Professional, concise, and goal-oriented. Use bullet points for lists and **bold** for key terms. Explain *why* you need specific data (e.g., "The court requires this for valid service").
+    8. **DISCLAIMER:** If asked for legal advice, state: "I'm a legal assistant, not a solicitor. This is procedural guidance, not legal advice."
+    9. **TONE:** Professional, concise, and goal-oriented. Use bullet points for lists and **bold** for key terms.
 
     RESPONSE FORMAT:
     You MUST respond with a JSON object containing:
@@ -393,15 +692,25 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
     Set readyToProceed to FALSE if you still need to gather more information.
   `;
 
-  const sdkHistory = history.slice(0, -1).map(msg => ({
-    role: msg.role === 'ai' ? 'model' : 'user',
-    parts: [{ text: msg.content }]
-  }));
+  // Build conversation history into the prompt
+  const conversationHistory = history
+    .slice(0, -1) // Exclude the last message (it's the current user message)
+    .map(msg => `${msg.role === 'ai' ? 'ASSISTANT' : 'USER'}: ${msg.content}`)
+    .join('\n');
 
-  const chat = ai.chats.create({
+  const fullPrompt = `${systemInstruction}
+
+CONVERSATION HISTORY:
+${conversationHistory}
+
+USER: ${userMessage}
+
+ASSISTANT (respond in JSON):`;
+
+  const response = await callGeminiProxy({
     model: 'gemini-2.5-flash',
+    prompt: fullPrompt,
     config: {
-      systemInstruction: systemInstruction,
       responseMimeType: 'application/json',
       responseSchema: {
         type: Type.OBJECT,
@@ -422,12 +731,10 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
         },
         required: ['message', 'readyToProceed']
       }
-    },
-    history: sdkHistory
+    }
   });
 
-  const result = await chat.sendMessage({ message: userMessage });
-  const responseText = result.text || '{"message": "Please clarify.", "readyToProceed": false}';
+  const responseText = response.text || '{"message": "Please clarify.", "readyToProceed": false}';
 
   try {
     const parsed = JSON.parse(cleanJson(responseText));
@@ -454,7 +761,6 @@ export const extractDataFromChat = async (
   chatHistory: ChatMessage[],
   currentData: ClaimState
 ): Promise<ExtractedClaimData> => {
-  const ai = getClient();
 
   // Format chat history as transcript
   const chatTranscript = chatHistory
@@ -484,13 +790,16 @@ export const extractDataFromChat = async (
     4. ONLY extract data that was EXPLICITLY mentioned in the chat - do not invent data
     5. If data is already in "CURRENT" fields and matches what was said, don't re-extract it
 
-    DOCUMENT RECOMMENDATION RULES:
+    DOCUMENT RECOMMENDATION RULES (in order of priority):
     Based on the conversation, determine which document the user should generate:
-    - If user mentioned sending a Letter Before Action (LBA, formal letter, final demand letter) AND it's been 30+ days → Recommend FORM_N1
-    - If user mentioned chasing/reminders but NO formal LBA yet → Recommend LBA
-    - If user wants to settle/negotiate → Recommend PART_36_OFFER
-    - If no prior contact mentioned → Recommend POLITE_CHASER
-    - Default if unclear → Recommend LBA (pre-action protocol requirement)
+    1. If user mentioned sending a Letter Before Action (LBA, formal letter, final demand) AND it's been 30+ days → Recommend FORM_N1
+    2. If user sent LBA but less than 30 days ago → Note they need to WAIT (but can prepare Form N1)
+    3. If user mentioned chasing/reminders but NO formal LBA yet → Recommend LBA
+    4. If user wants to settle/negotiate → Recommend PART_36_OFFER
+    5. If NO prior contact mentioned (first time reaching out) → Recommend POLITE_CHASER
+    6. Default if unclear → Recommend LBA (pre-action protocol requirement)
+
+    IMPORTANT: If user explicitly said they haven't contacted the debtor yet, ALWAYS recommend POLITE_CHASER first.
 
     Return JSON with:
     - claimant: Any NEW address fields mentioned (county especially important)
@@ -503,9 +812,9 @@ export const extractDataFromChat = async (
     - extractedFields: Array of field names that were extracted
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await callGeminiProxy({
     model: 'gemini-2.5-flash',
-    contents: prompt,
+    prompt,
     config: {
       responseMimeType: 'application/json',
       responseSchema: {
@@ -617,7 +926,6 @@ export const extractDataFromChat = async (
 };
 
 export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> => {
-  const ai = getClient();
   const isN1 = data.selectedDocType === DocumentType.FORM_N1;
   const docTypeLabel = isN1 ? "Particulars of Claim for Form N1" : "Letter Before Action (Pre-Action Protocol)";
 
@@ -676,9 +984,9 @@ export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> 
     Return JSON.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await callGeminiProxy({
     model: 'gemini-2.5-flash',
-    contents: prompt,
+    prompt,
     config: {
       responseMimeType: 'application/json',
       responseSchema: {
@@ -714,33 +1022,31 @@ export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> 
 
 // New Function for "Director Mode" - Conversational Refinement
 export const refineDraft = async (currentContent: string, instruction: string): Promise<string> => {
-  const ai = getClient();
   const prompt = `
     Act as a Legal Document Specialist.
     Refine the text below based on the user's directive.
-    
+
     DIRECTIVE: "${instruction}"
-    
+
     ORIGINAL TEXT:
     "${currentContent}"
-    
+
     Constraints:
     - Maintain strict legal professionalism suitable for UK Courts.
     - **DO NOT** remove legal citations (e.g. County Courts Act 1984).
     - If the user asks for "more aggressive", use "immediate commencement of proceedings" but do not threaten illegal action.
     - Output ONLY the refined text.
   `;
-  
-  const response = await ai.models.generateContent({
+
+  const response = await callGeminiProxy({
     model: 'gemini-2.5-flash',
-    contents: prompt
+    prompt
   });
-  
+
   return response.text || currentContent;
 };
 
 export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; critique: string; improvements: string[]; correctedContent?: string }> => {
-  const ai = getClient();
   
   // Safe Financials for "The Truth"
   const principal = data.invoice.totalAmount || 0;
@@ -780,9 +1086,9 @@ export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; 
     Output JSON.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await callGeminiProxy({
     model: 'gemini-2.5-flash',
-    contents: prompt,
+    prompt,
     config: {
       responseMimeType: 'application/json',
       responseSchema: {

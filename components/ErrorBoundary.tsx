@@ -26,25 +26,23 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null
-    };
-  }
+  state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null
+  };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     // Log error to console for debugging
     console.error('ErrorBoundary caught an error:', error, errorInfo);
 
     // Update state with error details
-    this.setState({
+    // eslint-disable-next-line react/no-did-catch-set-state
+    (this as Component<Props, State>).setState({
       error,
       errorInfo
     });
@@ -53,28 +51,32 @@ export class ErrorBoundary extends Component<Props, State> {
     // e.g., Sentry, LogRocket, etc.
   }
 
-  handleReset = () => {
-    this.setState({
+  handleReset = (): void => {
+    (this as Component<Props, State>).setState({
       hasError: false,
       error: null,
       errorInfo: null
     });
 
     // Call custom reset handler if provided
-    if (this.props.onReset) {
-      this.props.onReset();
+    const props = (this as Component<Props, State>).props;
+    if (props.onReset) {
+      props.onReset();
     }
   };
 
-  handleGoHome = () => {
+  handleGoHome = (): void => {
     window.location.href = '/';
   };
 
-  render() {
-    if (this.state.hasError) {
+  render(): ReactNode {
+    const { hasError, error, errorInfo } = this.state;
+    const { fallback, children } = (this as Component<Props, State>).props;
+
+    if (hasError) {
       // Custom fallback provided
-      if (this.props.fallback) {
-        return this.props.fallback;
+      if (fallback) {
+        return fallback;
       }
 
       // Default fallback UI
@@ -96,18 +98,18 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
               <p className="text-sm font-medium text-red-900 mb-2">Error Details:</p>
               <p className="text-sm text-red-700 font-mono">
-                {this.state.error?.toString() || 'Unknown error'}
+                {error?.toString() || 'Unknown error'}
               </p>
             </div>
 
             {/* Error Stack (Development Only) */}
-            {import.meta.env.DEV && this.state.errorInfo && (
+            {import.meta.env.DEV && errorInfo && (
               <details className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6">
                 <summary className="text-sm font-medium text-slate-700 cursor-pointer">
                   Stack Trace (Development Only)
                 </summary>
                 <pre className="text-xs text-slate-600 mt-3 overflow-auto max-h-48">
-                  {this.state.errorInfo.componentStack}
+                  {errorInfo.componentStack}
                 </pre>
               </details>
             )}
@@ -152,6 +154,6 @@ export class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return children;
   }
 }

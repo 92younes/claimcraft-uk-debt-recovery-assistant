@@ -99,8 +99,8 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
 
   const getIcon = (type: string) => {
     switch(type) {
-      case 'contract': return <FileText className="w-4 h-4 text-blue-500"/>;
-      case 'service_delivered': return <Truck className="w-4 h-4 text-purple-500"/>;
+      case 'contract': return <FileText className="w-4 h-4 text-teal-600"/>;
+      case 'service_delivered': return <Truck className="w-4 h-4 text-green-500"/>;
       case 'invoice': return <FileText className="w-4 h-4 text-green-500"/>;
       case 'payment_due': return <PoundSterling className="w-4 h-4 text-red-500"/>;
       case 'part_payment': return <CreditCard className="w-4 h-4 text-teal-500"/>;
@@ -114,7 +114,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
   const isValidInvoiceDate = invoiceDate && !isNaN(new Date(invoiceDate).getTime());
 
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in">
+    <div className="max-w-7xl mx-auto animate-fade-in">
        <div className="flex items-center gap-3 mb-2">
           <div className="p-2 bg-teal-100 rounded-xl">
             <Calendar className="w-6 h-6 text-teal-600" />
@@ -127,8 +127,8 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
 
        {/* Quick Actions */}
        {isValidInvoiceDate ? (
-         <div className="mb-6 mt-6 bg-teal-50 p-5 rounded-xl border border-teal-200">
-            <div className="flex items-center justify-between mb-3">
+         <div className="mb-4 mt-4 bg-teal-50 p-4 rounded-xl border border-teal-200">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-bold text-teal-700 uppercase tracking-wider flex items-center gap-2">
                   <Zap className="w-4 h-4" /> Quick Add Timeline Events
               </p>
@@ -136,17 +136,17 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                 Invoice: {new Date(invoiceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
             </div>
-            <p className="text-xs text-slate-600 mb-4">Add common debt recovery events based on your invoice date:</p>
+            <p className="text-xs text-slate-600 mb-3">Add common debt recovery events based on your invoice date:</p>
             <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => addQuickEvent(30, 'payment_due', 'Payment Due Date (30 Days)')}
-                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-all duration-200 flex flex-col items-start gap-1 group shadow-sm"
+                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:border-teal-400 hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 flex flex-col items-start gap-1 group shadow-sm"
                 >
                    <div className="flex items-center gap-2 w-full">
-                     <Clock className="w-4 h-4 text-blue-500" />
+                     <Clock className="w-4 h-4 text-teal-600" />
                      <span>Payment Due Date</span>
                    </div>
-                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-blue-500">
+                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-teal-600">
                      {(() => {
                        const date = new Date(invoiceDate);
                        date.setDate(date.getDate() + 30);
@@ -208,12 +208,12 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                    <span className="text-[10px] text-red-500 font-bold">REQUIRED before court</span>
                 </button>
             </div>
-            <div className="mt-3 text-[10px] text-slate-500 bg-white p-2 rounded-lg border border-slate-200">
+            <div className="mt-2 text-[10px] text-slate-500 bg-white p-2 rounded-lg border border-slate-200">
               <strong className="text-slate-700">Tip:</strong> These are typical timings for UK debt recovery. You can edit event descriptions after adding them.
             </div>
          </div>
        ) : (
-          <div className="mb-6 mt-6 flex items-start gap-3 text-xs text-amber-700 bg-amber-50 p-4 rounded-xl border border-amber-200">
+          <div className="mb-4 mt-4 flex items-start gap-3 text-xs text-amber-700 bg-amber-50 p-4 rounded-xl border border-amber-200">
              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
              <div>
                <p className="font-bold mb-1 text-amber-800">Invoice Date Required</p>
@@ -223,7 +223,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
        )}
 
       {/* Input Area */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 mb-8 grid grid-cols-1 md:grid-cols-12 gap-4 items-end shadow-sm">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 grid grid-cols-1 md:grid-cols-12 gap-3 items-end shadow-sm">
         <div className="md:col-span-3">
           <label className="text-xs font-bold text-slate-500 uppercase mb-1 block tracking-wider">Date</label>
           <input
@@ -274,7 +274,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
 
       {/* Event Order Warning */}
       {orderWarning && (
-        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
             <h4 className="font-bold text-amber-900 text-sm">Timeline Sequence Issue</h4>
@@ -287,9 +287,9 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
       )}
 
       {/* Timeline Visual */}
-      <div className="relative border-l-2 border-slate-200 ml-4 space-y-4 pb-4">
+      <div className="relative border-l-2 border-slate-200 ml-4 space-y-3 pb-3">
         {events.length === 0 && (
-          <div className="pl-8 py-4 text-slate-500 italic text-sm border border-dashed border-slate-300 rounded-xl bg-slate-50 m-4 text-center">
+          <div className="pl-8 py-3 text-slate-500 italic text-sm border border-dashed border-slate-300 rounded-xl bg-slate-50 m-3 text-center">
              No events added yet. Use the Quick Add buttons or enter manually above.
           </div>
         )}
@@ -297,7 +297,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
         {events.map((ev, idx) => (
           <div key={idx} className="relative pl-8 group animate-fade-in" style={{ animationDelay: `${idx * 50}ms` }}>
             <div className="absolute -left-[9px] top-4 w-4 h-4 bg-white border-2 border-slate-300 rounded-full group-hover:border-teal-500 group-hover:scale-110 transition-all duration-200 z-10"></div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all duration-200 flex justify-between items-start shadow-sm">
+            <div className="bg-white p-3 rounded-xl border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all duration-200 flex justify-between items-start shadow-sm">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <div className="p-1 bg-slate-100 rounded-lg">

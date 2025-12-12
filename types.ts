@@ -1,8 +1,9 @@
 
 
 export enum PartyType {
-  INDIVIDUAL = 'Individual',
-  BUSINESS = 'Business' // Ltd, PLC, Sole Trader
+  INDIVIDUAL = 'Individual', // Consumer
+  SOLE_TRADER = 'Sole Trader', // Business (Individual acting as business)
+  BUSINESS = 'Business' // Ltd, PLC, LLP
 }
 
 export interface Party {
@@ -97,6 +98,28 @@ export interface ExtractedClaimData {
   extractedFields: string[]; // List of fields that were extracted from chat
 }
 
+// Conversation Entry Intake Types (for new UX flow)
+export interface ClaimIntakeResult {
+  extractedData: Partial<ClaimState>;
+  acknowledgment: string;        // "Here's what I understand..." key points summary
+  followUpQuestions?: string[];  // If input was vague, 1-2 targeted questions
+  readyToProceed: boolean;       // Has amount + debtor + LBA status, can make document recommendation
+  confidence: number;            // 0-100 confidence in extraction
+  lbaStatus?: 'not_sent' | 'sent_under_30_days' | 'sent_over_30_days' | 'unknown';  // Letter Before Action status
+  lbaSentDate?: string;          // ISO date when LBA was sent (for 30-day calculation)
+  priorCommunications?: 'none' | 'informal_only' | 'formal_lba' | 'unknown';  // Track prior contact level
+  hasContract?: boolean;         // Do they have a signed contract?
+  hasProofOfDelivery?: boolean;  // Do they have proof of delivery/completion?
+  recommendedDocument?: string;  // Recommended document based on LBA status
+}
+
+export interface ConversationMessage {
+  role: 'user' | 'ai';
+  content: string;
+  timestamp: number;
+  attachments?: EvidenceFile[];
+}
+
 export interface TimelineEvent {
   date: string;
   description: string;
@@ -139,7 +162,7 @@ export interface ChatResponse {
   };
 }
 
-export type ClaimStatus = 'draft' | 'review' | 'sent' | 'paid';
+export type ClaimStatus = 'draft' | 'review' | 'sent' | 'paid' | 'overdue' | 'pre-action' | 'court' | 'judgment';
 
 export enum ClaimStage {
   DRAFT = 'Draft',
@@ -178,6 +201,47 @@ export interface ClaimState {
     invoiceId: string;
     importedAt: string;
   };
+  // Payment tracking (Stripe)
+  hasPaid: boolean;
+  paymentId?: string; // Stripe PaymentIntent ID
+  paidAt?: string; // ISO timestamp
+  // Pre-action communication tracking
+  lbaSentDate?: string; // ISO date when Letter Before Action was sent
+  priorCommunications?: 'none' | 'informal_only' | 'formal_lba' | 'unknown'; // Level of prior contact
+  hasContract?: boolean; // Do they have a signed contract?
+  hasProofOfDelivery?: boolean; // Do they have proof of delivery/completion?
+  // Wizard flags (Issue 1 fix)
+  hasVerifiedInterest?: boolean;
+  lbaAlreadySent?: boolean;
+  // Court form metadata (N225A, N180, etc.)
+  courtFormData?: CourtFormData;
+}
+
+// Court form specific data for N225A, N180, etc.
+export interface CourtFormData {
+  // Common fields
+  claimNumber?: string; // Court claim number once issued
+
+  // N225A (Request for Judgment on Admission) fields
+  admissionDate?: string; // Date defendant admitted the claim
+  defendantProposal?: string; // Defendant's proposed payment terms
+  claimantPaymentTerms?: string; // Claimant's proposed terms (e.g., "Payment in full within 14 days")
+  installmentAmount?: number; // Monthly installment amount if applicable
+
+  // N180 (Directions Questionnaire) fields
+  wantsSettlementStay?: boolean; // Do you want a stay to attempt settlement?
+  wantsMediation?: boolean; // Are you willing to try mediation?
+  unavailableDates?: string; // Dates when you cannot attend hearings
+  estimatedHearingDuration?: number; // Hours needed for hearing
+  witnessCount?: number; // Number of witnesses
+  witnessNames?: string[]; // Names of witnesses
+  needsExpert?: boolean; // Do you need expert evidence?
+  expertDetails?: string; // Details of expert evidence needed
+  hasDisability?: boolean; // Any disability affecting hearing?
+  disabilityDetails?: string; // Details of disability needs
+  claimLossOfEarnings?: boolean; // Claiming loss of earnings?
+  lossOfEarningsAmount?: number; // Amount of loss of earnings
+  additionalDocuments?: string; // List of additional documents
 }
 
 // Accounting Integration Types
@@ -354,5 +418,94 @@ export const INITIAL_STATE: ClaimState = {
   assessment: null,
   selectedDocType: DocumentType.LBA,
   generated: null,
-  signature: null
+  signature: null,
+  hasPaid: false
+};
+
+// ==========================================
+// Deadline & Calendar Types
+// ==========================================
+
+export enum DeadlineType {
+  LBA_RESPONSE = 'lba_response',           // 14-30 days after LBA sent
+  COURT_FILING = 'court_filing',           // After LBA expired
+  DEFENDANT_RESPONSE = 'defendant_response', // 14 days after claim issued
+  ACKNOWLEDGMENT = 'acknowledgment',        // 14 days to acknowledge claim
+  DEFENCE_DEADLINE = 'defence_deadline',    // 28 days total to file defence
+  JUDGMENT_DEADLINE = 'judgment_deadline',
+  ENFORCEMENT = 'enforcement',
+  CUSTOM = 'custom'
+}
+
+export enum DeadlinePriority {
+  CRITICAL = 'critical',   // Red - immediate action required (overdue or due today)
+  HIGH = 'high',           // Orange - action within 3 days
+  MEDIUM = 'medium',       // Yellow - action within week
+  LOW = 'low'              // Blue - informational (>7 days)
+}
+
+export enum DeadlineStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  MISSED = 'missed',
+  SNOOZED = 'snoozed'
+}
+
+export interface Deadline {
+  id: string;
+  claimId: string;                    // Links to ClaimState
+  type: DeadlineType;
+  title: string;
+  description: string;
+  dueDate: string;                    // ISO date (YYYY-MM-DD)
+  priority: DeadlinePriority;
+  status: DeadlineStatus;
+  createdAt: string;
+  completedAt?: string;
+  autoGenerated: boolean;             // Was this auto-calculated or manually added?
+  sourceEvent?: string;               // Which timeline event triggered this
+  legalReference?: string;            // e.g., "Pre-Action Protocol for Debt Claims"
+  reminderDays: number[];             // e.g., [7, 3, 1, 0] = remind 7, 3, 1, 0 days before
+  snoozedUntil?: string;
+}
+
+export interface DeadlineReminder {
+  id: string;
+  deadlineId: string;
+  claimId: string;
+  reminderDate: string;               // When to send reminder
+  sent: boolean;
+  sentAt?: string;
+  channel: 'email' | 'in_app';
+  emailAddress?: string;
+}
+
+export interface UserNotificationPreferences {
+  emailEnabled: boolean;
+  emailAddress?: string;
+  reminderDays: number[];             // Default: [7, 3, 1, 0]
+  dailyDigest: boolean;
+  weeklyReport: boolean;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+  resource: {
+    claimId: string;
+    deadlineId?: string;
+    type: 'deadline' | 'timeline_event' | 'payment_due';
+    priority?: DeadlinePriority;
+    status?: DeadlineStatus;
+  };
+}
+
+export const INITIAL_NOTIFICATION_PREFERENCES: UserNotificationPreferences = {
+  emailEnabled: false,
+  reminderDays: [7, 3, 1, 0],
+  dailyDigest: false,
+  weeklyReport: false
 };

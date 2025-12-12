@@ -1,5 +1,6 @@
 import React from 'react';
 import { Scale, Menu, ArrowRight } from 'lucide-react';
+import { Button } from './ui/Button';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -15,6 +16,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, onGetStarted }) => 
               <button
                 onClick={onMenuClick}
                 className="md:hidden p-2 -ml-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-900 transition-colors duration-200"
+                aria-label="Open navigation menu"
               >
                  <Menu className="w-6 h-6" />
               </button>
@@ -31,27 +33,42 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, onGetStarted }) => 
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
-          <span className="hover:text-slate-900 transition-colors duration-200 cursor-pointer relative group">
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="text-slate-400 cursor-not-allowed relative"
+            aria-disabled="true"
+          >
             Features
-            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-teal-500 group-hover:w-full transition-all duration-200"></span>
-          </span>
-          <span className="hover:text-slate-900 transition-colors duration-200 cursor-pointer relative group">
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="text-slate-400 cursor-not-allowed relative"
+            aria-disabled="true"
+          >
             Pricing
-            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-teal-500 group-hover:w-full transition-all duration-200"></span>
-          </span>
-          <span className="hover:text-slate-900 transition-colors duration-200 cursor-pointer relative group">
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="text-slate-400 cursor-not-allowed relative"
+            aria-disabled="true"
+          >
             Protocol Guide
-            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-teal-500 group-hover:w-full transition-all duration-200"></span>
-          </span>
+          </button>
 
           {onGetStarted && (
-            <button
+            <Button
               onClick={onGetStarted}
-              className="ml-4 bg-teal-500 hover:bg-teal-600 text-white px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2 shadow-sm hover:shadow-teal-md transition-all duration-200 btn-primary"
+              className="ml-4"
+              rightIcon={<ArrowRight className="w-4 h-4" />}
             >
               Get Started
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            </Button>
           )}
         </nav>
       </div>
