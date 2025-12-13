@@ -533,7 +533,8 @@ export class NangoClient {
           endpoint,
           method: 'GET',
           params,
-          headers: Object.keys(apiHeaders).length > 0 ? apiHeaders : undefined
+          // Force Xero-Tenant-Id header if it's Xero
+          headers: provider === 'xero' ? { 'Xero-Tenant-Id': localStorage.getItem(tenantIdKey) } : undefined
         })
       });
 

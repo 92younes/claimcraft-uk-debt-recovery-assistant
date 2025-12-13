@@ -1,7 +1,6 @@
 import { ClaimState, GeneratedContent, DocumentType, PartyType, Party } from '../types';
 import { getTemplate, generateBriefDetails, getDisclaimer } from './documentTemplates';
 import { logDocumentGeneration } from './complianceLogger';
-import { getLbaResponsePeriodDays } from './legalRules';
 import { DEFAULT_PAYMENT_TERMS_DAYS } from '../constants';
 
 /**
@@ -82,20 +81,14 @@ export class DocumentBuilder {
   }
 
   /**
-   * Helper to check if a party is a business (includes sole traders)
-   * Sole traders are treated as businesses under the Late Payment of Commercial Debts Act 1998
-   */
-  private static isBusinessParty(type: PartyType): boolean {
-    return type === PartyType.BUSINESS || type === PartyType.SOLE_TRADER;
-  }
-
-  /**
    * STEP 1: Fill template with hard facts (NO AI)
    * This eliminates risk of hallucinated amounts, dates, names
    */
   private static fillTemplate(template: string, data: ClaimState): string {
-    const isB2B = this.isBusinessParty(data.claimant.type) &&
-                  this.isBusinessParty(data.defendant.type);
+    // B2B includes Sole Traders per Late Payment of Commercial Debts (Interest) Act 1998
+    const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
+    const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
+    const isB2B = isClaimantBusiness && isDefendantBusiness;
 
     // Determine correct interest legislation
     const interestAct = isB2B
@@ -168,7 +161,6 @@ export class DocumentBuilder {
       // Additional placeholders for new document types
       .replace(/\[DUE_DATE\]/g, data.invoice.dueDate ? this.formatDate(data.invoice.dueDate) : 'N/A')
       .replace(/\[DAYS_OVERDUE\]/g, data.interest.daysOverdue.toString())
-      .replace(/\[LBA_RESPONSE_DAYS\]/g, getLbaResponsePeriodDays(data.defendant.type).toString())
       .replace(/\[SETTLEMENT_AMOUNT\]/g, (parseFloat(totalClaim) * 0.85).toFixed(2)) // 15% discount as settlement
       .replace(/\[PAYMENT_DETAILS\]/g, '[TO BE SPECIFIED BY CLAIMANT]')
       .replace(/\[NUMBER_OF_INSTALLMENTS\]/g, '6') // Default 6 month plan
@@ -307,8 +299,10 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
     }
 
     // 3. Check legal act is cited correctly
-    const isB2B = data.claimant.type === PartyType.BUSINESS &&
-                  data.defendant.type === PartyType.BUSINESS;
+    // B2B includes Sole Traders per Late Payment of Commercial Debts (Interest) Act 1998
+    const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
+    const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
+    const isB2B = isClaimantBusiness && isDefendantBusiness;
 
     const requiredAct = isB2B
       ? 'Late Payment of Commercial Debts'
@@ -487,8 +481,10 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
    * Get legal basis summary for the claim
    */
   private static getLegalBasis(data: ClaimState): string {
-    const isB2B = data.claimant.type === PartyType.BUSINESS &&
-                  data.defendant.type === PartyType.BUSINESS;
+    // B2B includes Sole Traders per Late Payment of Commercial Debts (Interest) Act 1998
+    const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
+    const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
+    const isB2B = isClaimantBusiness && isDefendantBusiness;
 
     return isB2B
       ? 'Contract Law + Late Payment of Commercial Debts (Interest) Act 1998'
@@ -498,13 +494,12 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
   /**
    * Get next steps for user guidance
    */
-  private static getNextSteps(docType: DocumentType, courtFee: number, defendantType: PartyType): string[] {
+  private static getNextSteps(docType: DocumentType, courtFee: number): string[] {
     if (docType === DocumentType.LBA) {
-      const responseDays = getLbaResponsePeriodDays(defendantType);
       return [
         'Send this letter to the defendant via Royal Mail Signed For or Recorded Delivery',
         'Keep proof of postage for court evidence',
-        `Wait ${responseDays} days for the defendant to respond`,
+        'Wait 30 days for the defendant to respond',
         'If no response or payment, proceed to file Form N1 with the County Court',
         'Consider seeking legal advice before court proceedings'
       ];
@@ -546,11 +541,7 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       const filledTemplate = this.fillTemplate(template, data);
 
       // Step 3: Refine customizable sections with AI
-      // OPTIMIZATION: Skip AI for Polite Chaser as it has no AI placeholders
-      let refinedDocument = filledTemplate;
-      if (data.selectedDocType !== DocumentType.POLITE_CHASER) {
-        refinedDocument = await this.refineWithAI(filledTemplate, data);
-      }
+      const refinedDocument = await this.refineWithAI(filledTemplate, data);
 
       // Step 4: Validate the output
       const validation = this.validate(refinedDocument, data);
@@ -586,7 +577,7 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
         content: refinedDocument,
         briefDetails,
         legalBasis: this.getLegalBasis(data),
-        nextSteps: this.getNextSteps(data.selectedDocType, data.courtFee, data.defendant.type),
+        nextSteps: this.getNextSteps(data.selectedDocType, data.courtFee),
         validation: {
           isValid: validation.isValid,
           warnings: validation.warnings,

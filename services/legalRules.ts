@@ -1,8 +1,9 @@
 
-import { ClaimState, AssessmentResult, PartyType } from "../types";
+import { ClaimState, AssessmentResult, PartyType, InterestData } from "../types";
+import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS, UK_LEGAL_DEADLINES } from "../constants";
 
-const SMALL_CLAIMS_LIMIT = 10000;
-const LIMITATION_PERIOD_YEARS = 6;
+// Import from centralized constants to avoid duplication
+const { SMALL_CLAIMS_LIMIT, LIMITATION_PERIOD_YEARS } = UK_LEGAL_DEADLINES;
 
 /**
  * UK Civil Proceedings Fees Order 2021 (Money Claims Online Fees)
@@ -102,6 +103,60 @@ export const assessClaimViability = (state: ClaimState): AssessmentResult => {
     valueCheck,
     solvencyCheck,
     recommendation
+  };
+};
+
+/**
+ * Calculate Statutory Interest
+ * B2B = Late Payment of Commercial Debts (Interest) Act 1998 (BoE + 8%)
+ * B2C = County Courts Act 1984 s.69 (8% per annum)
+ */
+export const calculateInterest = (
+  amount: number,
+  dateIssued: string,
+  dueDate: string | undefined,
+  claimantType: PartyType,
+  defendantType: PartyType
+): InterestData => {
+  if (!dateIssued || !amount) {
+    return {
+      daysOverdue: 0,
+      dailyRate: 0,
+      totalInterest: 0
+    };
+  }
+
+  // Determine the payment due date
+  // If dueDate is provided, use it. Otherwise, assume default payment terms.
+  let paymentDue: Date;
+  if (dueDate) {
+    paymentDue = new Date(dueDate);
+  } else {
+    // Fallback: invoice date + default payment terms
+    paymentDue = new Date(dateIssued);
+    paymentDue.setDate(paymentDue.getDate() + DEFAULT_PAYMENT_TERMS_DAYS);
+  }
+
+  const now = new Date();
+  const diffTime = now.getTime() - paymentDue.getTime();
+  const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+  // Use correct interest rate based on party types
+  // Note: Sole Traders are businesses for the purpose of the 1998 Act
+  const isClaimantBusiness = claimantType === PartyType.BUSINESS || claimantType === PartyType.SOLE_TRADER;
+  const isDefendantBusiness = defendantType === PartyType.BUSINESS || defendantType === PartyType.SOLE_TRADER;
+  const isB2B = isClaimantBusiness && isDefendantBusiness;
+  
+  const interestRate = isB2B ? LATE_PAYMENT_ACT_RATE : 8.0; // 12.75% for B2B, 8% for B2C
+
+  const annualRate = interestRate / 100;
+  const dailyRate = (amount * annualRate) / DAILY_INTEREST_DIVISOR;
+  const totalInterest = dailyRate * daysOverdue;
+
+  return {
+    daysOverdue,
+    dailyRate: parseFloat(dailyRate.toFixed(4)),
+    totalInterest: parseFloat(totalInterest.toFixed(2))
   };
 };
 

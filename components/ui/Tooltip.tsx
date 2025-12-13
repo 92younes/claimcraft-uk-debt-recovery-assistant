@@ -37,7 +37,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLElement>(null);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const showTooltip = () => {
     timeoutRef.current = setTimeout(() => {
@@ -50,19 +50,20 @@ export const Tooltip: React.FC<TooltipProps> = ({
 
         switch (position) {
           case 'top':
-            top = rect.top + window.scrollY - tooltipOffset;
+            // rect coordinates are already viewport-relative; tooltip is position: fixed
+            top = rect.top - tooltipOffset;
             left = rect.left + rect.width / 2;
             break;
           case 'bottom':
-            top = rect.bottom + window.scrollY + tooltipOffset;
+            top = rect.bottom + tooltipOffset;
             left = rect.left + rect.width / 2;
             break;
           case 'left':
-            top = rect.top + rect.height / 2 + window.scrollY;
+            top = rect.top + rect.height / 2;
             left = rect.left - tooltipOffset;
             break;
           case 'right':
-            top = rect.top + rect.height / 2 + window.scrollY;
+            top = rect.top + rect.height / 2;
             left = rect.right + tooltipOffset;
             break;
         }
@@ -87,6 +88,21 @@ export const Tooltip: React.FC<TooltipProps> = ({
       }
     };
   }, []);
+
+  // Hide on scroll/resize (important when using nested scroll containers)
+  useEffect(() => {
+    if (!isVisible) return;
+    const handle = () => hideTooltip();
+
+    // capture=true catches scroll events from nested scroll containers
+    window.addEventListener('scroll', handle, true);
+    window.addEventListener('resize', handle);
+
+    return () => {
+      window.removeEventListener('scroll', handle, true);
+      window.removeEventListener('resize', handle);
+    };
+  }, [isVisible]);
 
   // For disabled elements, wrap in a span so mouse events still fire
   const triggerElement = wrapDisabled ? (
@@ -130,7 +146,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const tooltipElement = isVisible ? (
     <div
       role="tooltip"
-      className={`fixed z-50 px-3 py-2 text-sm font-medium text-white bg-slate-900 rounded-lg shadow-lg max-w-xs pointer-events-none animate-fade-in ${
+      className={`fixed z-[70] px-3 py-2 text-sm font-medium text-white bg-slate-900 rounded-lg shadow-lg max-w-xs pointer-events-none animate-fade-in ${
         position === 'top' ? '-translate-y-full -translate-x-1/2' :
         position === 'bottom' ? 'translate-y-0 -translate-x-1/2' :
         position === 'left' ? '-translate-x-full -translate-y-1/2' :

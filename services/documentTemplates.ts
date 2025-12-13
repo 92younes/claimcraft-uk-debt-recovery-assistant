@@ -181,59 +181,6 @@ This is a polite payment reminder. If payment is not received or a response prov
 `;
 
 /**
- * TEMPLATE: Part 36 Settlement Offer
- *
- * Formal settlement offer under CPR Part 36.
- * Carries cost consequences if not accepted.
- */
-export const PART_36_OFFER_TEMPLATE = `[CLAIMANT_NAME]
-[CLAIMANT_ADDRESS]
-
-[DATE]
-
-[DEFENDANT_NAME]
-[DEFENDANT_ADDRESS]
-
-Dear Sir/Madam,
-
-RE: PART 36 OFFER - CLAIM FOR £[TOTAL_CLAIM]
-
-Without prejudice save as to costs.
-
-**NOTICE OF OFFER UNDER PART 36**
-
-I hereby make you an offer to settle this claim in accordance with Part 36 of the Civil Procedure Rules.
-
-**OFFER TERMS**
-
-1. The Defendant shall pay the Claimant the sum of £[SETTLEMENT_AMOUNT] in full and final settlement of this claim.
-
-2. Payment shall be made within 21 days of the date of this offer.
-
-3. This offer is made in accordance with CPR Part 36 and is inclusive of all interest and costs to date.
-
-4. This offer remains open for acceptance for 21 days from the date of this letter, after which it may be withdrawn.
-
-**CONSEQUENCES OF NON-ACCEPTANCE**
-
-If you do not accept this offer and the matter proceeds to trial, and you fail to obtain a judgment more advantageous than this offer, you may be liable for costs on an indemnity basis from the date when this offer should have been accepted, together with interest on those costs.
-
-**ACCEPTANCE**
-
-If you wish to accept this offer, you must serve written notice of acceptance on the Claimant within 21 days. Upon acceptance and payment, these proceedings will be stayed.
-
-**PAYMENT DETAILS**
-
-Payment should be made to: [PAYMENT_DETAILS]
-
-This offer is made in accordance with CPR 36.5 and will have the cost consequences set out in CPR 36.17 if not accepted.
-
-Yours faithfully,
-
-[CLAIMANT_NAME]
-`;
-
-/**
  * TEMPLATE: Installment Payment Agreement
  *
  * Formal agreement for payment by installments.
@@ -385,69 +332,6 @@ Signed: _________________ Date: [DATE]
 `;
 
 /**
- * TEMPLATE: Defence Response
- *
- * Claimant's response to defendant's defence.
- * Sets out why the defence should be rejected.
- */
-export const DEFENCE_RESPONSE_TEMPLATE = `CLAIMANT'S RESPONSE TO DEFENCE
-
-**CLAIM NUMBER:** [CLAIM_NUMBER]
-
-**CLAIMANT:** [CLAIMANT_NAME]
-
-**DEFENDANT:** [DEFENDANT_NAME]
-
-**INTRODUCTION**
-
-1. This is the Claimant's response to the Defence filed by the Defendant on [DEFENCE_DATE].
-
-2. The Claimant maintains that the claim is well-founded and that the Defence should be rejected for the reasons set out below.
-
-**RESPONSE TO DEFENDANT'S CASE**
-
-3. The Defendant's Defence is denied. Specifically:
-
-[DEFENCE_REBUTTALS]
-
-**CLAIMANT'S CASE**
-
-4. The Claimant's case is as pleaded in the Particulars of Claim dated [CLAIM_DATE].
-
-5. In addition, the Claimant relies on the following:
-
-[ADDITIONAL_EVIDENCE]
-
-**DOCUMENTARY EVIDENCE**
-
-6. The Claimant will rely on the following documents at trial:
-
-   - Invoice [INVOICE_NUMBER] dated [INVOICE_DATE]
-   - [EVIDENCE_LIST]
-
-**WITNESS EVIDENCE**
-
-7. The Claimant will rely on witness evidence from:
-
-   - [CLAIMANT_NAME] (Claimant)
-   - [ADDITIONAL_WITNESSES]
-
-**CONCLUSION**
-
-8. For the reasons set out above, the Claimant maintains that the Defence has no merit and requests that judgment be entered for the full amount claimed.
-
-9. The Claimant is willing to engage in alternative dispute resolution if the Defendant makes a reasonable settlement offer.
-
-**STATEMENT OF TRUTH**
-
-I believe that the facts stated in this response are true. I understand that proceedings for contempt of court may be brought against anyone who makes, or causes to be made, a false statement in a document verified by a statement of truth without an honest belief in its truth.
-
-Signed: _________________ Date: [DATE]
-
-[CLAIMANT_NAME]
-`;
-
-/**
  * TEMPLATE: Directions Questionnaire (Form N180)
  *
  * Filed when defence is submitted and matter allocated to track.
@@ -523,194 +407,6 @@ Signed: _________________ Date: [DATE]
 `;
 
 /**
- * TEMPLATE: Trial Bundle Index
- *
- * Organized bundle of all documents for trial.
- * Must comply with Practice Direction 39A.
- */
-export const TRIAL_BUNDLE_TEMPLATE = `TRIAL BUNDLE INDEX
-
-**CLAIM NUMBER:** [CLAIM_NUMBER]
-
-**CLAIMANT:** [CLAIMANT_NAME] v. **DEFENDANT:** [DEFENDANT_NAME]
-
-**HEARING DATE:** [HEARING_DATE]
-
----
-
-**SECTION A: CASE SUMMARY & PLEADINGS**
-
-A1. Case Summary (1 page maximum)
-A2. Claim Form (N1)
-A3. Particulars of Claim
-A4. Defence (if any)
-A5. Reply to Defence (if any)
-A6. Directions Order
-
----
-
-**SECTION B: CONTRACTS & AGREEMENTS**
-
-B1. [CONTRACT_DESCRIPTION]
-B2. Terms and Conditions
-B3. Order Confirmation / Purchase Order
-B4. [ADDITIONAL_CONTRACTS]
-
----
-
-**SECTION C: INVOICES & FINANCIAL DOCUMENTS**
-
-C1. Invoice [INVOICE_NUMBER] dated [INVOICE_DATE]
-C2. Proof of Delivery / Completion
-C3. [ADDITIONAL_INVOICES]
-
----
-
-**SECTION D: CORRESPONDENCE**
-
-D1. Payment Reminder dated [REMINDER_DATE]
-D2. Letter Before Action dated [LBA_DATE]
-D3. Defendant's Response (if any)
-D4. [ADDITIONAL_CORRESPONDENCE]
-
----
-
-**SECTION E: WITNESS STATEMENTS**
-
-E1. Witness Statement of [CLAIMANT_NAME] dated [STATEMENT_DATE]
-E2. [ADDITIONAL_WITNESS_STATEMENTS]
-
----
-
-**SECTION F: EXPERT EVIDENCE** (if applicable)
-
-F1. [EXPERT_REPORTS]
-
----
-
-**SECTION G: LEGAL AUTHORITIES** (if applicable)
-
-G1. [CASE_LAW]
-G2. [STATUTES]
-
----
-
-**BUNDLE PREPARATION NOTES**
-
-✓ All pages numbered consecutively
-✓ Documents in chronological order within each section
-✓ Original documents available for inspection
-✓ Bundle paginated and indexed
-✓ Copies prepared for: Judge, Defendant, Court file
-
-Prepared by: [CLAIMANT_NAME]
-Date: [DATE]
-`;
-
-/**
- * TEMPLATE: Skeleton Argument
- *
- * Summary of legal arguments for trial.
- * Concise document outlining case and legal basis.
- */
-export const SKELETON_ARGUMENT_TEMPLATE = `SKELETON ARGUMENT
-
-**CLAIM NUMBER:** [CLAIM_NUMBER]
-
-**HEARING:** [HEARING_DATE] at [COURT_NAME]
-
-**CLAIMANT:** [CLAIMANT_NAME]
-
-**DEFENDANT:** [DEFENDANT_NAME]
-
----
-
-**1. INTRODUCTION**
-
-1.1 This is the Claimant's skeleton argument for the final hearing listed on [HEARING_DATE].
-
-1.2 The claim is for £[TOTAL_CLAIM] arising from unpaid invoice(s) for [SERVICE_DESCRIPTION].
-
----
-
-**2. FACTUAL BACKGROUND**
-
-2.1 The Claimant and Defendant entered into a contract on [CONTRACT_DATE] whereby the Claimant agreed to provide [CONTRACT_DESCRIPTION].
-
-2.2 The Claimant performed their obligations under the contract by [PERFORMANCE_DESCRIPTION].
-
-2.3 The Defendant has failed to pay invoice [INVOICE_NUMBER] dated [INVOICE_DATE] for the sum of £[PRINCIPAL].
-
-2.4 The key chronology is:
-    [TIMELINE_EVENTS]
-
----
-
-**3. ISSUES**
-
-3.1 The issues for determination are:
-    (a) Whether a binding contract existed between the parties
-    (b) Whether the Claimant performed their obligations under the contract
-    (c) Whether the Defendant is liable to pay the sum claimed
-    (d) [ADDITIONAL_ISSUES]
-
----
-
-**4. LAW**
-
-4.1 **Contract Formation:** There was a valid contract between the parties evidenced by [CONTRACT_EVIDENCE].
-
-4.2 **Payment Terms:** The contract provided for payment [PAYMENT_TERMS_DESCRIPTION].
-
-4.3 **Late Payment:** The Claimant is entitled to interest under [INTEREST_ACT] at the rate of [INTEREST_RATE].
-
-4.4 **Compensation:** The Claimant is entitled to compensation under the Late Payment of Commercial Debts (Interest) Act 1998.
-
----
-
-**5. EVIDENCE**
-
-5.1 The Claimant relies on the following evidence:
-    - Invoice [INVOICE_NUMBER] (Bundle C1)
-    - [EVIDENCE_REFERENCES]
-    - Witness statement of [CLAIMANT_NAME] (Bundle E1)
-
----
-
-**6. CLAIMANT'S CASE**
-
-6.1 The Claimant's case is straightforward:
-    (a) A valid contract existed
-    (b) The Claimant performed their obligations
-    (c) The Defendant received the goods/services
-    (d) The Defendant has failed to pay
-    (e) The debt is due and owing
-
-6.2 The Defendant's defence [is non-existent / is without merit because [DEFENCE_REBUTTAL]].
-
----
-
-**7. RELIEF SOUGHT**
-
-7.1 The Claimant seeks:
-    (a) Judgment for £[TOTAL_CLAIM]
-    (b) Continuing interest at £[DAILY_RATE] per day
-    (c) Costs
-
----
-
-**8. CONCLUSION**
-
-8.1 For the reasons set out above, the Claimant respectfully requests that the Court enter judgment for the full amount claimed.
-
----
-
-[CLAIMANT_NAME]
-Claimant in Person
-Dated: [DATE]
-`;
-
-/**
  * Brief details generator for Form N1 front page
  * (Limited to 24 words on the physical form)
  */
@@ -745,18 +441,10 @@ export const getTemplate = (docType: DocumentType): string => {
       return DEFAULT_JUDGMENT_TEMPLATE;
     case DocumentType.ADMISSION:
       return ADMISSION_TEMPLATE;
-    case DocumentType.DEFENCE_RESPONSE:
-      return DEFENCE_RESPONSE_TEMPLATE;
     case DocumentType.DIRECTIONS_QUESTIONNAIRE:
       return DIRECTIONS_QUESTIONNAIRE_TEMPLATE;
-    case DocumentType.PART_36_OFFER:
-      return PART_36_OFFER_TEMPLATE;
     case DocumentType.INSTALLMENT_AGREEMENT:
       return INSTALLMENT_AGREEMENT_TEMPLATE;
-    case DocumentType.TRIAL_BUNDLE:
-      return TRIAL_BUNDLE_TEMPLATE;
-    case DocumentType.SKELETON_ARGUMENT:
-      return SKELETON_ARGUMENT_TEMPLATE;
     default:
       throw new Error(`Template not yet implemented for document type: ${docType}`);
   }
@@ -789,13 +477,6 @@ the court, you MUST:
 4. Sign the Statement of Truth only if all information is true to the best of your knowledge
   `.trim(),
 
-  [DocumentType.PART_36_OFFER]: `
-DISCLAIMER: This document was prepared using AI-assisted document assembly software.
-We are not a law firm and do not provide legal advice. Part 36 offers have serious
-cost consequences if made incorrectly. You MUST seek independent legal advice from a
-qualified solicitor before making or accepting a Part 36 offer.
-  `.trim(),
-
   [DocumentType.INSTALLMENT_AGREEMENT]: `
 DISCLAIMER: This document was prepared using AI-assisted document assembly software.
 We are not a law firm and do not provide legal advice. This agreement is legally binding.
@@ -814,28 +495,10 @@ We are not a law firm and do not provide legal advice. Seek independent legal ad
 before accepting an admission or applying for judgment.
   `.trim(),
 
-  [DocumentType.DEFENCE_RESPONSE]: `
-DISCLAIMER: This document was prepared using AI-assisted document assembly software.
-We are not a law firm and do not provide legal advice. Responding to a defence requires
-compliance with CPR Part 15. Seek independent legal advice.
-  `.trim(),
-
   [DocumentType.DIRECTIONS_QUESTIONNAIRE]: `
 DISCLAIMER: This document was prepared using AI-assisted document assembly software.
 We are not a law firm and do not provide legal advice. The Directions Questionnaire must
 comply with CPR Part 26. Seek independent legal advice before filing.
-  `.trim(),
-
-  [DocumentType.TRIAL_BUNDLE]: `
-DISCLAIMER: This document was prepared using AI-assisted document assembly software.
-We are not a law firm and do not provide legal advice. Trial bundles must comply with
-Practice Direction 39A. Seek independent legal advice.
-  `.trim(),
-
-  [DocumentType.SKELETON_ARGUMENT]: `
-DISCLAIMER: This document was prepared using AI-assisted document assembly software.
-We are not a law firm and do not provide legal advice. Skeleton arguments must comply
-with court requirements. Seek independent legal advice.
   `.trim()
 };
 

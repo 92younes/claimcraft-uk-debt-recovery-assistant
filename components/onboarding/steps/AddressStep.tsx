@@ -2,6 +2,7 @@ import React from 'react';
 import { Check } from 'lucide-react';
 import { UserProfile, UserAddress } from '../../../types';
 import { UK_COUNTIES, getCountyFromPostcode } from '../../../constants';
+import { Input, Select } from '../../ui/Input';
 
 interface AddressStepProps {
   data: Partial<UserProfile>;
@@ -48,121 +49,72 @@ export const AddressStep: React.FC<AddressStepProps> = ({
         {/* Address Form */}
         <div className="space-y-4">
           {/* First Line */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">
-              First line <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={address.line1 || ''}
-              onChange={(e) => onAddressChange({ line1: e.target.value })}
-              placeholder="e.g., 128, City Road"
-              className={`
-                w-full px-4 py-3 border rounded-xl bg-white text-slate-900
-                focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
-                ${errors.line1 ? 'border-red-300' : 'border-slate-200'}
-              `}
-            />
-            {errors.line1 && (
-              <p className="text-sm text-red-500">{errors.line1}</p>
-            )}
-          </div>
+          <Input
+            label="First line"
+            value={address.line1 || ''}
+            onChange={(e) => onAddressChange({ line1: e.target.value })}
+            placeholder="e.g., 128, City Road"
+            required
+            error={errors.line1}
+            noMargin
+          />
 
           {/* Second Line */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">
-              Second line
-            </label>
-            <input
-              type="text"
-              value={address.line2 || ''}
-              onChange={(e) => onAddressChange({ line2: e.target.value })}
-              placeholder="e.g., Littleport"
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
-            />
-          </div>
+          <Input
+            label="Second line"
+            value={address.line2 || ''}
+            onChange={(e) => onAddressChange({ line2: e.target.value })}
+            placeholder="e.g., Littleport"
+            noMargin
+          />
 
           {/* Town and County */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Town <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={address.city || ''}
-                onChange={(e) => onAddressChange({ city: e.target.value })}
-                placeholder="e.g., London"
-                className={`
-                  w-full px-4 py-3 border rounded-xl bg-white text-slate-900
-                  focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
-                  ${errors.city ? 'border-red-300' : 'border-slate-200'}
-                `}
-              />
-              {errors.city && (
-                <p className="text-sm text-red-500">{errors.city}</p>
-              )}
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Town"
+              value={address.city || ''}
+              onChange={(e) => onAddressChange({ city: e.target.value })}
+              placeholder="e.g., London"
+              required
+              error={errors.city}
+              noMargin
+            />
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">
-                County <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={address.county || ''}
-                onChange={(e) => onAddressChange({ county: e.target.value })}
-                className={`
-                  w-full px-4 py-3 border rounded-xl bg-white text-slate-900
-                  focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
-                  ${errors.county ? 'border-red-300' : 'border-slate-200'}
-                `}
-              >
-                <option value="">Select county</option>
-                {UK_COUNTIES.map(county => (
-                  <option key={county} value={county}>{county}</option>
-                ))}
-              </select>
-              {errors.county && (
-                <p className="text-sm text-red-500">{errors.county}</p>
-              )}
-            </div>
+            <Select
+              label="County"
+              value={address.county || ''}
+              onChange={(e) => onAddressChange({ county: e.target.value })}
+              options={[
+                { value: '', label: 'Select county' },
+                ...UK_COUNTIES.map(county => ({ value: county, label: county }))
+              ]}
+              required
+              error={errors.county}
+              noMargin
+            />
           </div>
 
           {/* Postal Code and Country */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Postal Code <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={address.postcode || ''}
-                onChange={(e) => onAddressChange({ postcode: e.target.value.toUpperCase() })}
-                onBlur={handlePostcodeBlur}
-                placeholder="e.g., EC1V 2NX"
-                className={`
-                  w-full px-4 py-3 border rounded-xl bg-white text-slate-900
-                  focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
-                  ${errors.postcode ? 'border-red-300' : 'border-slate-200'}
-                `}
-              />
-              {errors.postcode && (
-                <p className="text-sm text-red-500">{errors.postcode}</p>
-              )}
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Postal Code"
+              value={address.postcode || ''}
+              onChange={(e) => onAddressChange({ postcode: e.target.value.toUpperCase() })}
+              onBlur={handlePostcodeBlur}
+              placeholder="e.g., EC1V 2NX"
+              required
+              error={errors.postcode}
+              noMargin
+            />
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Country <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={address.country || 'United Kingdom'}
-                onChange={(e) => onAddressChange({ country: e.target.value })}
-                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
-              >
-                <option value="United Kingdom">United Kingdom</option>
-              </select>
-            </div>
+            <Select
+              label="Country"
+              value={address.country || 'United Kingdom'}
+              onChange={(e) => onAddressChange({ country: e.target.value })}
+              options={[{ value: 'United Kingdom', label: 'United Kingdom' }]}
+              required
+              noMargin
+            />
           </div>
         </div>
 
@@ -173,17 +125,19 @@ export const AddressStep: React.FC<AddressStepProps> = ({
               type="checkbox"
               checked={data.tradingAddressSame !== false}
               onChange={(e) => onChange({ tradingAddressSame: e.target.checked })}
-              className="sr-only"
+              aria-label="My trading address is the same as my registered office address"
+              className="sr-only peer"
             />
             <div className={`
               w-5 h-5 rounded border-2 flex items-center justify-center transition-colors
+              peer-focus-visible:ring-2 peer-focus-visible:ring-teal-500/30 peer-focus-visible:ring-offset-2
               ${data.tradingAddressSame !== false
                 ? 'bg-teal-500 border-teal-500'
                 : 'border-slate-300 group-hover:border-teal-400'
               }
             `}>
               {data.tradingAddressSame !== false && (
-                <Check className="w-3 h-3 text-white" />
+                <Check className="w-3 h-3 text-white" aria-hidden="true" />
               )}
             </div>
           </div>

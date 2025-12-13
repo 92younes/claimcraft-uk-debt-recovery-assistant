@@ -48,18 +48,22 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [disqualified, setDisqualified] = useState<string | null>(null);
 
   const modalRef = useRef<HTMLDivElement>(null);
+  const previousOverflowRef = useRef<string>('');
 
-  // Focus management
+  // Focus management and scroll lock
   useEffect(() => {
     modalRef.current?.focus();
 
     if (layout === 'fullscreen') {
+      // Store the original overflow value
+      previousOverflowRef.current = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
     }
 
     return () => {
       if (layout === 'fullscreen') {
-        document.body.style.overflow = 'unset';
+        // Restore the original overflow value
+        document.body.style.overflow = previousOverflowRef.current;
       }
     };
   }, [layout]);
@@ -242,7 +246,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         {/* Content Area */}
         <div className={`flex-1 overflow-y-auto ${layout === 'fullscreen' ? 'p-8 md:p-12' : 'p-6 md:p-8'}`}>
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             {renderStepContent()}
           </div>
         </div>
@@ -250,7 +254,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         {/* Footer Navigation */}
         {!disqualified && (
           <div className="border-t border-slate-200 bg-slate-50 px-8 py-4">
-            <div className="max-w-2xl mx-auto flex justify-between items-center">
+            <div className="max-w-4xl mx-auto flex justify-between items-center">
               <Button
                 variant="secondary"
                 onClick={handleBack}

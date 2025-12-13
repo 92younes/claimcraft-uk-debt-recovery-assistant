@@ -57,12 +57,15 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4" role="group" aria-label="Politically Exposed Person selection">
           <button
             type="button"
             onClick={() => handlePepSelect(true)}
+            aria-pressed={pepSelected === true}
+            aria-label="Yes, I am a Politically Exposed Person"
             className={`
               relative flex items-center justify-center gap-3 p-6 rounded-xl border-2 transition-all duration-200
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
               ${pepSelected === true
                 ? 'border-slate-300 bg-slate-50'
                 : 'border-slate-200 bg-white hover:border-slate-300'
@@ -73,7 +76,7 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
               w-8 h-8 rounded-lg flex items-center justify-center
               ${pepSelected === true ? 'bg-slate-200 text-slate-600' : 'bg-slate-100 text-slate-400'}
             `}>
-              <Check className="w-5 h-5" />
+              <Check className="w-5 h-5" aria-hidden="true" />
             </div>
             <span className={`font-semibold ${pepSelected === true ? 'text-slate-700' : 'text-slate-900'}`}>
               Yes
@@ -83,8 +86,11 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
           <button
             type="button"
             onClick={() => handlePepSelect(false)}
+            aria-pressed={pepSelected === false}
+            aria-label="No, I am not a Politically Exposed Person"
             className={`
               relative flex items-center justify-center gap-3 p-6 rounded-xl border-2 transition-all duration-200
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
               ${pepSelected === false
                 ? 'border-teal-500 bg-teal-50'
                 : 'border-slate-200 bg-white hover:border-slate-300'
@@ -95,7 +101,7 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
               w-8 h-8 rounded-lg flex items-center justify-center
               ${pepSelected === false ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-red-400'}
             `}>
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" aria-hidden="true" />
             </div>
             <span className={`font-semibold ${pepSelected === false ? 'text-teal-700' : 'text-slate-900'}`}>
               No
@@ -129,12 +135,15 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4" role="group" aria-label="Debtor jurisdiction selection">
           <button
             type="button"
             onClick={() => handleJurisdictionSelect(false)}
+            aria-pressed={jurisdictionSelected === false}
+            aria-label="No, debtor is not based in England or Wales"
             className={`
               relative flex items-center justify-center gap-3 p-6 rounded-xl border-2 transition-all duration-200
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
               ${jurisdictionSelected === false
                 ? 'border-red-300 bg-red-50'
                 : 'border-slate-200 bg-white hover:border-slate-300'
@@ -145,7 +154,7 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
               w-8 h-8 rounded-lg flex items-center justify-center
               ${jurisdictionSelected === false ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-red-400'}
             `}>
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" aria-hidden="true" />
             </div>
             <span className={`font-semibold ${jurisdictionSelected === false ? 'text-red-700' : 'text-slate-900'}`}>
               No
@@ -155,8 +164,11 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
           <button
             type="button"
             onClick={() => handleJurisdictionSelect(true)}
+            aria-pressed={jurisdictionSelected === true}
+            aria-label="Yes, debtor is based in England or Wales"
             className={`
               relative flex items-center justify-center gap-3 p-6 rounded-xl border-2 transition-all duration-200
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
               ${jurisdictionSelected === true
                 ? 'border-teal-500 bg-teal-50'
                 : 'border-slate-200 bg-white hover:border-slate-300'
@@ -167,7 +179,7 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
               w-8 h-8 rounded-lg flex items-center justify-center
               ${jurisdictionSelected === true ? 'bg-teal-500 text-white' : 'bg-slate-100 text-teal-600'}
             `}>
-              <Check className="w-5 h-5" />
+              <Check className="w-5 h-5" aria-hidden="true" />
             </div>
             <span className={`font-semibold ${jurisdictionSelected === true ? 'text-teal-700' : 'text-slate-900'}`}>
               Yes
@@ -175,7 +187,7 @@ export const DeclarationsStep: React.FC<DeclarationsStepProps> = ({
           </button>
         </div>
         {errors.jurisdictionConfirmed && (
-          <p className="text-sm text-red-500">{errors.jurisdictionConfirmed}</p>
+          <p className="text-sm text-red-500" role="alert" aria-live="polite">{errors.jurisdictionConfirmed}</p>
         )}
       </div>
     </div>

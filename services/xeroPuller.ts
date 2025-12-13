@@ -6,7 +6,7 @@
  */
 
 import { NangoClient } from './nangoClient';
-import { calculateCourtFee, calculateCompensation } from './legalRules';
+import { calculateCourtFee, calculateCompensation, calculateInterest as calculateInterestFromRules } from './legalRules';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, getCountyFromPostcode } from '../constants';
 import {
   XeroInvoice,
@@ -150,32 +150,35 @@ export class XeroPuller {
   }
 
   /**
-   * Calculate statutory interest per Late Payment of Commercial Debts Act 1998
+   * Calculate statutory interest based on party types
+   *
+   * B2B: Late Payment of Commercial Debts (Interest) Act 1998 (BoE + 8%)
+   * B2C: County Courts Act 1984 s.69 (8% per annum)
    *
    * @param amount - Principal amount
-   * @param dueDate - Payment due date
+   * @param dueDate - Payment due date (Xero format)
+   * @param claimantType - Type of claimant (Business, Sole Trader, Individual)
+   * @param defendantType - Type of defendant (Business, Sole Trader, Individual)
    * @returns Interest data (days overdue, daily rate, total interest)
    */
-  static calculateInterest(amount: number, dueDate: string): InterestData {
-    const today = new Date();
-    const due = parseXeroDate(dueDate);
+  static calculateInterest(
+    amount: number,
+    dueDate: string,
+    claimantType: PartyType = PartyType.BUSINESS,
+    defendantType: PartyType = PartyType.BUSINESS
+  ): InterestData {
+    // Convert Xero date format to ISO string for legalRules function
+    const dueDateISO = xeroDateToISOString(dueDate);
 
-    // Calculate days overdue
-    const diffMs = today.getTime() - due.getTime();
-    const daysOverdue = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-
-    // Daily interest rate: (amount * annual rate) / 365
-    const annualRate = LATE_PAYMENT_ACT_RATE / 100; // Convert percentage to decimal
-    const dailyRate = (amount * annualRate) / DAILY_INTEREST_DIVISOR;
-
-    // Total interest accrued
-    const totalInterest = dailyRate * daysOverdue;
-
-    return {
-      daysOverdue,
-      dailyRate: parseFloat(dailyRate.toFixed(4)),
-      totalInterest: parseFloat(totalInterest.toFixed(2))
-    };
+    // Use the centralized interest calculation from legalRules
+    // This ensures consistent B2B vs B2C rate determination
+    return calculateInterestFromRules(
+      amount,
+      dueDateISO, // dateIssued - use due date as reference
+      dueDateISO, // dueDate
+      claimantType,
+      defendantType
+    );
   }
 
   // Compensation and court fee calculations now imported from legalRules.ts
@@ -245,8 +248,10 @@ export class XeroPuller {
       AmountPaid: invoice.AmountPaid
     });
 
-    const interest = this.calculateInterest(principal, invoice.DueDate);
     const defendant = this.transformContactToParty(contact);
+    // Calculate interest using correct rate based on party types
+    // Note: Xero defaults defendant to BUSINESS, user can change if dealing with consumers
+    const interest = this.calculateInterest(principal, invoice.DueDate, claimant.type, defendant.type);
 
     // Calculate compensation on the outstanding principal (B2B only)
     const compensation = calculateCompensation(principal, claimant.type, defendant.type);
@@ -375,9 +380,13 @@ export class XeroPuller {
    * Get summary statistics for overdue invoices
    *
    * @param connectionId - Nango connection ID (optional)
+   * @param claimantType - Claimant party type for interest calculation (defaults to BUSINESS)
    * @returns Summary stats
    */
-  static async getOverdueSummary(connectionId?: string): Promise<{
+  static async getOverdueSummary(
+    connectionId?: string,
+    claimantType: PartyType = PartyType.BUSINESS
+  ): Promise<{
     count: number;
     totalValue: number;
     oldestDaysOverdue: number;
@@ -393,8 +402,9 @@ export class XeroPuller {
 
     overdueInvoices.forEach(invoice => {
       // Calculate interest on outstanding balance (AmountDue), not original total
+      // Note: Summary assumes B2B (defendant is BUSINESS) - actual rate calculated per-claim
       const principal = invoice.AmountDue > 0 ? invoice.AmountDue : invoice.Total;
-      const interest = this.calculateInterest(principal, invoice.DueDate);
+      const interest = this.calculateInterest(principal, invoice.DueDate, claimantType, PartyType.BUSINESS);
       if (interest.daysOverdue > oldestDaysOverdue) {
         oldestDaysOverdue = interest.daysOverdue;
       }

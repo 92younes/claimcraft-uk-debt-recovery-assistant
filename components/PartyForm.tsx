@@ -36,6 +36,9 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchSuccess, setSearchSuccess] = useState(false);
 
+  // Issue 10: County lookup warning
+  const [countyLookupWarning, setCountyLookupWarning] = useState<string | null>(null);
+
   // Check if this is the defendant form (Companies House lookup only for defendant)
   const isDefendant = title.toLowerCase().includes('defendant');
 
@@ -167,6 +170,8 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
 
   const handlePostcodeBlur = () => {
     handleBlur('postcode');
+    setCountyLookupWarning(null); // Clear any previous warning
+
     // Auto-format valid postcodes and auto-fill county
     if (party.postcode && party.postcode.trim() && validateUKPostcode(party.postcode)) {
       const formatted = formatUKPostcode(party.postcode);
@@ -181,6 +186,9 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
         const suggestedCounty = getCountyFromPostcode(party.postcode);
         if (suggestedCounty) {
           updates.county = suggestedCounty;
+        } else {
+          // Issue 10: Show warning when county couldn't be auto-determined
+          setCountyLookupWarning('County could not be determined from postcode. Please select manually.');
         }
       }
 
@@ -392,12 +400,22 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
             label="County"
             options={UK_COUNTIES.map(s => ({ value: s, label: s }))}
             value={party.county}
-            onChange={(e) => handleChange('county', e.target.value)}
+            onChange={(e) => {
+              handleChange('county', e.target.value);
+              setCountyLookupWarning(null); // Clear warning once user selects
+            }}
             onBlur={() => handleBlur('county')}
             error={touched.has('county') ? errors.county : undefined}
             required
             disabled={readOnly}
           />
+          {/* Issue 10: County lookup warning */}
+          {countyLookupWarning && !party.county && (
+            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {countyLookupWarning}
+            </p>
+          )}
         </div>
       </div>
 

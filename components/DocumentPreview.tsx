@@ -21,14 +21,15 @@ interface DocumentPreviewProps {
   onOpenMcol?: () => void;
   mailSuccess?: boolean;
   onPaymentComplete?: (paymentIntentId: string) => void;
+  onMarkAsFiled?: () => void; // Issue 7: Mark N1 as filed to unlock post-filing docs
 }
 
 // A4 Page Wrapper with optional Watermark and Overflow Handling
 // Mobile responsive: full width on small screens, A4 width on larger screens
 const Page = ({ children, className = "", watermark = false, id }: { children?: React.ReactNode; className?: string; watermark?: boolean; id?: string }) => (
-  <div id={id} className={`bg-white shadow-xl w-full md:w-[210mm] min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-hidden flex-shrink-0 ${className}`}>
+  <div id={id} className={`bg-white shadow-xl w-full max-w-full md:w-[210mm] md:max-w-none min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-x-auto flex-shrink-0 ${className}`}>
     {watermark && (
-      <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50 opacity-15 select-none overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10 opacity-15 select-none overflow-hidden">
         <div className="transform -rotate-45 text-3xl sm:text-5xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-4 md:border-[10px] border-slate-900 p-4 md:p-10 rounded-2xl mix-blend-multiply">
            DRAFT - REVIEW PENDING
         </div>
@@ -48,13 +49,15 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   onSendPhysicalMail,
   onOpenMcol,
   mailSuccess = false,
-  onPaymentComplete
+  onPaymentComplete,
+  onMarkAsFiled
 }) => {
   const [viewMode, setViewMode] = useState<'letter' | 'reply-form' | 'info-sheet' | 'n1-form'>('letter');
   const [isSigning, setIsSigning] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [emailOpenedSuccess, setEmailOpenedSuccess] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [showFinalReview, setShowFinalReview] = useState(false);
@@ -150,7 +153,9 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
               throw new Error('Unsupported PDF form type');
           }
 
-          blob = new Blob([pdfBytes], { type: 'application/pdf' });
+          // TS-safe: copy into a new Uint8Array backed by an ArrayBuffer
+          const bytes = new Uint8Array(pdfBytes);
+          blob = new Blob([bytes.buffer], { type: 'application/pdf' });
         }
 
         const url = URL.createObjectURL(blob);
@@ -268,9 +273,8 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const legalCosts = 0; // Standard assumption for small claims
   const totalAmount = (claimAmount + totalInterest + compensation + courtFee + legalCosts).toFixed(2);
 
-  const isLetter = data.generated?.documentType === DocumentType.LBA || 
+  const isLetter = data.generated?.documentType === DocumentType.LBA ||
                    data.generated?.documentType === DocumentType.POLITE_CHASER ||
-                   data.generated?.documentType === DocumentType.PART_36_OFFER ||
                    data.generated?.documentType === DocumentType.INSTALLMENT_AGREEMENT;
 
   // Initial load effect to set correct mode
@@ -316,7 +320,8 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         }
 
         if (cancelled) return;
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const bytes = new Uint8Array(pdfBytes);
+        const blob = new Blob([bytes.buffer], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         setPdfPreviewUrl(prev => {
           if (prev) URL.revokeObjectURL(prev);
@@ -375,11 +380,10 @@ ${data.claimant.name}`);
     const recipient = data.defendant.email || '';
     
     window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
-    
-    // In a real app with backend email sending, we'd do this after API success
-    // For mailto, we assume they sent it
-    setSendSuccess(true);
-    setTimeout(() => setSendSuccess(false), 5000);
+
+    // UX: mailto opens the user's email client; we should not claim it was "sent".
+    setEmailOpenedSuccess(true);
+    setTimeout(() => setEmailOpenedSuccess(false), 5000);
   };
 
   // Reset preview URL when switching away from N1
@@ -393,16 +397,19 @@ ${data.claimant.name}`);
     }
   }, [data.selectedDocType, pdfPreviewUrl]);
 
-  if (mailSuccess || sendSuccess) {
+  if (mailSuccess || sendSuccess || emailOpenedSuccess) {
      return (
        <div className="max-w-lg mx-auto mt-20 text-center animate-fade-in">
           <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
              <CheckCircle className="w-12 h-12 text-green-600" />
           </div>
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">Sent Successfully!</h2>
+          <h2 className="text-3xl font-bold text-slate-900 mb-4">
+            {emailOpenedSuccess ? 'Email Draft Opened' : 'Sent Successfully!'}
+          </h2>
           <p className="text-slate-600 mb-8">
-             Your Letter Before Action has been dispatched via Registered Post and Email. 
-             Tracking number: <span className="font-mono font-bold text-slate-800">GB-2938-4421</span>
+             {emailOpenedSuccess
+               ? 'We opened an email draft in your email client. Review the message, attach your PDF, and send when ready.'
+               : 'Your Letter Before Action has been dispatched.'}
           </p>
           <div className="flex justify-center">
             <Button onClick={onBack} className="px-8">
@@ -507,6 +514,20 @@ ${data.claimant.name}`);
         </div>
       )}
 
+      {!data.hasPaid && (
+        <div className="mt-6 mb-2 px-4 md:px-0 no-print">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Preview is free</p>
+              <p className="text-amber-800">
+                To download PDFs or send by post/email, you’ll be prompted to unlock this document.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Actions Bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 mt-8 no-print gap-4 px-4 md:px-0">
         <Button 
@@ -541,6 +562,19 @@ ${data.claimant.name}`);
                   >
                     <span className="hidden md:inline">File on MCOL</span>
                     <span className="md:hidden">MCOL</span>
+                  </Button>
+                )}
+
+                {/* Mark as Filed Button (Issue 7: Unlocks post-filing documents) */}
+                {onMarkAsFiled && data.selectedDocType === DocumentType.FORM_N1 && data.claimLifecycle !== 'filed' && (
+                  <Button
+                    onClick={onMarkAsFiled}
+                    variant="secondary"
+                    className="border-teal-500 text-teal-700 hover:bg-teal-50"
+                    icon={<CheckCircle className="w-4 h-4" />}
+                  >
+                    <span className="hidden md:inline">Mark as Filed</span>
+                    <span className="md:hidden">Filed</span>
                   </Button>
                 )}
 
@@ -928,7 +962,8 @@ ${data.claimant.name}`);
                         setIsLoadingPreview(true);
                         generateN1PDF(data)
                           .then(pdfBytes => {
-                            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                            const bytes = new Uint8Array(pdfBytes);
+                            const blob = new Blob([bytes.buffer], { type: 'application/pdf' });
                             setCachedPdfBlob(blob);
                             const url = URL.createObjectURL(blob);
                             setPdfPreviewUrl(prev => {

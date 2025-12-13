@@ -26,17 +26,27 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
   const baseStyles =
     'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200 ' +
-    'focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ' +
+    'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white ' +
+    'disabled:opacity-50 disabled:cursor-not-allowed ' +
     'shadow-sm';
   
   const variants = {
-    primary: 'bg-teal-600 hover:bg-teal-700 text-white focus:ring-teal-500 shadow-lg hover:shadow-teal-500/25 hover:-translate-y-0.5',
-    secondary: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 focus:ring-slate-200',
-    warning: 'bg-amber-500 hover:bg-amber-600 text-white focus:ring-amber-500 shadow-lg hover:shadow-amber-500/25 hover:-translate-y-0.5',
-    danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500 shadow-lg hover:shadow-red-500/25',
-    outline: 'bg-transparent border-2 border-teal-600 text-teal-600 hover:bg-teal-50 focus:ring-teal-500',
-    ghost: 'bg-transparent hover:bg-slate-100 text-slate-600 hover:text-slate-900 shadow-none',
-    link: 'bg-transparent text-teal-600 hover:underline shadow-none p-0 h-auto'
+    primary:
+      'bg-teal-600 enabled:hover:bg-teal-700 text-white focus-visible:ring-teal-500 shadow-lg ' +
+      'motion-safe:enabled:hover:shadow-teal-500/25 motion-safe:enabled:hover:-translate-y-0.5',
+    secondary:
+      'bg-white enabled:hover:bg-slate-50 text-slate-700 border border-slate-200 enabled:hover:border-slate-300 focus-visible:ring-slate-300',
+    warning:
+      'bg-amber-500 enabled:hover:bg-amber-600 text-white focus-visible:ring-amber-500 shadow-lg ' +
+      'motion-safe:enabled:hover:shadow-amber-500/25 motion-safe:enabled:hover:-translate-y-0.5',
+    danger:
+      'bg-red-600 enabled:hover:bg-red-700 text-white focus-visible:ring-red-500 shadow-lg motion-safe:enabled:hover:shadow-red-500/25',
+    outline:
+      'bg-transparent border-2 border-teal-600 text-teal-600 enabled:hover:bg-teal-50 focus-visible:ring-teal-500',
+    ghost:
+      'bg-transparent enabled:hover:bg-slate-100 text-slate-600 enabled:hover:text-slate-900 shadow-none',
+    link:
+      'bg-transparent text-teal-600 enabled:hover:underline shadow-none p-0 h-auto'
   };
 
   const sizes = {

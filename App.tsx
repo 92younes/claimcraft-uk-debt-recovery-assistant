@@ -1,55 +1,105 @@
 import React, { useState, useEffect, useRef } from 'react';
+
 import { Header } from './components/Header';
+
 import { Sidebar } from './components/Sidebar';
+
 import { Dashboard } from './components/Dashboard';
+
 import { PartyForm } from './components/PartyForm';
+
 import { Button } from './components/ui/Button';
+
 import { Input, TextArea } from './components/ui/Input';
+
 import { Tooltip } from './components/ui/Tooltip';
+
 import { ProgressStepsCompact } from './components/ui/ProgressSteps';
+
 import { DocumentPreview } from './components/DocumentPreview';
+
 import { CsvImportModal } from './components/CsvImportModal';
+
 import { ConfirmModal } from './components/ConfirmModal';
+
 import { AssessmentReport } from './components/AssessmentReport';
+
 import { TimelineBuilder } from './components/TimelineBuilder';
+
 import { EvidenceUpload } from './components/EvidenceUpload';
+
 import { ChatInterface } from './components/ChatInterface';
 import { OnboardingModal } from './components/OnboardingModal';
 import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
+
 import { LitigantInPersonModal } from './components/LitigantInPersonModal';
+
 import { ViabilityBlockModal } from './components/ViabilityBlockModal';
+
 import { AccountingIntegration } from './components/AccountingIntegration';
+
 import { XeroInvoiceImporter } from './components/XeroInvoiceImporter';
+
 import { ConversationEntry } from './components/ConversationEntry';
+
 import { McolSidecar } from './components/McolSidecar';
+
 import { CourtFormDataModal } from './components/CourtFormDataModal';
+
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
+
 import { TermsOfService } from './pages/TermsOfService';
+
 import { CalendarView } from './pages/CalendarView';
+
 import { SettingsPage } from './pages/SettingsPage';
+
 import { DeadlineWidget } from './components/DeadlineWidget';
+
 import { getDeadlines, saveDeadline, deleteDeadline, deleteDeadlinesForClaim } from './services/storageService';
+
 import { getUpcomingDeadlines, markDeadlineComplete } from './services/deadlineService';
+
 import { analyzeEvidence, startClarificationChat, sendChatMessage, getClaimStrengthAssessment, extractDataFromChat } from './services/geminiService';
 import { DocumentBuilder } from './services/documentBuilder';
+
 import { NangoClient } from './services/nangoClient';
+
 import { searchCompaniesHouse } from './services/companiesHouse';
-import { assessClaimViability, calculateCourtFee, calculateCompensation, getLbaResponsePeriodDays } from './services/legalRules';
+
+import { assessClaimViability, calculateCourtFee, calculateCompensation, getLbaResponsePeriodDays, calculateInterest } from './services/legalRules';
+
 import { getStoredClaims, saveClaimToStorage, deleteClaimFromStorage, exportAllUserData, deleteAllUserData, getUserProfile, saveUserProfile } from './services/storageService';
+
 import { verifyPayment } from './services/paymentService';
+
 import { profileToClaimantParty } from './services/userProfileService';
+
 import { ClaimState, INITIAL_STATE, Party, InvoiceData, InterestData, DocumentType, PartyType, TimelineEvent, EvidenceFile, ChatMessage, ConversationMessage, AccountingConnection, ExtractedClaimData, UserProfile, Deadline, DeadlineStatus, CourtFormData } from './types';
 import { LATE_PAYMENT_ACT_RATE, DAILY_INTEREST_DIVISOR, DEFAULT_PAYMENT_TERMS_DAYS, getCountyFromPostcode } from './constants';
+
 import { validateDateRelationship, validateInterestCalculation, validateUniqueInvoice } from './utils/validation';
+import { AddDeadlineModal } from './components/AddDeadlineModal';
+import { calculateSuggestedDeadlines, createManualDeadline, hasExistingDeadlineForEvent } from './services/deadlineService';
+
 import { ArrowRight, Wand2, Loader2, CheckCircle, FileText, Mail, Scale, ArrowLeft, Sparkles, Upload, Zap, ShieldCheck, ChevronRight, ChevronUp, ChevronDown, Lock, Check, Play, Globe, LogIn, Keyboard, Pencil, MessageSquareText, ThumbsUp, Command, AlertTriangle, AlertCircle, HelpCircle, Calendar, PoundSterling, User, Gavel, FileCheck, FolderOpen, Percent, Save } from 'lucide-react';
 
+
+
 // Backend API URL - Issue 4 fix
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
+
+
 // New view state
+
 type ViewState = 'landing' | 'onboarding' | 'dashboard' | 'wizard' | 'conversation' | 'privacy' | 'terms' | 'calendar' | 'settings';
 
+
+
 enum Step {
+
   SOURCE = 1,
   DETAILS = 2,
   VIABILITY = 3,   // Legal Viability Check (Gatekeeper)
@@ -61,8 +111,12 @@ enum Step {
   PREVIEW = 9
 }
 
+
+
 // Wizard step definitions for progress indicator
+
 const WIZARD_STEPS = [
+
   { number: Step.SOURCE, label: 'Data Source', description: 'Import or enter' },
   { number: Step.DETAILS, label: 'Claim Details', description: 'Parties & amounts' },
   { number: Step.VIABILITY, label: 'Assessment', description: 'Legal check' },
@@ -71,391 +125,754 @@ const WIZARD_STEPS = [
   { number: Step.DATA_REVIEW, label: 'Review Data', description: 'Verify details' },
   { number: Step.RECOMMENDATION, label: 'Strategy', description: 'Document type' },
   { number: Step.DRAFT, label: 'Draft', description: 'Edit content' },
+
   { number: Step.PREVIEW, label: 'Review', description: 'Final check' }
 ];
 
+
+
 const App: React.FC = () => {
+
   // High Level State
+
   const [view, setView] = useState<ViewState>('landing');
+
   const [dashboardClaims, setDashboardClaims] = useState<ClaimState[]>([]);
+
   const [showOnboarding, setShowOnboarding] = useState(false); // Combined disclaimer + eligibility (legacy)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+
+
   // Deadline/Calendar State
+
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
+  const [showAddDeadlineModal, setShowAddDeadlineModal] = useState(false);
+
+
 
   // Wizard State
+
   const [step, setStep] = useState<Step>(Step.SOURCE);
   const [maxStepReached, setMaxStepReached] = useState<Step>(Step.SOURCE);
   const [claimData, setClaimData] = useState<ClaimState>(INITIAL_STATE);
+
   const [isProcessing, setIsProcessing] = useState(false);
+
   const [processingText, setProcessingText] = useState("");
+
   const [error, setError] = useState<string | null>(null);
+
   const [isFinalized, setIsFinalized] = useState(false);
+
   
+
   // Refine State (Step 7)
+
   const [showRefineInput, setShowRefineInput] = useState(false);
+
   const [refineInstruction, setRefineInstruction] = useState('');
+
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
+
+
   const [showCsvModal, setShowCsvModal] = useState(false);
+
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false); // For AI flow in Step 2
 
+
   // Accounting Integration State
+
   const [accountingConnection, setAccountingConnection] = useState<AccountingConnection | null>(null);
+
   const [showAccountingModal, setShowAccountingModal] = useState(false);
+
   const [showXeroImporter, setShowXeroImporter] = useState(false);
 
+
+
   // Compliance Modal State
+
   const [showLiPModal, setShowLiPModal] = useState(false);
+
   const [showAdvancedDocs, setShowAdvancedDocs] = useState(false);
 
+
+
   // Transition State
+
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+
 
   // Chat readiness state (AI determines when enough info is collected)
   const [canProceed, setCanProceed] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
+
+
   // AI Data Extraction State (for DATA_REVIEW step)
+
   const [extractedData, setExtractedData] = useState<ExtractedClaimData | null>(null);
+
   const [recommendationReason, setRecommendationReason] = useState<string>('');
+
   const [extractedFields, setExtractedFields] = useState<string[]>([]);
+
   const [chatHistoryExpanded, setChatHistoryExpanded] = useState(false);
 
+
+
   // Validation State
+
   const [dateValidationError, setDateValidationError] = useState<string | null>(null);
+
   const [duplicateInvoiceWarning, setDuplicateInvoiceWarning] = useState<string | null>(null);
+
   const [showViabilityWarning, setShowViabilityWarning] = useState(false);
+
   const [viabilityIssues, setViabilityIssues] = useState<string[]>([]);
+
   const [hasAcknowledgedViability, setHasAcknowledgedViability] = useState(false);
+
   const [hasAcknowledgedLbaWarning, setHasAcknowledgedLbaWarning] = useState(false);
+
   const [chatError, setChatError] = useState<string | null>(null);
+
 
   // Form Validity State (for Step.DETAILS)
   const [isClaimantFormValid, setIsClaimantFormValid] = useState(true);
   const [isDefendantFormValid, setIsDefendantFormValid] = useState(true);
 
+
   // Mailroom & MCOL State
+
   const [showMcolSidecar, setShowMcolSidecar] = useState(false);
 
+
+
   // Court Form Data Modal State (N225A, N180, N225)
+
   const [showCourtFormModal, setShowCourtFormModal] = useState(false);
+
   const [isSendingMail, setIsSendingMail] = useState(false);
+
   const [mailSuccess, setMailSuccess] = useState<string | null>(null); // Stores tracking ID
+
   const [mailServiceAvailable, setMailServiceAvailable] = useState(false); // Tracks if mail service is configured
 
+
+
   // Accessibility: Ref for focus management on step changes
+
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
 
+
+
   // Focus step heading when step changes (for screen readers)
+
   useEffect(() => {
+
     if (view === 'wizard' && stepHeadingRef.current) {
+
       // Small delay to ensure DOM has updated
+
       setTimeout(() => {
+
         stepHeadingRef.current?.focus();
+
       }, 100);
+
     }
+
   }, [step, view]);
 
+
+
   const parseAddressForMail = (fullAddress: string, city: string, postcode: string) => {
+
     // Split by comma OR newline to handle different user input formats
+
     const parts = fullAddress.split(/[,\n]+/).map(p => p.trim()).filter(p => p.length > 0);
+
     return {
+
       address1: parts[0] || '',
+
       address2: parts.slice(1).join(', ') || '', 
+
       city: city,
+
       postcode: postcode
+
     };
+
   };
+
+
 
   const sendPhysicalLetter = async () => {
+
     if (!claimData.generated?.content) {
+
       alert("Please generate the document first.");
+
       return;
+
     }
+
+
 
     const addressData = parseAddressForMail(
+
       claimData.defendant.address, 
+
       claimData.defendant.city, 
+
       claimData.defendant.postcode
+
     );
 
+
+
     setIsSendingMail(true);
+
     try {
+
       const response = await fetch(`${API_BASE_URL}/api/mail/send`, {
+
         method: 'POST',
+
         headers: { 'Content-Type': 'application/json' },
+
         body: JSON.stringify({
+
           recipient: {
+
             name: claimData.defendant.name,
+
             ...addressData
+
           },
+
           html: `
+
             <h1>Letter Before Action</h1>
+
             <p><strong>Ref:</strong> ${claimData.invoice.invoiceNumber}</p>
+
             <hr/>
+
             <div style="white-space: pre-wrap;">${claimData.generated.content}</div>
+
           `
+
         })
+
       });
 
+
+
       const data = await response.json();
+
       if (data.success) {
+
         setMailSuccess(data.trackingId);
+
         // Update claim status locally
+
         setClaimData(prev => ({
+
           ...prev,
+
           status: 'sent',
+
           timeline: [...prev.timeline, {
+
             date: new Date().toISOString(),
+
             description: `Physical LBA sent via Mailroom (Tracking: ${data.trackingId})`,
+
             type: 'lba_sent'
+
           }]
+
         }));
+
       } else {
+
         alert('Failed to send: ' + data.message);
+
       }
+
     } catch (e) {
+
       console.error(e);
+
       alert('Error connecting to mail server');
+
     } finally {
+
       setIsSendingMail(false);
+
     }
+
   };
 
+
+
   // Helper to reset all wizard-specific state when starting/resuming a claim
+
   // Issue 1 fix: Don't reset hasVerifiedInterest, lbaAlreadySent, lbaSentDate as they're now in claimData
+
   const resetWizardState = () => {
+
     setStep(Step.SOURCE);
     setMaxStepReached(Step.SOURCE);
     setCanProceed(false);
     setExtractedData(null);
+
     setRecommendationReason('');
+
     setExtractedFields([]);
+
     setChatHistoryExpanded(false);
+
     setDateValidationError(null);
+
     setDuplicateInvoiceWarning(null);
+
     setShowViabilityWarning(false);
+
     setViabilityIssues([]);
+
     setHasAcknowledgedViability(false);
+
     setHasAcknowledgedLbaWarning(false);
+
     setChatError(null);
     setIsEditingAnalysis(false);
     setIsFinalized(false);
+
     // Reset form validity to true initially (will update on mount of PartyForm)
+
     setIsClaimantFormValid(true);
     setIsDefendantFormValid(true);
     setShowMcolSidecar(false);
+
     setMailSuccess(null);
+
   };
 
+
+
   // Initialize Nango on mount
+
   useEffect(() => {
+
     NangoClient.initialize();
 
+
+
     // Check if Xero is connected
+
     const checkXeroConnection = async () => {
+
       try {
+
         const connected = await NangoClient.isXeroConnected();
+
         if (connected) {
+
           const connection = NangoClient.getXeroConnection();
+
           setAccountingConnection(connection);
+
         }
+
       } catch (error) {
+
         console.warn('Failed to check Xero connection status:', error);
+
         // Connection check failed, user can reconnect via UI if needed
+
       }
+
     };
+
     checkXeroConnection();
+
   }, []);
 
+
+
   // Load data on mount
+
   useEffect(() => {
+
     // Load local claims, user profile, and deadlines async
+
     const loadData = async () => {
+
         const storedClaims = await getStoredClaims();
+
         setDashboardClaims(storedClaims);
 
+
+
         // Load user profile
+
         const profile = await getUserProfile();
+
         setUserProfile(profile);
 
+
+
         // Load deadlines
+
         const storedDeadlines = await getDeadlines();
+
         setDeadlines(storedDeadlines);
+
+
 
         // If we have claims, auto-direct to dashboard for better UX
         if (storedClaims.length > 0) {
-            setView('dashboard');
+          setView('dashboard');
+
         }
+
     };
+
     loadData();
+
   }, []);
+
+
 
   // Check mail service availability on mount
+
   useEffect(() => {
+
     const checkMailService = async () => {
+
       try {
+
         const response = await fetch(`${API_BASE_URL}/api/health`, {
+
           method: 'GET',
+
           signal: AbortSignal.timeout(3000) // 3 second timeout
+
         });
+
         if (response.ok) {
+
           const data = await response.json();
+
           setMailServiceAvailable(data.services?.mail === true);
+
         } else {
+
           setMailServiceAvailable(false);
+
         }
+
       } catch {
+
         // Server not running or network error - mail not available
+
         setMailServiceAvailable(false);
+
       }
+
     };
+
     checkMailService();
+
   }, []);
+
+
 
   // Validate API keys on mount
+
   useEffect(() => {
+
     const anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+
     const geminiKey = import.meta.env.VITE_API_KEY;
 
+
+
     if (!anthropicKey) {
+
       console.error('❌ ANTHROPIC_API_KEY not set. Document generation will fail.');
+
       console.log('📖 See .env.example for setup instructions');
+
       console.log('💡 Create a .env file with: VITE_ANTHROPIC_API_KEY=your_key_here');
+
     }
+
+
 
     if (!geminiKey) {
+
       console.error('❌ API_KEY (Gemini) not set. Evidence analysis will fail.');
+
       console.log('📖 See .env.example for setup instructions');
+
       console.log('💡 Create a .env file with: VITE_API_KEY=your_key_here');
+
     }
+
+
 
     if (anthropicKey && geminiKey) {
+
       console.log('✅ All API keys configured correctly');
+
     }
+
   }, []);
+
+
 
   // Cleanup old compliance logs monthly (GDPR compliance)
+
   useEffect(() => {
+
     const lastCleanup = localStorage.getItem('lastLogCleanup');
+
     const monthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
 
+
+
     if (!lastCleanup || parseInt(lastCleanup) < monthAgo) {
+
       import('./services/complianceLogger').then(({ clearOldComplianceLogs }) => {
+
         clearOldComplianceLogs(12).then(count => {
+
           if (count > 0) {
+
             console.log(`🧹 Cleaned up ${count} compliance logs older than 12 months`);
+
           }
+
           localStorage.setItem('lastLogCleanup', Date.now().toString());
+
         }).catch(err => {
+
           console.warn('Compliance log cleanup failed (non-critical):', err);
+
         });
+
       });
+
     }
+
   }, []);
 
+
+
   // Listen for navigation events from CookieConsent and other components
+
   useEffect(() => {
+
     const handleNavigatePrivacy = () => setView('privacy');
     const handleNavigateTerms = () => setView('terms');
 
+
     window.addEventListener('navigate-privacy', handleNavigatePrivacy);
+
     window.addEventListener('navigate-terms', handleNavigateTerms);
 
+
+
     return () => {
+
       window.removeEventListener('navigate-privacy', handleNavigatePrivacy);
+
       window.removeEventListener('navigate-terms', handleNavigateTerms);
+
     };
+
   }, []);
 
+
+
   // Auto-save effect: Persist data whenever claimData changes while in wizard
+
   useEffect(() => {
+
     if (claimData.id && view === 'wizard') {
+
        const timer = setTimeout(async () => {
-         await saveClaimToStorage({ ...claimData, lastModified: Date.now() });
+
+         await saveClaimAndRefreshDeadlines({ ...claimData, lastModified: Date.now() });
+
          // Quietly update dashboard state to reflect changes
+
          const stored = await getStoredClaims();
+
          setDashboardClaims(stored);
+
        }, 1000);
+
        return () => clearTimeout(timer);
+
     }
+
   }, [claimData, view]);
 
+
+
   // Warn user before leaving page with unsaved changes
+
   useEffect(() => {
+
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+
       if (view === 'wizard' && claimData.id) {
+
         e.preventDefault();
+
         e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+
         return e.returnValue;
+
       }
+
     };
 
+
+
     window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+
   }, [view, claimData.id]);
 
+
+
   // Helper to save claim immediately (used for critical transitions)
+
   const saveClaimImmediately = async () => {
+
     if (claimData.id) {
-      await saveClaimToStorage({ ...claimData, lastModified: Date.now() });
+
+      await saveClaimAndRefreshDeadlines({ ...claimData, lastModified: Date.now() });
+
       const stored = await getStoredClaims();
+
       setDashboardClaims(stored);
+
     }
+
   };
 
+
+
   // Check for duplicate invoice numbers
+
   useEffect(() => {
+
     if (claimData.invoice.invoiceNumber && dashboardClaims.length > 0) {
+
       const isUnique = validateUniqueInvoice(
+
         claimData.invoice.invoiceNumber,
+
         claimData.id,
+
         dashboardClaims
+
       );
+
       if (!isUnique) {
+
         setDuplicateInvoiceWarning(
+
           `Invoice "${claimData.invoice.invoiceNumber}" may already exist in another claim. Please verify this is not a duplicate.`
+
         );
+
       } else {
+
         setDuplicateInvoiceWarning(null);
+
       }
+
     } else {
+
       setDuplicateInvoiceWarning(null);
+
     }
+
   }, [claimData.invoice.invoiceNumber, claimData.id, dashboardClaims]);
+
+
 
   // Auto-populate timeline when entering Timeline step if empty but invoice data exists
   useEffect(() => {
+
     if (step === Step.TIMELINE && claimData.timeline.length === 0 && claimData.invoice.dateIssued) {
       const invoiceEvent: TimelineEvent = {
+
         date: claimData.invoice.dateIssued,
+
         description: `Invoice #${claimData.invoice.invoiceNumber || 'N/A'} sent for £${claimData.invoice.totalAmount?.toFixed(2) || '0.00'}`,
+
         type: 'invoice'
+
       };
+
+
 
       const events: TimelineEvent[] = [invoiceEvent];
 
+
+
       // Also add payment due date if we can calculate it
+
       if (claimData.invoice.paymentTermsDays) {
+
         const invoiceDate = new Date(claimData.invoice.dateIssued);
+
         invoiceDate.setDate(invoiceDate.getDate() + claimData.invoice.paymentTermsDays);
+
         const dueDateEvent: TimelineEvent = {
+
           date: invoiceDate.toISOString().split('T')[0],
+
           description: `Payment due (${claimData.invoice.paymentTermsDays} day terms)`,
+
           type: 'payment_due'
+
         };
+
         events.push(dueDateEvent);
+
       }
 
+
+
       setClaimData(prev => ({ ...prev, timeline: events }));
+
     }
+
   }, [step, claimData.timeline.length, claimData.invoice.dateIssued]);
 
+
+
   // --- Step Navigation Wrapper ---
+
   // Updates step and tracks the highest step reached for forward navigation after going back
+
   const handleStepChange = (newStep: Step) => {
     setStep(newStep);
     if (newStep > maxStepReached) {
@@ -463,108 +880,241 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Navigation Handlers ---
-  const handleStartNewClaim = async () => {
-    // Check if user has completed onboarding
-    const profile = userProfile || await getUserProfile();
 
-    if (!profile) {
-      // First-time user: show full onboarding flow
-      setView('onboarding');
-    } else {
-      // Reset all wizard state for fresh claim
-      resetWizardState();
-      // Returning user: pre-fill claimant from profile and go to conversation entry
-      const claimantFromProfile = profileToClaimantParty(profile);
-      setClaimData({
-        ...INITIAL_STATE,
-        id: Math.random().toString(36).substr(2, 9),
-        claimant: claimantFromProfile
-      });
-      // NEW: Go to conversation entry instead of wizard
-      setView('conversation');
-    }
+
+  // --- Navigation Handlers ---
+
+  // --- Helpers ---
+
+  const saveClaimAndRefreshDeadlines = async (claim: ClaimState) => {
+      // 1. Save claim
+      await saveClaimAndRefreshDeadlines(claim);
+
+      // 2. Auto-generate deadlines from timeline events
+      const suggestions = calculateSuggestedDeadlines(claim);
+      let deadlinesChanged = false;
+
+      // Fetch latest deadlines to avoid duplicates against stale state
+      const currentDeadlines = await getDeadlines();
+
+      for (const suggestion of suggestions) {
+          if (!hasExistingDeadlineForEvent(currentDeadlines, claim.id, suggestion.type, suggestion.sourceEvent)) {
+              console.log('Auto-generating deadline:', suggestion.title);
+              await saveDeadline(suggestion);
+              deadlinesChanged = true;
+          }
+      }
+
+      if (deadlinesChanged) {
+          setDeadlines(await getDeadlines());
+      }
   };
 
-  // Start with manual wizard - skip AI assistant and go directly to step-by-step form
-  const handleStartManualWizard = async () => {
+  const handleAddDeadline = () => {
+    setShowAddDeadlineModal(true);
+  };
+
+  const handleSaveManualDeadline = async (title: string, description: string, date: string, priority: DeadlinePriority, claimId: string) => {
+    const newDeadline = createManualDeadline(claimId, title, description, date);
+    newDeadline.priority = priority; // Allow user override
+
+    await saveDeadline(newDeadline);
+
+    // Refresh
+    setDeadlines(await getDeadlines());
+    setShowAddDeadlineModal(false);
+  };
+
+  const handleStartNewClaim = async () => {
+
+    // Check if user has completed onboarding
+
     const profile = userProfile || await getUserProfile();
 
+
+
     if (!profile) {
+
       // First-time user: show full onboarding flow
+
       setView('onboarding');
+
     } else {
+
       // Reset all wizard state for fresh claim
+
       resetWizardState();
-      // Returning user: pre-fill claimant from profile
+
+      // Returning user: pre-fill claimant from profile and go to conversation entry
+
       const claimantFromProfile = profileToClaimantParty(profile);
+
       setClaimData({
+
         ...INITIAL_STATE,
+
         id: Math.random().toString(36).substr(2, 9),
+
         claimant: claimantFromProfile
+
       });
+
+      // NEW: Go to conversation entry instead of wizard
+
+      setView('conversation');
+
+    }
+
+  };
+
+
+
+  // Start with manual wizard - skip AI assistant and go directly to step-by-step form
+
+  const handleStartManualWizard = async () => {
+
+    const profile = userProfile || await getUserProfile();
+
+
+
+    if (!profile) {
+
+      // First-time user: show full onboarding flow
+
+      setView('onboarding');
+
+    } else {
+
+      // Reset all wizard state for fresh claim
+
+      resetWizardState();
+
+      // Returning user: pre-fill claimant from profile
+
+      const claimantFromProfile = profileToClaimantParty(profile);
+
+      setClaimData({
+
+        ...INITIAL_STATE,
+
+        id: Math.random().toString(36).substr(2, 9),
+
+        claimant: claimantFromProfile
+
+      });
+
       // Go directly to wizard Step.SOURCE
       setStep(Step.SOURCE);
       setView('wizard');
+
     }
+
   };
 
+
+
   // Handle conversation entry completion - transition to wizard with pre-filled data
+
   const handleConversationComplete = (extractedData: Partial<ClaimState>, messages: ConversationMessage[]) => {
     // Show magic transition
+
     setIsTransitioning(true);
 
+
+
     // Map ConversationMessage to ChatMessage for history
+
     const history: ChatMessage[] = messages.map(msg => ({
+
       id: Date.now().toString() + Math.random().toString(),
+
       role: msg.role,
+
       content: msg.content,
+
       timestamp: msg.timestamp
+
     }));
 
+
+
     // Merge extracted data with existing claim data (preserving claimant from profile)
+
     setClaimData(prev => ({
+
       ...prev,
+
       ...extractedData,
       // Merge nested objects properly
+
       defendant: { ...prev.defendant, ...extractedData.defendant },
       claimant: { ...prev.claimant, ...extractedData.claimant },
       invoice: { ...prev.invoice, ...extractedData.invoice },
       timeline: [...(prev.timeline || []), ...(extractedData.timeline || [])],
       evidence: [...(prev.evidence || []), ...(extractedData.evidence || [])],
       chatHistory: history,
+
       source: 'upload' // Mark as uploaded/extracted
+
     }));
 
+
+
     // Delay transition to simulate "AI processing"
+
     setTimeout(() => {
+
         setIsTransitioning(false);
+
         // Transition to wizard at DETAILS step (for verification)
         setStep(Step.DETAILS);
         setMaxStepReached(Step.DETAILS);
         setView('wizard');
+
     }, 2000);
+
   };
+
+
 
   // New onboarding flow complete handler
+
   const handleOnboardingFlowComplete = async (profile: UserProfile) => {
+
     await saveUserProfile(profile);
+
     setUserProfile(profile);
 
+
+
     // Reset all wizard state for fresh claim
+
     resetWizardState();
+
     // Start claim with pre-filled claimant
+
     const claimantFromProfile = profileToClaimantParty(profile);
+
     setClaimData({
+
       ...INITIAL_STATE,
+
       id: Math.random().toString(36).substr(2, 9),
+
       claimant: claimantFromProfile
+
     });
-    // Go directly to conversation entry to start the claim
-    setView('conversation');
+
+    // Navigate to dashboard for new users instead of conversation
+    // User can create a new claim from there
+    setView('dashboard');
+
   };
 
+
+
   // Phase 2: Combined onboarding handlers (replaces disclaimer + eligibility flow) - LEGACY
+
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
     // Reset all wizard state for fresh claim
@@ -580,666 +1130,1190 @@ const App: React.FC = () => {
     // User declined, stay on landing/dashboard
   };
 
+
   const handleResumeClaim = (claim: ClaimState) => {
+
     // Reset wizard state to avoid stale data from previous claim
+
     resetWizardState();
 
+
+
     // Auto-populate timeline if empty but invoice data exists
+
     let updatedClaim = claim;
+
     if (claim.timeline.length === 0 && claim.invoice.dateIssued) {
+
       const events: TimelineEvent[] = [];
 
+
+
       // Add invoice sent event
+
       events.push({
+
         date: claim.invoice.dateIssued,
+
         description: `Invoice #${claim.invoice.invoiceNumber || 'N/A'} sent for £${claim.invoice.totalAmount?.toFixed(2) || '0.00'}`,
+
         type: 'invoice'
+
       });
 
+
+
       // Add payment due event if due date exists
+
       if (claim.invoice.dueDate) {
+
         events.push({
+
           date: claim.invoice.dueDate,
+
           description: `Payment due for Invoice #${claim.invoice.invoiceNumber || 'N/A'}`,
+
           type: 'payment_due'
+
         });
+
       }
 
+
+
       updatedClaim = { ...claim, timeline: events };
+
     }
+
+
 
     setClaimData(updatedClaim);
 
+
+
     // Smart heuristic to jump to the correct step based on claim completeness
+
     // Use updatedClaim to account for auto-populated timeline
+
     let resumeStep: Step;
+
     if (updatedClaim.status === 'sent') {
+
       resumeStep = Step.PREVIEW;
       setIsFinalized(true);
+
     } else if (updatedClaim.generated) {
+
       resumeStep = Step.DRAFT;
+
     } else if (!updatedClaim.claimant.name || !updatedClaim.defendant.name || !updatedClaim.invoice.totalAmount) {
+
       // Missing essential party/invoice details
       resumeStep = Step.DETAILS;
     } else if (!updatedClaim.assessment) {
+
       // Ensure assessment is run before proceeding
       resumeStep = Step.DETAILS;
     } else if (updatedClaim.timeline.length < 1) {
+
       // Need at least the invoice event
       resumeStep = Step.TIMELINE;
     } else if (!updatedClaim.selectedDocType) {
+
        // No document selected yet - check if they are in consultation or need to start
+
        if (updatedClaim.chatHistory.length > 0) {
+
          resumeStep = Step.QUESTIONS;
        } else {
+
          resumeStep = Step.TIMELINE;
        }
+
     } else {
+
       // Has selected document type (from AI or manual skip)
+
       // Go to Data Review to verify details before Strategy
+
       resumeStep = Step.DATA_REVIEW;
     }
+
     setStep(resumeStep);
+
     setMaxStepReached(resumeStep);
+
     setView('wizard');
+
   };
+
+
 
   // Create Demo Claim for Empty State
+
   const handleCreateDemoClaim = async () => {
+
     setIsProcessing(true);
+
     const demoClaim: ClaimState = {
+
         ...INITIAL_STATE,
+
         id: Math.random().toString(36).substr(2, 9),
+
         source: 'manual',
+
         status: 'draft',
+
         lastModified: Date.now(),
+
         claimant: {
+
             ...INITIAL_STATE.claimant,
+
             name: userProfile?.businessName || 'Your Business Ltd',
+
             type: PartyType.BUSINESS,
+
             email: userProfile?.email || 'accounts@yourbusiness.com',
+
             address: '123 High Street\nLondon',
+
             postcode: 'SW1A 1AA',
+
             city: 'London'
+
         },
+
         defendant: {
+
             ...INITIAL_STATE.defendant,
+
             name: 'Acme Trading Corp',
+
             type: PartyType.BUSINESS,
+
             address: 'Industrial Estate, Unit 5\nManchester',
+
             postcode: 'M1 1AB',
+
             city: 'Manchester'
+
         },
+
         invoice: {
+
             ...INITIAL_STATE.invoice,
+
             invoiceNumber: 'INV-2024-001',
+
             dateIssued: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 45 days ago
+
             dueDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 15 days ago
+
             totalAmount: 1500.00,
+
             description: 'Web Design and Development Services'
+
         },
+
         interest: {
+
             ...INITIAL_STATE.interest,
+
             daysOverdue: 15,
+
             dailyRate: 0.52,
+
             totalInterest: 7.80
+
         },
+
         compensation: 70.00,
+
         timeline: [
+
             {
+
                 date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+
                 type: 'invoice',
+
                 description: 'Invoice INV-2024-001 sent for £1,500.00'
+
             },
+
             {
+
                 date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+
                 type: 'payment_due',
+
                 description: 'Payment due date reached'
+
             },
+
             {
+
                 date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+
                 type: 'chaser',
+
                 description: 'Polite reminder email sent'
+
             }
+
         ]
+
     };
 
-    await saveClaimToStorage(demoClaim);
+
+
+    await saveClaimAndRefreshDeadlines(demoClaim);
+
     const stored = await getStoredClaims();
+
     setDashboardClaims(stored);
+
     setView('dashboard');
+
     setIsProcessing(false);
+
   };
+
+
 
   const handleDeleteClaim = async (id: string) => {
+
     try {
+
       // Delete associated deadlines first
+
       await deleteDeadlinesForClaim(id);
+
       // Then delete the claim
+
       await deleteClaimFromStorage(id);
+
       // Update state
+
       setDashboardClaims(prev => prev.filter(c => c.id !== id));
+
       setDeadlines(prev => prev.filter(d => d.claimId !== id));
+
     } catch (error) {
+
       console.error('Failed to delete claim:', error);
+
       setError('Failed to delete claim. Please try again.');
+
     }
+
   };
+
+
 
   // GDPR Data Management Handlers
+
   const handleExportAllData = async () => {
+
     try {
+
       const blob = await exportAllUserData();
+
       const url = URL.createObjectURL(blob);
+
       const link = document.createElement('a');
+
       link.href = url;
+
       link.download = `claimcraft-backup-${new Date().toISOString().split('T')[0]}.json`;
+
       link.click();
+
       URL.revokeObjectURL(url);
+
       console.log('✅ Data exported successfully');
+
     } catch (error) {
+
       console.error('Failed to export data:', error);
+
       alert('Failed to export data. Please try again.');
+
     }
+
   };
 
+
+
   const handleDeleteAllData = async () => {
+
     const confirmed = confirm(
+
       '⚠️ WARNING: This will PERMANENTLY delete all your claims, settings, and connections.\n\n' +
+
       'This action CANNOT be undone.\n\n' +
+
       'Are you absolutely sure you want to delete all your data?'
+
     );
+
+
 
     if (!confirmed) return;
 
+
+
     // Double confirmation for safety
+
     const doubleConfirm = confirm(
+
       '🔴 FINAL CONFIRMATION\n\n' +
+
       'This is your last chance. All your claim data will be lost forever.\n\n' +
+
       'Click OK to permanently delete everything, or Cancel to go back.'
+
     );
+
+
 
     if (!doubleConfirm) return;
 
+
+
     try {
+
       await deleteAllUserData();
+
       setDashboardClaims([]);
+
       setAccountingConnection(null);
+
       setUserProfile(null); // Reset user profile
+
       setView('landing');
+
       alert('✅ All data has been permanently deleted. You will be redirected to the landing page.');
+
     } catch (error) {
+
       console.error('Failed to delete all data:', error);
+
       alert('Failed to delete data. Please try clearing your browser data manually.');
+
     }
+
   };
+
+
 
   // Xero Import Handlers
+
   const handleOpenAccountingModal = () => {
+
     setShowAccountingModal(true);
+
   };
+
+
 
   const handleAccountingConnectionChange = (connection: AccountingConnection | null) => {
+
     setAccountingConnection(connection);
+
   };
+
+
 
   const handleXeroImport = async (importedClaims: ClaimState[]) => {
+
     // Save all imported claims to storage
+
     for (const claim of importedClaims) {
-      await saveClaimToStorage(claim);
+
+      await saveClaimAndRefreshDeadlines(claim);
+
     }
+
+
 
     // Reload claims from storage
+
     const storedClaims = await getStoredClaims();
+
     setDashboardClaims(storedClaims);
+
+
 
     // Close importer
+
     setShowXeroImporter(false);
 
+
+
     // Show success message (you could add a toast notification here)
+
     console.log(`✅ Successfully imported ${importedClaims.length} invoice(s) from Xero`);
+
   };
+
+
 
   const handleExitWizard = async () => {
+
     const timestampedClaim = { ...claimData, lastModified: Date.now() };
 
+
+
     // 1. Save to Storage
-    await saveClaimToStorage(timestampedClaim);
+
+    await saveClaimAndRefreshDeadlines(timestampedClaim);
+
+
 
     // 2. Update UI State
+
     const storedClaims = await getStoredClaims();
+
     setDashboardClaims(storedClaims);
+
     
+
     setView('dashboard');
+
   };
+
+
 
   const handleEnterApp = async () => {
+
     // Check for existing profile
+
     const profile = userProfile || await getUserProfile();
+
+
 
     if (!profile) {
+
       // First-time user: show onboarding
+
       setView('onboarding');
+
     } else if (dashboardClaims.length === 0) {
+
       // Returning user with no claims: go to conversation to start first claim
+
       resetWizardState();
+
       const claimantFromProfile = profileToClaimantParty(profile);
+
       setClaimData({
+
         ...INITIAL_STATE,
+
         id: Math.random().toString(36).substr(2, 9),
+
         claimant: claimantFromProfile
+
       });
+
       setView('conversation');
+
     } else {
+
       // Returning user with claims: go to dashboard
+
       setView('dashboard');
+
     }
+
   };
+
+
 
   // --- Calendar/Deadline Handlers ---
+
   const handleCalendarClick = () => {
+
     setView('calendar');
+
   };
+
+
 
   // --- Settings Handlers ---
-  const handleSettingsClick = async () => {
-    // Ensure we have a loaded profile before entering Settings.
-    // This avoids routing issues if the user clicks quickly before initial load completes.
-    const profile = userProfile || await getUserProfile();
-    if (profile) {
-      setUserProfile(profile);
+
+  const handleSettingsClick = () => {
       setView('settings');
-      return;
-    }
-    // No accepted profile yet -> route to onboarding gate
-    setView('onboarding');
+
   };
+
+
 
   const handleSettingsSave = async (updatedProfile: UserProfile) => {
+
     await saveUserProfile(updatedProfile);
+
     setUserProfile(updatedProfile);
+
     setView('dashboard');
+
   };
+
+
 
   const handleDeadlineClick = (deadline: Deadline) => {
+
     // Find the associated claim and open it
+
     const claim = dashboardClaims.find(c => c.id === deadline.claimId);
+
     if (claim) {
+
       setClaimData(claim);
+
       setStep(Step.SOURCE);
       setView('wizard');
+
     }
+
   };
+
+
 
   const handleCompleteDeadline = async (deadline: Deadline) => {
+
     const updatedDeadline = markDeadlineComplete(deadline);
+
     await saveDeadline(updatedDeadline);
 
+
+
     // Refresh deadlines
+
     const storedDeadlines = await getDeadlines();
+
     setDeadlines(storedDeadlines);
+
   };
+
+
 
   const handleViewAllDeadlines = () => {
+
     setView('calendar');
+
   };
+
+
 
   // Get count of upcoming deadlines for sidebar badge
+
   const upcomingDeadlinesCount = getUpcomingDeadlines(dashboardClaims, deadlines, 7).length;
 
+
+
   // --- Wizard Logic (Existing) ---
+
   useEffect(() => {
+
     if (view !== 'wizard') return;
 
+
+
     // Validate date relationship
+
     if (claimData.invoice.dateIssued && claimData.invoice.dueDate) {
+
       const dateValidation = validateDateRelationship(
+
         claimData.invoice.dateIssued,
+
         claimData.invoice.dueDate
+
       );
+
       if (!dateValidation.isValid) {
+
         setDateValidationError(dateValidation.error || 'Invalid date relationship');
+
       } else {
+
         setDateValidationError(null);
+
       }
+
     } else {
+
       setDateValidationError(null);
+
     }
+
+
 
     const interest = calculateInterest(
+
       claimData.invoice.totalAmount,
+
       claimData.invoice.dateIssued,
+
       claimData.invoice.dueDate,
+
       claimData.claimant.type,
+
       claimData.defendant.type
+
     );
+
+
 
     // Verify interest calculation
+
     if (interest.totalInterest > 0 && interest.daysOverdue > 0) {
+
       const isB2B = claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS;
+
       const rate = isB2B ? LATE_PAYMENT_ACT_RATE : 8.0;
+
       const interestValidation = validateInterestCalculation(
+
         claimData.invoice.totalAmount,
+
         rate,
+
         interest.daysOverdue,
+
         interest.totalInterest
+
       );
+
       if (!interestValidation.isValid) {
+
         console.warn('Interest calculation discrepancy:', interestValidation.error);
+
       }
+
     }
+
+
 
     const compensation = calculateCompensation(
+
         claimData.invoice.totalAmount,
+
         claimData.claimant.type,
+
         claimData.defendant.type
+
     );
+
     // Court fee should be based on total claim value (principal + interest + compensation)
+
     const totalClaim = claimData.invoice.totalAmount + interest.totalInterest + compensation;
+
     const courtFee = calculateCourtFee(totalClaim);
+
     setClaimData(prev => ({ ...prev, interest, courtFee, compensation }));
+
   }, [
+
       claimData.invoice.totalAmount,
+
       claimData.invoice.dateIssued,
+
       claimData.invoice.dueDate,
+
       claimData.claimant.type,
+
       claimData.defendant.type,
+
       view
+
   ]);
+
+
 
   // Reset viability acknowledgment when key claim data changes
+
   // This ensures users must re-acknowledge viability issues if they modify critical fields
+
   useEffect(() => {
+
     if (hasAcknowledgedViability) {
+
       setHasAcknowledgedViability(false);
+
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [
+
     claimData.invoice.totalAmount,
+
     claimData.claimant.type,
+
     claimData.claimant.name,
+
     claimData.defendant.type,
+
     claimData.defendant.name,
+
     claimData.defendant.solvencyStatus
+
   ]);
 
-  const calculateInterest = (
-    amount: number,
-    dateIssued: string,
-    dueDate: string | undefined,
-    claimantType: PartyType,
-    defendantType: PartyType
-  ): InterestData => {
-    if (!dateIssued || !amount) {
-      return {
-        daysOverdue: 0,
-        dailyRate: 0,
-        totalInterest: 0
-      };
-    }
 
-    // Determine the payment due date
-    // If dueDate is provided, use it. Otherwise, assume default payment terms.
-    let paymentDue: Date;
-    if (dueDate) {
-      paymentDue = new Date(dueDate);
-    } else {
-      // Fallback: invoice date + default payment terms
-      paymentDue = new Date(dateIssued);
-      paymentDue.setDate(paymentDue.getDate() + DEFAULT_PAYMENT_TERMS_DAYS);
-    }
 
-    const now = new Date();
-    const diffTime = now.getTime() - paymentDue.getTime();
-    const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
 
-    // CRITICAL FIX: Use correct interest rate based on party types
-    // B2B = Late Payment of Commercial Debts (Interest) Act 1998 (BoE + 8% = 12.75%)
-    // B2C = County Courts Act 1984 s.69 (8% per annum)
-    // Note: Sole Traders are businesses for the purpose of the 1998 Act
-    const isClaimantBusiness = claimantType === PartyType.BUSINESS || claimantType === PartyType.SOLE_TRADER;
-    const isDefendantBusiness = defendantType === PartyType.BUSINESS || defendantType === PartyType.SOLE_TRADER;
-    const isB2B = isClaimantBusiness && isDefendantBusiness;
-    
-    const interestRate = isB2B ? LATE_PAYMENT_ACT_RATE : 8.0; // 12.75% for B2B, 8% for B2C
 
-    const annualRate = interestRate / 100;
-    const dailyRate = (amount * annualRate) / DAILY_INTEREST_DIVISOR;
-    const totalInterest = dailyRate * daysOverdue;
-
-    return {
-      daysOverdue,
-      dailyRate: parseFloat(dailyRate.toFixed(4)),
-      totalInterest: parseFloat(totalInterest.toFixed(2))
-    };
-  };
 
   const updateInvoice = (field: string, val: string | number) => {
+
     setClaimData(prev => {
+
         const newState = { ...prev, invoice: { ...prev.invoice, [field]: val }, assessment: null };
+
         
+
         // Sync invoice date with timeline if it exists
+
         if (field === 'dateIssued' && newState.timeline.length > 0) {
+
             const newTimeline = newState.timeline.map(e => 
+
                 e.type === 'invoice' ? { ...e, date: val as string } : e
+
             );
+
             newState.timeline = newTimeline;
+
         }
+
         
+
         return newState;
+
     });
+
   };
+
   const updateTimeline = (events: TimelineEvent[]) => 
+
     setClaimData(prev => ({ ...prev, timeline: events }));
 
+
+
   const handleEvidenceAnalysis = async () => {
+
     if (claimData.evidence.length === 0) return;
+
     setIsProcessing(true);
+
     setProcessingText("Classifying & Analyzing Documents...");
+
     try {
+
         const result = await analyzeEvidence(claimData.evidence);
+
         
+
         // Update evidence with classifications
+
         const updatedEvidence = claimData.evidence.map((file, idx) => {
+
            // Simple match by index if names don't match, or try name matching
+
            // The AI returns a list. We try to map by name or fall back to order.
+
            const match = result.classifications?.find(c => c.fileName === file.name) 
+
                       || result.classifications?.[idx];
+
            
+
            return match ? { ...file, classification: match.type } : { ...file, classification: "Unclassified" };
+
         });
 
+
+
         // Merge AI results with existing data
+
         const mergedClaimant = { ...claimData.claimant, ...result.claimant };
+
         const mergedDefendant = { ...claimData.defendant, ...result.defendant };
 
+
+
         // Infer county from postcode if AI didn't return it
+
         if (!mergedClaimant.county && mergedClaimant.postcode) {
+
           mergedClaimant.county = getCountyFromPostcode(mergedClaimant.postcode);
-        }
-        if (!mergedDefendant.county && mergedDefendant.postcode) {
-          mergedDefendant.county = getCountyFromPostcode(mergedDefendant.postcode);
+
         }
 
+        if (!mergedDefendant.county && mergedDefendant.postcode) {
+
+          mergedDefendant.county = getCountyFromPostcode(mergedDefendant.postcode);
+
+        }
+
+
+
         let newState = {
+
           ...claimData,
+
           evidence: updatedEvidence,
+
           source: 'upload' as const,
+
           claimant: mergedClaimant,
+
           defendant: mergedDefendant,
+
           invoice: { ...claimData.invoice, ...result.invoice },
+
           timeline: result.timelineEvents || []
+
         };
+
         if(newState.timeline.length === 0 && newState.invoice.dateIssued) {
+
            newState.timeline.push({
+
              date: newState.invoice.dateIssued,
+
              description: `Invoice ${newState.invoice.invoiceNumber} sent`,
+
              type: 'invoice'
+
            });
+
         }
+
         if (newState.defendant.type === PartyType.BUSINESS && newState.defendant.name) {
+
             const companyDetails = await searchCompaniesHouse(newState.defendant.name);
+
             if (companyDetails) newState.defendant = { ...newState.defendant, ...companyDetails };
+
         }
+
         setClaimData(newState);
+
         handleStepChange(Step.DETAILS);
         setIsEditingAnalysis(false);
     } catch (err) {
+
         setError("Failed to analyze documents. Please ensure they are legible.");
+
     } finally {
+
         setIsProcessing(false);
+
     }
+
   };
 
+
+
   const handleManualEntry = () => {
+
     setClaimData(prev => ({ ...prev, source: 'manual' }));
+
     handleStepChange(Step.DETAILS);
   };
 
+
+
   const handleLegacyXeroImport = async (importedData: Partial<ClaimState>) => {
+
     const mergedClaimant = (claimData.claimant.name && claimData.claimant.name.length > 0)
+
       ? claimData.claimant
+
       : { ...claimData.claimant, ...importedData.claimant };
+
     const mergedDefendant = { ...claimData.defendant, ...importedData.defendant };
+
     const mergedTimeline = [...(claimData.timeline || []), ...(importedData.timeline || [])];
 
+
+
     // Infer county from postcode if not set (Xero often doesn't have UK county data)
+
     if (!mergedClaimant.county && mergedClaimant.postcode) {
+
       mergedClaimant.county = getCountyFromPostcode(mergedClaimant.postcode);
-    }
-    if (!mergedDefendant.county && mergedDefendant.postcode) {
-      mergedDefendant.county = getCountyFromPostcode(mergedDefendant.postcode);
+
     }
 
-    let newState = {
-      ...claimData,
-      ...importedData,
-      claimant: mergedClaimant,
-      defendant: mergedDefendant,
-      timeline: mergedTimeline
-    };
-    setIsProcessing(true);
-    setProcessingText("Enriching Xero Data...");
-    try {
-       if (newState.defendant.type === PartyType.BUSINESS && newState.defendant.name) {
-          const companyDetails = await searchCompaniesHouse(newState.defendant.name);
-          if (companyDetails) newState.defendant = { ...newState.defendant, ...companyDetails };
-       }
-    } finally {
-       setIsProcessing(false);
+    if (!mergedDefendant.county && mergedDefendant.postcode) {
+
+      mergedDefendant.county = getCountyFromPostcode(mergedDefendant.postcode);
+
     }
+
+
+
+    let newState = {
+
+      ...claimData,
+
+      ...importedData,
+
+      claimant: mergedClaimant,
+
+      defendant: mergedDefendant,
+
+      timeline: mergedTimeline
+
+    };
+
+    setIsProcessing(true);
+
+    setProcessingText("Enriching Xero Data...");
+
+    try {
+
+       if (newState.defendant.type === PartyType.BUSINESS && newState.defendant.name) {
+
+          const companyDetails = await searchCompaniesHouse(newState.defendant.name);
+
+          if (companyDetails) newState.defendant = { ...newState.defendant, ...companyDetails };
+
+       }
+
+    } finally {
+
+       setIsProcessing(false);
+
+    }
+
     setClaimData(newState as ClaimState);
+
     handleStepChange(Step.DETAILS);
     setIsEditingAnalysis(false);
   };
 
+
+
   const handleBulkImport = async (claims: ClaimState[]) => {
+
     setIsProcessing(true);
+
     setProcessingText(`Importing ${claims.length} claims...`);
+
     
+
     // Enrich with Companies House if possible
+
     const enrichedClaims: ClaimState[] = [];
+
     
+
     // Process in chunks or parallel if needed, for now sequential for safety
+
     for (const claim of claims) {
+
         let processed = { ...claim };
+
         if (processed.defendant.type === PartyType.BUSINESS && processed.defendant.name) {
+
              try {
+
                 const details = await searchCompaniesHouse(processed.defendant.name);
+
                 if (details) {
+
                     processed.defendant = { ...processed.defendant, ...details };
+
                 }
+
              } catch (e) {
+
                  // fail silently for bulk import enrichment
+
              }
+
         }
+
         
+
         // Calculate fees
+
         const interest = calculateInterest(processed.invoice.totalAmount, processed.invoice.dateIssued, processed.invoice.dueDate, processed.claimant.type, processed.defendant.type);
+
         const compensation = calculateCompensation(processed.invoice.totalAmount, processed.claimant.type, processed.defendant.type);
+
         const totalClaim = processed.invoice.totalAmount + interest.totalInterest + compensation;
+
         const courtFee = calculateCourtFee(totalClaim);
+
         
+
         processed = {
+
             ...processed,
+
             interest,
+
             compensation,
+
             courtFee,
+
             // If overdue, update status (unless it was already something advanced like 'court')
+
             status: (interest.daysOverdue > 0 && ['draft', 'overdue'].includes(processed.status)) ? 'overdue' : processed.status
+
         };
 
-        await saveClaimToStorage(processed);
+
+
+        await saveClaimAndRefreshDeadlines(processed);
+
         enrichedClaims.push(processed);
+
     }
+
+
 
     const stored = await getStoredClaims();
+
     setDashboardClaims(stored);
+
     setIsProcessing(false);
+
     setShowCsvModal(false);
+
     
+
     // If only 1 imported, open it directly
+
     if (claims.length === 1) {
+
         handleResumeClaim(enrichedClaims[0]);
+
     } else {
+
         setView('dashboard');
+
     }
+
   };
 
+
+
   const runAssessment = async () => {
+
     setIsProcessing(true);
+
     setProcessingText("Running Legal Judgment Agent...");
 
+
+
     // 1. Basic Rules Assessment
+
     const assessment = assessClaimViability(claimData);
+
+
 
     // AI Assessment removed from here - moved to post-chat (handleContinueFromChat)
     // We only init the structure here so the UI doesn't break
     assessment.strengthAnalysis = "Pending AI consultation..."; 
 
+
     setClaimData(prev => ({ ...prev, assessment }));
+
     setIsProcessing(false);
 
+
+
     // Check for viability issues and show blocking modal if needed
+
     if (!assessment.isViable && !hasAcknowledgedViability) {
+
       const issues: Array<{ type: 'statute_barred' | 'defendant_dissolved' | 'exceeds_track' | 'other'; message: string }> = [];
 
+
+
       // Check for specific viability issues
+
       if (assessment) {
+
         if (assessment.limitationCheck && !assessment.limitationCheck.passed) {
+
           issues.push({
+
             type: 'statute_barred',
+
             message: assessment.limitationCheck.message || 'This claim may be statute-barred under the Limitation Act 1980.'
+
           });
+
         }
+
+
 
         if (assessment.solvencyCheck && !assessment.solvencyCheck.passed) {
+
           issues.push({
+
             type: 'defendant_dissolved',
+
             message: assessment.solvencyCheck.message || 'The defendant company appears to be dissolved or insolvent.'
+
           });
+
         }
+
+
 
         if (assessment.valueCheck && !assessment.valueCheck.passed) {
+
           issues.push({
+
             type: 'exceeds_track',
+
             message: assessment.valueCheck.message || 'This claim exceeds the Small Claims Track limit of £10,000.'
+
           });
+
         }
+
       }
+
+
 
       // Generic issue if no specific ones found
+
       if (issues.length === 0) {
+
         issues.push({
+
           type: 'other',
+
           message: 'The claim has failed viability checks. Please review the assessment details for more information.'
+
         });
+
       }
 
+
+
       setViabilityIssues(issues);
+
       setShowViabilityWarning(true);
+
     } else {
+
       // If viable (or no critical issues), proceed to Assessment Report step
+
       handleStepChange(Step.VIABILITY);
     }
   };
@@ -1434,364 +2508,716 @@ const App: React.FC = () => {
     }
   };
 
+
   // Pre-validation before document generation
+
   const validateClaimData = (data: ClaimState): { isValid: boolean; errors: string[] } => {
+
     const errors: string[] = [];
 
+
+
     // Validate Claimant
+
     if (!data.claimant.name.trim()) {
+
       errors.push("Claimant name is required");
+
     }
+
     if (!data.claimant.address.trim()) {
+
       errors.push("Claimant address is required");
+
     }
+
     if (!data.claimant.city.trim()) {
+
       errors.push("Claimant town/city is required");
+
     }
+
     if (!data.claimant.postcode.trim()) {
+
       errors.push("Claimant postcode is required");
+
     }
+
     if (!data.claimant.county.trim()) {
+
       errors.push("Claimant county is required");
+
     }
+
+
 
     // Validate Defendant
+
     if (!data.defendant.name.trim()) {
+
       errors.push("Defendant name is required");
+
     }
+
     if (!data.defendant.address.trim()) {
+
       errors.push("Defendant address is required");
+
     }
+
     if (!data.defendant.city.trim()) {
+
       errors.push("Defendant town/city is required");
+
     }
+
     if (!data.defendant.postcode.trim()) {
+
       errors.push("Defendant postcode is required");
+
     }
+
     if (!data.defendant.county.trim()) {
+
       errors.push("Defendant county is required");
+
     }
+
+
 
     // Validate Invoice
+
     if (!data.invoice.invoiceNumber.trim()) {
+
       errors.push("Invoice number is required");
+
     }
+
     if (!data.invoice.dateIssued) {
+
       errors.push("Invoice date is required");
+
     }
+
     if (data.invoice.totalAmount <= 0) {
+
       errors.push("Invoice amount must be greater than £0");
+
     }
+
+
 
     // Validate Timeline
+
     if (!data.timeline || data.timeline.length === 0) {
+
       errors.push("At least one timeline event is required");
+
     }
+
+
 
     // Check for LBA requirement on court documents (Pre-Action Protocol compliance)
+
     const courtDocuments = [
+
       DocumentType.FORM_N1,
+
       DocumentType.DEFAULT_JUDGMENT,
+
       DocumentType.DIRECTIONS_QUESTIONNAIRE,
+
       DocumentType.DEFENCE_RESPONSE,
+
       DocumentType.TRIAL_BUNDLE,
+
       DocumentType.SKELETON_ARGUMENT
+
     ];
 
+
+
     if (courtDocuments.includes(data.selectedDocType)) {
+
       const hasLBA = data.timeline?.some(event => event.type === 'lba_sent');
+
       if (!hasLBA) {
+
         errors.push("Letter Before Action (LBA) required before court proceedings - add an LBA event to your timeline or generate an LBA document first");
+
       }
+
     }
+
+
 
     return {
+
       isValid: errors.length === 0,
+
       errors
+
     };
+
   };
+
+
 
   // Helper: Check if the document type requires court form data modal
+
   const requiresCourtFormData = (docType: DocumentType): boolean => {
+
     return [
+
       DocumentType.ADMISSION,           // N225A
+
       DocumentType.DIRECTIONS_QUESTIONNAIRE, // N180
+
       DocumentType.DEFAULT_JUDGMENT     // N225
+
     ].includes(docType);
+
   };
+
+
 
   // Handler for court form data submission
+
   const handleCourtFormDataSubmit = (data: CourtFormData) => {
+
     setClaimData(prev => ({
+
       ...prev,
+
       courtFormData: data,
+
       hasVerifiedInterest: true
+
     }));
+
     setShowCourtFormModal(false);
+
     handleStepChange(Step.DRAFT);
+
   };
+
+
 
   // Handler for proceeding to draft - checks if court form data is needed
+
   const handleProceedToDraft = () => {
+
     if (requiresCourtFormData(claimData.selectedDocType)) {
+
       setShowCourtFormModal(true);
+
     } else {
+
       setClaimData(prev => ({ ...prev, hasVerifiedInterest: true }));
+
       handleStepChange(Step.DRAFT);
+
     }
+
   };
+
+
 
   const handleDraftClaim = async (forceRegenerate = false) => {
+
     // Check for existing draft to prevent accidental overwrite
+
     const isForced = typeof forceRegenerate === 'boolean' ? forceRegenerate : false;
+
     
+
     if (claimData.generated && !isForced) {
+
       setShowRegenerateConfirm(true);
+
       return;
+
     }
+
+
 
     // Pre-validate claim data
+
     const validation = validateClaimData(claimData);
+
     if (!validation.isValid) {
+
       const errorMessage = `Cannot generate document. Please fix the following:\n\n${validation.errors.map(e => `• ${e}`).join('\n')}`;
+
       setError(errorMessage);
+
       return;
+
     }
+
+
 
     // Define the actual generation function
+
     const proceedWithGeneration = async () => {
+
       setIsProcessing(true);
+
       setProcessingText(`Generating ${claimData.selectedDocType}...`);
+
       try {
+
         // Use new DocumentBuilder with template + AI hybrid approach
+
         const result = await DocumentBuilder.generateDocument(claimData);
+
         setClaimData(prev => ({ ...prev, generated: result }));
+
         handleStepChange(Step.DRAFT);
 
+
+
         // Show validation warnings to user if any
+
         if (result.validation?.warnings && result.validation.warnings.length > 0) {
+
           console.warn('Document warnings:', result.validation.warnings);
+
         }
+
       } catch (e: any) {
+
         setError(e.message || "Document generation failed. Please check your data and try again.");
+
         console.error('Draft generation error:', e);
+
       } finally {
+
         setIsProcessing(false);
+
       }
+
     };
 
+
+
     // Phase 2: Check inline interest verification (replaces modal)
+
     if (!claimData.hasVerifiedInterest) {
+
       setError("Please verify the interest rate calculation before generating documents.");
+
       return;
+
     }
+
+
 
     // COMPLIANCE MODAL FLOW:
+
     // 1. Interest Rate Confirmation - NOW INLINE (Phase 2 UX improvement)
+
     // 2. Litigant in Person Warning (N1 only) - Still modal
+
     // 3. Statement of Truth Warning (N1, N225, N225A - shown later in signature step)
 
+
+
     // If N1, show LiP modal before generation
+
     if (claimData.selectedDocType === DocumentType.FORM_N1) {
+
       setPendingAction(() => proceedWithGeneration);
+
       setShowLiPModal(true);
+
     } else {
+
       // Otherwise, proceed directly
+
       await proceedWithGeneration();
+
     }
+
   };
+
   
+
   const handleRefineDraft = async () => {
+
      if (!refineInstruction || !claimData.generated) return;
 
+
+
      setIsProcessing(true);
+
      try {
+
         // Use new DocumentBuilder.refineDocument with validation
+
         const refined = await DocumentBuilder.refineDocument(
+
           claimData.generated.content,
+
           refineInstruction,
+
           claimData
+
         );
+
         setClaimData(prev => {
+
             if (!prev.generated) return prev;
+
             return {
+
                 ...prev,
+
                 generated: { ...prev.generated, content: refined }
+
             };
+
         });
+
         setRefineInstruction('');
+
         setShowRefineInput(false);
+
      } catch (e) {
+
         console.error("Refinement failed:", e);
+
         setError("Failed to refine document. Please try again.");
+
      } finally {
+
         setIsProcessing(false);
+
      }
+
   };
 
+
+
   const handlePrePreview = async () => {
+
     // Validation is now built into DocumentBuilder.generateDocument()
+
     // So we can go straight to preview
+
     setIsFinalized(false);
+
     handleStepChange(Step.PREVIEW);
   };
 
+
+
   const handleConfirmDraft = async () => {
+
       const updatedClaim = { ...claimData, status: 'review' as const };
+
       setClaimData(updatedClaim);
+
       setIsFinalized(true);
+
       // Auto save on confirm
-      await saveClaimToStorage(updatedClaim);
+
+      await saveClaimAndRefreshDeadlines(updatedClaim);
+
+
 
       // Update dashboard state immediately so it's reflected if they exit
+
       const stored = await getStoredClaims();
+
       setDashboardClaims(stored);
+
   };
+
+
 
   // Handle payment completion from DocumentPreview
+
   const handlePaymentComplete = async (paymentIntentId: string) => {
+
     try {
+
       // Verify payment server-side before trusting
+
       const verification = await verifyPayment(paymentIntentId);
 
+
+
       if (verification.paid) {
+
         // Update local state
+
         const updatedClaim = {
+
           ...claimData,
+
           hasPaid: true,
+
           paymentId: paymentIntentId,
+
           paidAt: new Date().toISOString()
+
         };
+
         setClaimData(updatedClaim);
 
+
+
         // Persist to localStorage
-        await saveClaimToStorage(updatedClaim);
+
+        await saveClaimAndRefreshDeadlines(updatedClaim);
+
+
 
         // Update dashboard state
+
         const stored = await getStoredClaims();
+
         setDashboardClaims(stored);
 
+
+
         console.log('Payment completed successfully:', paymentIntentId);
+
       } else {
+
         console.error('Payment verification failed - status:', verification.status);
+
       }
+
     } catch (error) {
+
       console.error('Failed to verify payment:', error);
+
     }
+
   };
+
+
 
   // Issue 2 fix: Use functional update pattern to avoid stale closures
+
   const handleClaimantChange = (newParty: Party) => {
+
     setClaimData(prev => {
+
       const typeChanged = prev.claimant.type !== newParty.type;
+
       return {
+
         ...prev,
+
         claimant: newParty,
+
         assessment: null, // Reset assessment if party changes
+
         // Reset verified interest if type changes (Issue 1 & 2 fix)
+
         hasVerifiedInterest: typeChanged ? false : prev.hasVerifiedInterest
+
       };
+
     });
+
   };
+
+
 
   const handleDefendantChange = (newParty: Party) => {
+
     setClaimData(prev => {
+
       const typeChanged = prev.defendant.type !== newParty.type;
+
       return {
+
         ...prev,
+
         defendant: newParty,
+
         assessment: null,
+
         // Reset verified interest if type changes (Issue 1 & 2 fix)
+
         hasVerifiedInterest: typeChanged ? false : prev.hasVerifiedInterest
+
       };
+
     });
+
   };
 
+
+
   const renderWizardStep = () => {
+
       switch (step) {
+
       case Step.SOURCE: {
         // Check if claim already has data (source is set, or has invoice data)
+
         const hasExistingData = claimData.source !== 'none' || claimData.invoice.totalAmount > 0 || claimData.defendant.name;
 
+
+
         return (
-          <div className="max-w-7xl mx-auto animate-fade-in py-6">
+
+          <div className="max-w-5xl mx-auto animate-fade-in py-10">
              {/* Header */}
-             <div className="mb-6">
+
+             <div className="mb-8">
                 <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">
+
                   {hasExistingData ? 'Evidence & Documents' : 'New Claim'}
+
                 </h2>
+
                 <p className="text-slate-500">
+
                   {hasExistingData
+
                     ? 'Upload supporting evidence for your claim.'
+
                     : 'Import your claim data or enter manually.'}
+
                 </p>
+
              </div>
+
+
 
              {/* Option Cards - only show if no existing data */}
+
              {!hasExistingData && (
-               <div className="grid md:grid-cols-2 gap-4 mb-6">
+
+               <div className="grid md:grid-cols-2 gap-4 mb-8">
                   <button
+
                     onClick={handleOpenAccountingModal}
+
                     className={`p-6 rounded-xl transition-all flex flex-col items-center gap-3 border hover:shadow-md hover:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-500/30 ${
+
                       accountingConnection ? 'bg-teal-50 border-teal-200' : 'bg-white border-slate-200'
+
                     }`}
+
                   >
+
                       <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
+
                           <FileText className="w-5 h-5 text-teal-500"/>
+
                       </div>
+
                       <div className="text-center">
+
                          <span className="block font-semibold text-slate-900">{accountingConnection ? "Import from " + accountingConnection.provider : "Connect Accounting"}</span>
+
                          <span className="text-sm text-slate-500 mt-1 block">{accountingConnection ? `${accountingConnection.organizationName}` : "Xero, QuickBooks & more"}</span>
+
                       </div>
+
                   </button>
 
+
+
                   <button
+
                     onClick={handleManualEntry}
+
                     className="p-6 bg-white border border-slate-200 hover:border-teal-300 rounded-xl transition-all flex flex-col items-center gap-3 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+
                   >
+
                       <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
+
                           <Keyboard className="w-5 h-5 text-slate-600"/>
+
                       </div>
+
                       <div className="text-center">
+
                          <span className="block font-semibold text-slate-900">Manual Entry</span>
+
                          <span className="text-sm text-slate-500 mt-1 block">Type in claim details</span>
+
                       </div>
+
                   </button>
+
                </div>
+
              )}
+
+
 
              {/* Evidence Locker Section */}
+
              <div className="bg-white rounded-xl border border-slate-200 p-6">
+
                 <h3 className="text-xl font-semibold text-slate-900 text-center mb-2">Evidence Locker</h3>
+
                 <p className="text-slate-500 text-center text-sm mb-6">
+
                   {hasExistingData
+
                     ? 'Add contracts, emails, or other documents to strengthen your claim.'
+
                     : 'Upload your Invoices, Contracts, and Emails (PDFs or Images). Gemini will analyze the entire bundle.'}
+
                 </p>
 
+
+
                 <EvidenceUpload
+
                   files={claimData.evidence}
+
                   onAddFiles={(newFiles) => setClaimData(prev => ({...prev, evidence: [...prev.evidence, ...newFiles]}))}
+
                   onRemoveFile={(idx) => setClaimData(prev => ({...prev, evidence: prev.evidence.filter((_, i) => i !== idx)}))}
+
                   onAnalyze={hasExistingData ? undefined : handleEvidenceAnalysis}
+
                   isProcessing={isProcessing}
+
                 />
+
              </div>
 
+
+
              {/* Continue button when claim already has data */}
+
              {hasExistingData && (
+
                <div className="mt-6 flex justify-end">
+
                  <Button
+
                    onClick={() => handleStepChange(Step.DETAILS)}
                    rightIcon={<ArrowRight className="w-5 h-5" />}
+
                  >
+
                    Continue to Claim Details
                  </Button>
+
                </div>
+
              )}
+
           </div>
+
         );
+
       }
+
       
       case Step.DETAILS:
         // Logic: If Source is Manual OR User has clicked "Edit Analysis", show full form.
@@ -1801,45 +3227,64 @@ const App: React.FC = () => {
         const isMissingCriticalData = !claimData.claimant.name || !claimData.defendant.name || !claimData.invoice.totalAmount;
         
         if (claimData.source === 'manual' || isEditingAnalysis || isMissingCriticalData) {
-            return (
-                <div className="space-y-6 animate-fade-in py-6 max-w-7xl mx-auto pb-24">
-                    <Button
-                      variant="ghost"
-                      icon={<ArrowLeft className="w-4 h-4" />}
+        return (
+
+                <div className="space-y-8 animate-fade-in py-10 max-w-5xl mx-auto pb-32">
+            <Button
+
+              variant="ghost"
+
+              icon={<ArrowLeft className="w-4 h-4" />}
+
                       onClick={() => handleStepChange(Step.SOURCE)}
-                      className="w-fit"
-                    >
+              className="w-fit"
+
+            >
+
                       Back to Data Source
-                    </Button>
-                    <div className="text-center mb-6">
+            </Button>
+
+                    <div className="text-center mb-8">
                         <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Claim Details</h2>
                         <p className="text-slate-500">Please ensure all details are correct before legal assessment.</p>
-                    </div>
-                    <div className="grid xl:grid-cols-2 gap-6">
-                        <PartyForm 
+                </div>
+
+                    <div className="grid xl:grid-cols-2 gap-8">
+                <PartyForm
+
                           title="Claimant (You)" 
-                          party={claimData.claimant} 
-                          onChange={handleClaimantChange}
+                  party={claimData.claimant}
+
+                  onChange={handleClaimantChange}
+
                           onValidationChange={setIsClaimantFormValid}
                         />
-                        <PartyForm 
+                <PartyForm
+
                           title="Defendant (Debtor)" 
-                          party={claimData.defendant} 
-                          onChange={handleDefendantChange}
+                  party={claimData.defendant}
+
+                  onChange={handleDefendantChange}
+
                           onValidationChange={setIsDefendantFormValid}
-                        />
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                />
+
+              </div>
+
+                    <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100">
                             <h2 className="text-xl font-bold text-slate-800 font-display">Claim Financials</h2>
                             <Tooltip content="Enter the invoice amount and dates to calculate statutory interest and court fees automatically">
                               <div className="cursor-help">
                                 <HelpCircle className="w-4 h-4 text-slate-400 hover:text-teal-600" />
-                              </div>
+            </div>
+
                             </Tooltip>
-                        </div>
+              </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <Input
+                <Input
+
                               label="Principal Amount (£)"
                               type="number"
                               icon={<PoundSterling className="w-4 h-4" />}
@@ -1848,8 +3293,10 @@ const App: React.FC = () => {
                               required
                               helpText="The original unpaid invoice amount (excluding interest/compensation)"
                               placeholder="e.g. 5000.00"
-                            />
-                            <Input
+                />
+
+                <Input
+
                               label="Invoice Reference"
                               type="text"
                               icon={<FileText className="w-4 h-4" />}
@@ -1861,11 +3308,15 @@ const App: React.FC = () => {
                             />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <Input
-                              label="Invoice Date"
-                              type="date"
+                <Input
+
+                  label="Invoice Date"
+
+                  type="date"
+
                               icon={<Calendar className="w-4 h-4" />}
-                              value={claimData.invoice.dateIssued}
+                  value={claimData.invoice.dateIssued}
+
                               onChange={(e) => {
                                 const newDate = e.target.value;
                                 updateInvoice('dateIssued', newDate);
@@ -1886,8 +3337,10 @@ const App: React.FC = () => {
                               value={claimData.invoice.dueDate}
                               onChange={(e) => updateInvoice('dueDate', e.target.value)}
                               helpText={`Leave blank to use ${DEFAULT_PAYMENT_TERMS_DAYS}-day payment terms`}
-                            />
-                        </div>
+                />
+
+              </div>
+
                         {/* Date validation error */}
                         {dateValidationError && (
                           <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
@@ -1908,12 +3361,14 @@ const App: React.FC = () => {
                             </div>
                           </div>
                         )}
-                    </div>
+            </div>
+
+
 
                     {/* Sticky Footer for Actions */}
-                    <div className="sticky bottom-0 z-30 mt-6">
+                    <div className="sticky bottom-0 z-30 mt-8">
                       <div className="bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
-                        <div className="max-w-7xl mx-auto flex justify-end">
+                        <div className="max-w-5xl mx-auto flex justify-end">
                           <Button
                             onClick={runAssessment}
                             disabled={
@@ -1937,7 +3392,7 @@ const App: React.FC = () => {
         } else {
             // AI/Xero Analysis Summary View
             return (
-                <div className="max-w-7xl mx-auto animate-fade-in py-6">
+                <div className="max-w-3xl mx-auto animate-fade-in py-10">
                     <Button
                       variant="ghost"
                       icon={<ArrowLeft className="w-4 h-4" />}
@@ -1946,12 +3401,12 @@ const App: React.FC = () => {
                     >
                       Back to Data Source
                     </Button>
-                <div className="flex items-center gap-4 mb-6">
+                    <div className="flex items-center gap-4 mb-8">
                         <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center shadow-sm"><CheckCircle className="w-6 h-6 text-green-600" /></div>
                         <div><h2 className="text-3xl font-bold text-slate-900 font-display">Analysis Complete</h2><p className="text-slate-600">We've extracted the key facts. Please verify.</p></div>
                     </div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-200 text-left mb-6 relative overflow-hidden">
-                        <div className="grid grid-cols-2 gap-6 mb-6 relative z-10">
+                    <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 text-left mb-8 relative overflow-hidden">
+                        <div className="grid grid-cols-2 gap-8 mb-8 relative z-10">
                             <div className="p-4 bg-slate-50 rounded-lg border border-slate-100"><span className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 block">Creditor</span><p className="font-bold text-lg text-slate-900">{claimData.claimant.name || "Unknown"}</p><p className="text-sm text-slate-500">{claimData.claimant.city}</p></div>
                             <div className="text-right p-4 bg-slate-50 rounded-lg border border-slate-100"><span className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 block">Debtor</span><p className="font-bold text-lg text-slate-900">{claimData.defendant.name || "Unknown"}</p></div>
                         </div>
@@ -1984,8 +3439,8 @@ const App: React.FC = () => {
 
       case Step.VIABILITY:
         return (
-            <div className="py-6 pb-20">
-                <div className="max-w-7xl mx-auto mb-6">
+            <div className="py-10 pb-32 max-w-5xl mx-auto">
+                <div className="max-w-5xl mx-auto mb-6">
                     <Button
                       variant="ghost"
                       icon={<ArrowLeft className="w-4 h-4" />}
@@ -2006,8 +3461,8 @@ const App: React.FC = () => {
 
       case Step.TIMELINE:
         return (
-            <div className="space-y-6 py-6 pb-20">
-                <div className="max-w-7xl mx-auto">
+            <div className="space-y-8 py-10 pb-32 max-w-5xl mx-auto">
+                <div className="max-w-5xl mx-auto">
                     <Button
                       variant="ghost"
                       icon={<ArrowLeft className="w-4 h-4" />}
@@ -2016,9 +3471,12 @@ const App: React.FC = () => {
                     >
                       Back to Assessment
                     </Button>
-                </div>
-                <TimelineBuilder
-                    events={claimData.timeline}
+              </div>
+
+              <TimelineBuilder
+
+                events={claimData.timeline}
+
                     onChange={(newEvents) => {
                       // Auto-detect LBA sent from timeline events - Issue 1 fix
                       const lbaEvent = newEvents.find(e =>
@@ -2036,138 +3494,260 @@ const App: React.FC = () => {
                     invoiceDate={claimData.invoice.dateIssued}
                 />
 
-                {/* Timeline validation warning */}
-                {claimData.timeline.length === 0 && (
-                  <div className="max-w-7xl mx-auto bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="font-bold text-amber-900 text-sm">Timeline Empty</h4>
-                      <p className="text-amber-800 text-sm mt-1">
-                        Add at least the invoice date to proceed. Additional events (chaser emails, phone calls) strengthen your claim.
-                      </p>
-                    </div>
-                  </div>
-                )}
+
+            {/* Timeline validation warning */}
+
+            {claimData.timeline.length === 0 && (
+
+                  <div className="max-w-4xl mx-auto bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+
+                <div>
+
+                  <h4 className="font-bold text-amber-900 text-sm">Timeline Empty</h4>
+
+                  <p className="text-amber-800 text-sm mt-1">
+
+                    Add at least the invoice date to proceed. Additional events (chaser emails, phone calls) strengthen your claim.
+
+                  </p>
+
+                </div>
+
+              </div>
+
+            )}
+
+
 
                 {/* LBA Status Check - Moved here for earlier capture */}
-                <div className="max-w-7xl mx-auto bg-slate-50 border border-slate-200 rounded-xl p-5">
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={claimData.lbaAlreadySent || false}
-                      onChange={(e) => {
-                        const isChecked = e.target.checked;
+                <div className="max-w-4xl mx-auto bg-slate-50 border border-slate-200 rounded-xl p-5">
+              <label className="flex items-start gap-3 cursor-pointer group">
 
-                        if (!isChecked) {
-                           // Optionally remove the LBA event from timeline if it exists
-                           const newTimeline = claimData.timeline.filter(ev => ev.type !== 'lba_sent');
-                           setClaimData(prev => ({
-                             ...prev,
-                             timeline: newTimeline,
-                             lbaAlreadySent: false,
-                             lbaSentDate: ''
-                           }));
-                        } else {
+                <input
+
+                  type="checkbox"
+
+                  checked={claimData.lbaAlreadySent || false}
+
+                  onChange={(e) => {
+
+                    const isChecked = e.target.checked;
+
+
+
+                    if (!isChecked) {
+
+                      // Optionally remove the LBA event from timeline if it exists
+
+                      const newTimeline = claimData.timeline.filter(ev => ev.type !== 'lba_sent');
+
+                      setClaimData(prev => ({
+
+                        ...prev,
+
+                        timeline: newTimeline,
+
+                        lbaAlreadySent: false,
+
+                        lbaSentDate: ''
+
+                      }));
+
+                    } else {
+
                            // If checked manually without a date, default to today or let them pick
                            // We will add the timeline event when the date is set or confirmed
-                           if (!claimData.lbaSentDate) {
-                               const today = new Date().toISOString().split('T')[0];
+                      if (!claimData.lbaSentDate) {
 
-                               // Add timeline event automatically
-                               const newEvent: TimelineEvent = {
-                                   date: today,
-                                   description: 'Letter Before Action (LBA) sent to defendant',
-                                   type: 'lba_sent'
-                               };
-                               setClaimData(prev => ({
-                                 ...prev,
-                                 timeline: [...prev.timeline, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-                                 lbaAlreadySent: true,
-                                 lbaSentDate: today
-                               }));
-                           } else {
-                               setClaimData(prev => ({ ...prev, lbaAlreadySent: true }));
-                           }
-                        }
-                      }}
-                      className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
-                    />
-                    <div className="flex-1">
-                      <span className="font-semibold text-slate-900 group-hover:text-teal-700 transition-colors">
-                        I have already sent a Letter Before Action (LBA)
-                      </span>
-                      <p className="text-sm text-slate-500 mt-1">
-                        An LBA is a formal demand letter giving the debtor typically 30 days to pay before court action.
-                        If you've already sent one, check this box.
-                      </p>
-                    </div>
-                  </label>
+                        const today = new Date().toISOString().split('T')[0];
 
-                  {claimData.lbaAlreadySent && (
-                    <div className="mt-4 pl-8 space-y-3 animate-fade-in">
-                      <Input
-                        label="Date LBA was sent"
-                        type="date"
-                        value={claimData.lbaSentDate || ''}
-                        onChange={(e) => {
-                          const newDate = e.target.value;
 
-                          // Update the timeline event if it exists, or create it
-                          const existingIndex = claimData.timeline.findIndex(ev => ev.type === 'lba_sent');
 
-                          if (existingIndex >= 0) {
-                              const newTimeline = [...claimData.timeline];
-                              newTimeline[existingIndex] = { ...newTimeline[existingIndex], date: newDate };
-                              setClaimData(prev => ({
-                                ...prev,
-                                timeline: newTimeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-                                lbaSentDate: newDate
-                              }));
-                          } else {
-                              const newEvent: TimelineEvent = {
-                                  date: newDate,
-                                  description: 'Letter Before Action (LBA) sent to defendant',
-                                  type: 'lba_sent'
-                              };
-                              setClaimData(prev => ({
-                                ...prev,
-                                timeline: [...prev.timeline, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-                                lbaSentDate: newDate
-                              }));
-                          }
-                        }}
-                        max={new Date().toISOString().split('T')[0]}
-                        noMargin
-                        wrapperClassName="max-w-xs"
-                      />
-                      {claimData.lbaSentDate && (() => {
-                        const daysSince = Math.floor((Date.now() - new Date(claimData.lbaSentDate).getTime()) / (1000 * 60 * 60 * 24));
-                        const requiredDays = getLbaResponsePeriodDays(claimData.defendant.type);
-                        const isReady = daysSince >= requiredDays;
-                        return (
-                          <div className={`flex items-center gap-2 text-sm ${isReady ? 'text-teal-600' : 'text-amber-600'}`}>
-                            {isReady ? (
-                              <>
-                                <CheckCircle className="w-4 h-4" />
-                                <span>{daysSince} days since LBA - you can proceed with court action</span>
-                              </>
-                            ) : (
-                              <>
-                                <AlertTriangle className="w-4 h-4" />
-                                <span>{daysSince} days since LBA - wait {requiredDays - daysSince} more days for compliance (Standard for {claimData.defendant.type === 'individual' ? 'individuals' : 'businesses'}: {requiredDays} days)</span>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
+                        // Add timeline event automatically
+
+                        const newEvent: TimelineEvent = {
+
+                          date: today,
+
+                          description: 'Letter Before Action (LBA) sent to defendant',
+
+                          type: 'lba_sent'
+
+                        };
+
+                        setClaimData(prev => ({
+
+                          ...prev,
+
+                          timeline: [...prev.timeline, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+
+                          lbaAlreadySent: true,
+
+                          lbaSentDate: today
+
+                        }));
+
+                      } else {
+
+                        setClaimData(prev => ({ ...prev, lbaAlreadySent: true }));
+
+                      }
+
+                    }
+
+                  }}
+
+                  className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+
+                />
+
+                <div className="flex-1">
+
+                  <span className="font-semibold text-slate-900 group-hover:text-teal-700 transition-colors">
+
+                    I have already sent a Letter Before Action (LBA)
+
+                  </span>
+
+                  <p className="text-sm text-slate-500 mt-1">
+
+                    An LBA is a formal demand letter giving the debtor typically 30 days to pay before court action.
+
+                    If you've already sent one, check this box.
+
+                  </p>
+
+                </div>
+
+              </label>
+
+
+
+              {claimData.lbaAlreadySent && (
+
+                <div className="mt-4 pl-8 space-y-3 animate-fade-in">
+
+                  <Input
+
+                    label="Date LBA was sent"
+
+                    type="date"
+
+                    value={claimData.lbaSentDate || ''}
+
+                    onChange={(e) => {
+
+                      const newDate = e.target.value;
+
+
+
+                      // Update the timeline event if it exists, or create it
+
+                      const existingIndex = claimData.timeline.findIndex(ev => ev.type === 'lba_sent');
+
+
+
+                      if (existingIndex >= 0) {
+
+                        const newTimeline = [...claimData.timeline];
+
+                        newTimeline[existingIndex] = { ...newTimeline[existingIndex], date: newDate };
+
+                        setClaimData(prev => ({
+
+                          ...prev,
+
+                          timeline: newTimeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+
+                          lbaSentDate: newDate
+
+                        }));
+
+                      } else {
+
+                        const newEvent: TimelineEvent = {
+
+                          date: newDate,
+
+                          description: 'Letter Before Action (LBA) sent to defendant',
+
+                          type: 'lba_sent'
+
+                        };
+
+                        setClaimData(prev => ({
+
+                          ...prev,
+
+                          timeline: [...prev.timeline, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+
+                          lbaSentDate: newDate
+
+                        }));
+
+                      }
+
+                    }}
+
+                    max={new Date().toISOString().split('T')[0]}
+
+                    noMargin
+
+                    wrapperClassName="max-w-xs"
+
+                  />
+
+                  {claimData.lbaSentDate && (() => {
+
+                    const daysSince = Math.floor((Date.now() - new Date(claimData.lbaSentDate).getTime()) / (1000 * 60 * 60 * 24));
+
+                    const requiredDays = getLbaResponsePeriodDays(claimData.defendant.type);
+
+                    const isReady = daysSince >= requiredDays;
+
+                    return (
+
+                      <div className={`flex items-center gap-2 text-sm ${isReady ? 'text-teal-600' : 'text-amber-600'}`}>
+
+                        {isReady ? (
+
+                          <>
+
+                            <CheckCircle className="w-4 h-4" />
+
+                            <span>{daysSince} days since LBA - you can proceed with court action</span>
+
+                          </>
+
+                        ) : (
+
+                          <>
+
+                            <AlertTriangle className="w-4 h-4" />
+
+                            <span>{daysSince} days since LBA - wait {requiredDays - daysSince} more days for compliance (Standard for {claimData.defendant.type === 'individual' ? 'individuals' : 'businesses'}: {requiredDays} days)</span>
+
+                          </>
+
+                        )}
+
+                      </div>
+
+                    );
+
+                  })()}
+
+                </div>
+
+              )}
+
                 </div>
 
                 {/* Sticky Footer for Actions */}
                 <div className="sticky bottom-0 z-30 mt-8">
                   <div className="bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
-                    <div className="max-w-7xl mx-auto flex justify-end gap-4">
+                    <div className="max-w-4xl mx-auto flex justify-end gap-4">
                       {/* Optional: Skip AI for power users */}
                       <Tooltip
                         content={claimData.timeline.length < 1 ? "Add at least one timeline event to continue" : ""}
@@ -2222,7 +3802,7 @@ const App: React.FC = () => {
         const aiWasSkipped = !showChatHistory || extractedFields.length === 0;
 
         return (
-          <div className="space-y-6 animate-fade-in py-6 max-w-7xl mx-auto pb-20">
+          <div className="space-y-6 animate-fade-in py-10 max-w-5xl mx-auto pb-32">
             <Button
               variant="ghost"
               icon={<ArrowLeft className="w-4 h-4" />}
@@ -2232,7 +3812,7 @@ const App: React.FC = () => {
               {aiWasSkipped ? 'Back to Timeline' : 'Back to Consultation'}
             </Button>
 
-            <div className="text-center mb-5">
+            <div className="text-center mb-8">
               <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Review Your Claim Details</h2>
               <p className="text-slate-500">
                 {aiWasSkipped
@@ -2336,1146 +3916,2175 @@ const App: React.FC = () => {
               />
             </div>
 
+
+
             {/* Chat History (Collapsible) */}
+
             {showChatHistory && (
+
               <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+
                 <button
+
                   onClick={() => setChatHistoryExpanded(!chatHistoryExpanded)}
+
                   className="w-full px-6 py-4 flex items-center justify-between text-slate-700 hover:bg-slate-100 transition-colors"
+
                 >
+
                   <span className="font-medium flex items-center gap-2">
+
                     <MessageSquareText className="w-4 h-4" />
+
                     View Consultation Transcript ({claimData.chatHistory.length} messages)
+
                   </span>
+
                   {chatHistoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+
                 </button>
+
                 {chatHistoryExpanded && (
+
                   <div className="px-6 pb-4 max-h-64 overflow-y-auto">
+
                     {claimData.chatHistory.map((msg, i) => (
+
                       <div key={i} className={`py-2 ${msg.role === 'user' ? 'text-teal-700' : 'text-slate-700'}`}>
+
                         <span className="font-medium">{msg.role === 'user' ? 'You: ' : 'AI: '}</span>
+
                         <span className="text-sm">{msg.content}</span>
+
                       </div>
+
                     ))}
+
                   </div>
+
                 )}
+
               </div>
+
             )}
 
+
+
             {/* Sticky Footer for Actions */}
-                <div className="sticky bottom-0 z-30 mt-6">
+
+            <div className="sticky bottom-0 z-30 mt-8">
               <div className="bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
-                <div className="max-w-7xl mx-auto flex justify-end">
+
+                <div className="max-w-5xl mx-auto flex justify-end">
                   <Button
+
                     variant="ghost"
+
                     onClick={() => handleStepChange(claimData.chatHistory.length > 0 ? Step.DATA_REVIEW : Step.TIMELINE)}
                     className="mr-auto"
+
                     icon={<ArrowLeft className="w-4 h-4" />}
+
                   >
+
                     Back
+
                   </Button>
+
                   <Button
+
                     onClick={() => handleStepChange(Step.RECOMMENDATION)}
                     rightIcon={<ArrowRight className="w-5 h-5" />}
+
                     className="px-8"
+
                   >
+
                     Continue to Document Selection
                   </Button>
+
                 </div>
+
               </div>
+
             </div>
+
           </div>
+
         );
+
       }
+
+
 
       case Step.RECOMMENDATION: {
         // Legal Compliance Logic: Check timeline for LBA or manual override
+
         const timelineHasLBA = claimData.timeline.some(e =>
+
             e.type === 'lba_sent' ||
+
             (e.type === 'chaser' &&
+
               (e.description.toLowerCase().includes('letter before action') ||
+
                e.description.toLowerCase().includes('lba') ||
+
                e.description.toLowerCase().includes('formal demand')))
+
         );
+
         const hasLBA = timelineHasLBA || claimData.lbaAlreadySent;
 
+
+
         const recommendedDoc = hasLBA ? DocumentType.FORM_N1 : DocumentType.LBA;
+
         
+
         // Calculate back step target based on whether AI was skipped
         const backStep = claimData.chatHistory.length > 0 ? Step.DATA_REVIEW : Step.TIMELINE;
 
+
         // Document configurations with metadata
+
         const documentConfigs = [
+
           // PRE-ACTION STAGE
+
           {
+
             stage: 'Pre-Action',
+
             docs: [
+
               {
+
                 type: DocumentType.POLITE_CHASER,
+
                 icon: Mail,
+
                 title: 'Polite Payment Reminder',
+
                 description: 'Friendly pre-LBA reminder to maintain business relationship while requesting payment.',
+
                 when: 'Before formal legal action',
+
                 badge: null
+
               },
+
               {
+
                 type: DocumentType.LBA,
+
                 icon: Mail,
+
                 title: 'Letter Before Action',
+
                 description: 'Mandatory under Pre-Action Protocol. Must give debtor 30 days to respond before court filing.',
+
                 when: 'Required before N1',
+
                 badge: !hasLBA ? { text: 'REQUIRED FIRST', color: 'bg-green-500' } : null
+
               }
+
             ]
+
           },
+
           // FILING STAGE
+
           {
+
             stage: 'Court Filing',
+
             docs: [
+
               {
+
                 type: DocumentType.FORM_N1,
+
                 icon: Scale,
+
                 title: 'Form N1 (Claim Form)',
+
                 description: `Official court claim form. Commences legal proceedings. Court fee: £${claimData.courtFee}.`,
+
                 when: 'After 30-day LBA period',
+
                 badge: hasLBA ? { text: 'NEXT STEP', color: 'bg-teal-600' } : null
+
               }
+
             ]
+
           },
+
           // SETTLEMENT OPTIONS
+
           {
+
             stage: 'Settlement',
+
             docs: [
+
               {
+
                 type: DocumentType.PART_36_OFFER,
+
                 icon: FileText,
+
                 title: 'Part 36 Settlement Offer',
+
                 description: 'Formal settlement offer with cost consequences if not accepted. CPR Part 36 compliant.',
+
                 when: 'Any time before trial',
+
                 badge: null
+
               },
+
               {
+
                 type: DocumentType.INSTALLMENT_AGREEMENT,
+
                 icon: FileText,
+
                 title: 'Installment Payment Agreement',
+
                 description: 'Legally binding agreement for payment by installments. Default: 6 monthly payments.',
+
                 when: 'When debtor cannot pay in full',
+
                 badge: null
+
               }
+
             ]
+
           },
+
           // POST-FILING STAGE
+
           {
+
             stage: 'Post-Filing',
+
             docs: [
+
               {
+
                 type: DocumentType.DEFAULT_JUDGMENT,
+
                 icon: Gavel,
+
                 title: 'Default Judgment (N225)',
+
                 description: 'Application when defendant fails to respond within 14/28 days. Must file within 6 months.',
+
                 when: 'No defence filed',
+
                 badge: null
+
               },
+
               {
+
                 type: DocumentType.ADMISSION,
+
                 icon: Gavel,
+
                 title: 'Judgment on Admission (N225A)',
+
                 description: 'Application when defendant admits but disputes payment terms.',
+
                 when: 'Defendant admits claim',
+
                 badge: null
+
               },
+
               {
+
                 type: DocumentType.DEFENCE_RESPONSE,
+
                 icon: FileText,
+
                 title: 'Response to Defence',
+
                 description: 'Claimant\'s rebuttal to defendant\'s defence. Sets out why defence should be rejected.',
+
                 when: 'Defence filed by defendant',
+
                 badge: null
+
               }
+
             ]
+
           },
+
           // TRIAL PREPARATION
+
           {
+
             stage: 'Trial Preparation',
+
             docs: [
+
               {
+
                 type: DocumentType.DIRECTIONS_QUESTIONNAIRE,
+
                 icon: FileCheck,
+
                 title: 'Directions Questionnaire (N180)',
+
                 description: 'Required for small claims track allocation. Must complete for trial directions.',
+
                 when: 'After defence filed',
+
                 badge: null
+
               },
+
               {
+
                 type: DocumentType.TRIAL_BUNDLE,
+
                 icon: FolderOpen,
+
                 title: 'Trial Bundle',
+
                 description: 'Organized bundle of all documents for trial. Must comply with Practice Direction 39A.',
+
                 when: 'Before trial hearing',
+
                 badge: null
+
               },
+
               {
+
                 type: DocumentType.SKELETON_ARGUMENT,
+
                 icon: FileText,
+
                 title: 'Skeleton Argument',
+
                 description: 'Summary of legal arguments for trial. Outlines your case and legal basis.',
+
                 when: 'Before trial hearing',
+
                 badge: null
+
               }
+
             ]
+
           }
+
         ];
 
+
+
         // Get the recommended document details (config object with icon, title, description)
+
         const recommendedDocConfig = documentConfigs
+
           .flatMap(stage => stage.docs)
+
           .find(doc => doc.type === claimData.selectedDocType);
 
+
+
         return (
-          <div className="space-y-6 animate-fade-in py-6 max-w-7xl mx-auto">
+
+          <div className="space-y-8 animate-fade-in py-10 max-w-6xl mx-auto">
             <Button
+
               variant="ghost"
+
               icon={<ArrowLeft className="w-4 h-4" />}
+
               onClick={() => handleStepChange(Step.DATA_REVIEW)}
               className="w-fit"
+
             >
+
               Back to Data Review
+
             </Button>
 
-            <div className="text-center mb-5">
+
+
+            <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-slate-900 font-display mb-4">Recommended Document</h2>
+
                 <p className="text-slate-500">Based on your case details, we recommend the following document</p>
+
             </div>
+
+
 
             {/* Prominent Recommended Document Card */}
+
             {recommendedDocConfig && (
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-2xl mb-6">
+
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-2xl mb-8">
                 <div className="flex items-start gap-6">
+
                   <div className="p-4 bg-white/10 rounded-xl">
+
                     <recommendedDocConfig.icon className="w-10 h-10" />
+
                   </div>
+
                   <div className="flex-1">
+
                     <div className="flex items-center gap-3 mb-2">
+
                       <h3 className="text-2xl font-bold">{recommendedDocConfig.title}</h3>
+
                       <span className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
+
                         <Sparkles className="w-3 h-3" /> AI RECOMMENDED
+
                       </span>
+
                     </div>
+
                     <p className="text-slate-300 mb-4">{recommendedDocConfig.description}</p>
 
+
+
                     {/* AI Recommendation Reason */}
+
                     {recommendationReason && (
+
                       <div className="bg-white/10 rounded-lg p-4 mb-4">
+
                         <h4 className="font-semibold text-amber-300 mb-2 flex items-center gap-2">
+
                           <Wand2 className="w-4 h-4" /> Why This Document?
+
                         </h4>
+
                         <p className="text-sm text-slate-200">{recommendationReason}</p>
+
                       </div>
+
                     )}
 
+
+
                     <Button
+
                       onClick={handleProceedToDraft}
+
                       variant="secondary"
+
                       className="bg-white text-slate-900 hover:bg-slate-50 border-white/20"
+
                       rightIcon={<ArrowRight className="w-5 h-5" />}
+
                     >
+
                       Generate {recommendedDocConfig.title}
+
                     </Button>
+
                   </div>
+
                 </div>
+
               </div>
+
             )}
+
+
 
             {/* Other Options (Collapsed by Default) */}
+
             <div className="border border-slate-200 rounded-xl overflow-hidden">
+
               <button
+
                 onClick={() => setShowAdvancedDocs(!showAdvancedDocs)}
+
                 className="w-full px-6 py-4 flex items-center justify-between text-slate-700 bg-slate-50 hover:bg-slate-100 transition-colors"
+
               >
+
                 <span className="font-medium flex items-center gap-2">
+
                   <FolderOpen className="w-4 h-4" />
+
                   Other Document Options
+
                 </span>
+
                 {showAdvancedDocs ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+
               </button>
 
+
+
               {showAdvancedDocs && (
-                <div className="p-5 space-y-6">
+
+                <div className="p-6 space-y-8">
                   {documentConfigs.map((stageGroup) => (
+
                     <div key={stageGroup.stage} className="space-y-4">
+
                       {/* Stage Header */}
+
                       <div className="flex items-center gap-3">
+
                         <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent"></div>
+
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-4">{stageGroup.stage}</h3>
+
                         <div className="h-px flex-1 bg-gradient-to-l from-slate-200 to-transparent"></div>
+
                       </div>
+
+
 
                       {/* Documents Grid */}
+
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
                         {stageGroup.docs.map((doc) => {
+
                           const Icon = doc.icon;
+
                           const isSelected = claimData.selectedDocType === doc.type;
 
+
+
                           return (
+
                             <div
+
                               key={doc.type}
+
                               onClick={() => setClaimData(p => ({...p, selectedDocType: doc.type}))}
+
                               className={`relative p-6 rounded-xl border-2 transition-all cursor-pointer group ${
+
                                 isSelected
+
                                   ? 'border-slate-900 bg-slate-900 text-white shadow-xl scale-105'
+
                                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:shadow-md'
+
                               }`}
+
                             >
+
                               {/* Badge */}
+
                               {doc.badge && (
+
                                 <div className={`absolute top-0 right-0 ${doc.badge.color} text-white text-xs font-bold px-2 py-1 rounded-bl-lg shadow-sm flex items-center gap-1`}>
+
                                   <Check className="w-3 h-3" /> {doc.badge.text}
+
                                 </div>
+
                               )}
 
+
+
                               {/* Icon & Title */}
+
                               <div className="flex items-center gap-3 mb-3">
+
                                 <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/10' : 'bg-teal-50 text-teal-600'}`}>
+
                                   <Icon className="w-5 h-5" />
+
                                 </div>
+
                                 <h4 className="font-bold text-sm">{doc.title}</h4>
+
                               </div>
+
+
 
                               {/* Description */}
+
                               <p className={`text-xs leading-relaxed mb-3 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+
                                 {doc.description}
+
                               </p>
 
+
+
                               {/* When to use */}
+
                               <div className={`text-xs font-medium flex items-center gap-1 ${isSelected ? 'text-amber-300' : 'text-teal-700'}`}>
+
                                 <Calendar className="w-3 h-3" /> {doc.when}
+
                               </div>
+
                             </div>
+
                           );
+
                         })}
+
                       </div>
+
                     </div>
+
                   ))}
+
                 </div>
+
               )}
+
             </div>
+
+
 
             {/* LBA Override Toggle - shown when timeline doesn't have LBA but user may have sent one externally */}
+
             {!timelineHasLBA && (() => {
+
               const daysSinceLba = claimData.lbaSentDate
+
                 ? Math.floor((Date.now() - new Date(claimData.lbaSentDate).getTime()) / (1000 * 60 * 60 * 24))
+
                 : 0;
 
+
+
               return (
+
                 <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 flex items-start gap-4">
+
                   <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
+
                     <Mail className="w-4 h-4 text-teal-700" />
+
                   </div>
+
                   <div className="flex-1">
+
                     <label className="flex items-start gap-3 cursor-pointer group">
+
                       <input
+
                         type="checkbox"
+
                         checked={claimData.lbaAlreadySent || false}
+
                         onChange={(e) => {
+
                           setClaimData(prev => ({
+
                             ...prev,
+
                             lbaAlreadySent: e.target.checked,
+
                             lbaSentDate: e.target.checked ? prev.lbaSentDate : ''
+
                           }));
+
                         }}
+
                         className="mt-1 w-5 h-5 rounded border-teal-300 text-teal-600 focus:ring-2 focus:ring-teal-500 cursor-pointer"
+
                       />
+
                       <div>
+
                         <span className="font-semibold text-teal-900">I have already sent a Letter Before Action</span>
+
                         <p className="text-sm text-teal-800 mt-1">
+
                           Check this if you sent an LBA outside of this system. This will enable Form N1 as an option.
+
                           You should keep evidence of your LBA for court.
+
                         </p>
+
                       </div>
+
                     </label>
+
+
 
                     {/* Date input when checkbox is checked */}
+
                     {claimData.lbaAlreadySent && (
+
                       <div className="mt-4 ml-8">
+
                         <Input
+
                           label="Date LBA was sent"
+
                           type="date"
+
                           value={claimData.lbaSentDate || ''}
+
                           onChange={(e) => setClaimData(prev => ({ ...prev, lbaSentDate: e.target.value }))}
+
                           max={new Date().toISOString().split('T')[0]}
+
                           noMargin
+
                           wrapperClassName="max-w-[12rem]"
+
                         />
+
+
 
                         {/* 30-day warning */}
+
                         {claimData.lbaSentDate && daysSinceLba < 30 && (
+
                           <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+
                             <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+
                             <p className="text-sm text-amber-800">
+
                               <strong>Only {daysSinceLba} day{daysSinceLba !== 1 ? 's' : ''} since LBA.</strong>{' '}
+
                               Pre-Action Protocol requires 30 days before filing Form N1.
+
                               You may proceed, but the court may impose cost sanctions for premature filing.
+
                             </p>
+
                           </div>
+
                         )}
+
+
 
                         {claimData.lbaSentDate && daysSinceLba >= 30 && (
+
                           <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
+
                             <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+
                             <p className="text-sm text-green-800">
+
                               <strong>{daysSinceLba} days since LBA.</strong>{' '}
+
                               30-day response period has elapsed. You may proceed to file Form N1.
+
                             </p>
+
                           </div>
+
                         )}
+
                       </div>
+
                     )}
+
                   </div>
+
                 </div>
+
               );
+
             })()}
 
+
+
             {/* Soft-Block Warning for N1 without LBA */}
+
             {claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && (
+
               <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6 animate-fade-in">
+
                 <div className="flex items-start gap-4 mb-4">
+
                   <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0">
+
                     <AlertTriangle className="w-5 h-5 text-white" />
+
                   </div>
+
                   <div className="flex-1">
+
                     <h3 className="font-bold text-red-900 text-lg mb-2">Pre-Action Protocol Warning</h3>
+
                     <p className="text-sm text-red-700 mb-3">
+
                       Filing Form N1 without a compliant Letter Before Action (LBA) violates the Pre-Action Protocol for Debt Claims.
+
                       The court may impose cost sanctions, even if you win your case.
+
                     </p>
+
                     <div className="bg-red-100 border border-red-200 rounded-lg p-3 mb-4">
+
                       <h4 className="font-bold text-red-900 text-sm mb-2">Potential Consequences:</h4>
+
                       <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
+
                         <li>Court may refuse to award you costs</li>
+
                         <li>Court may order you to pay defendant's costs</li>
+
                         <li>Court may stay proceedings until LBA requirements are met</li>
+
                         <li>Claim may be struck out in severe cases</li>
+
                       </ul>
+
                     </div>
+
                     <div className="bg-white border border-red-200 rounded-lg p-3 mb-4">
+
                       <p className="text-sm text-slate-700">
+
                         <strong>Recommended:</strong> Add an LBA to your timeline first, or{' '}
+
                         <button
+
                           onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: DocumentType.LBA }))}
+
                           className="text-red-600 underline hover:text-red-700 font-medium"
+
                         >
+
                           generate an LBA document
+
                         </button>
+
                         {' '}instead.
+
                       </p>
+
                     </div>
+
                     <label className="flex items-start gap-3 cursor-pointer group">
+
                       <input
+
                         type="checkbox"
+
                         checked={hasAcknowledgedLbaWarning}
+
                         onChange={(e) => setHasAcknowledgedLbaWarning(e.target.checked)}
+
                         className="mt-1 w-5 h-5 rounded border-red-300 text-red-600 focus:ring-2 focus:ring-red-500 cursor-pointer"
+
                       />
+
                       <span className="text-sm text-red-900">
+
                         <span className="font-bold">I understand and accept the risks:</span>{' '}
+
                         I am proceeding without an LBA and accept that I may face cost sanctions or other adverse consequences.
+
                         I take full responsibility for this decision.
+
                       </span>
+
                     </label>
+
                   </div>
+
                 </div>
+
               </div>
+
             )}
+
+
 
             {/* Warning for selecting LBA when one has already been sent */}
+
             {claimData.selectedDocType === DocumentType.LBA && hasLBA && (
+
               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-6 animate-fade-in">
+
                 <div className="flex items-start gap-4">
+
                   <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0">
+
                     <AlertTriangle className="w-5 h-5 text-white" />
+
                   </div>
+
                   <div className="flex-1">
+
                     <h3 className="font-bold text-amber-900 text-lg mb-2">You've Already Sent an LBA</h3>
+
                     <p className="text-sm text-amber-800 mb-3">
+
                       {timelineHasLBA
+
                         ? "Your timeline shows a Letter Before Action has already been sent."
+
                         : "You indicated you've already sent a Letter Before Action."}
+
                       {' '}Sending another LBA may unnecessarily delay your claim.
+
                     </p>
+
                     <div className="bg-amber-100 border border-amber-200 rounded-lg p-3 mb-4">
+
                       <h4 className="font-bold text-amber-900 text-sm mb-2">Consider Instead:</h4>
+
                       <ul className="text-sm text-amber-800 space-y-2">
+
                         <li className="flex items-start gap-2">
+
                           <Scale className="w-4 h-4 mt-0.5 flex-shrink-0" />
+
                           <span><strong>Form N1 (Claim Form)</strong> – If 30 days have passed since your LBA, you can proceed to file a court claim.</span>
+
                         </li>
+
                         <li className="flex items-start gap-2">
+
                           <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
+
                           <span><strong>Part 36 Offer</strong> – Make a formal settlement offer with cost protection.</span>
+
                         </li>
+
                       </ul>
+
                     </div>
+
                     <div className="flex gap-3">
+
                       <Button
+
                         onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: DocumentType.FORM_N1 }))}
+
                         variant="primary"
+
                         className="bg-slate-900 hover:bg-slate-800"
+
                         size="sm"
+
                       >
+
                         Switch to Form N1
+
                       </Button>
+
                       <Button
+
                         onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: DocumentType.PART_36_OFFER }))}
+
                         variant="secondary"
+
                         className="border-amber-300 text-amber-900 hover:bg-amber-50"
+
                         size="sm"
+
                       >
+
                         Make Part 36 Offer
+
                       </Button>
+
                     </div>
+
                     <p className="text-xs text-amber-700 mt-3">
+
                       You can still proceed with generating another LBA if needed (e.g., to a different party or with updated terms).
+
                     </p>
+
                   </div>
+
                 </div>
+
               </div>
+
             )}
+
+
 
             {/* Phase 2: Inline Interest Rate Verification (replaces modal) */}
+
             {claimData.selectedDocType && (
-              <div className="mt-6 bg-teal-50 border-2 border-teal-200 rounded-xl p-5">
+
+              <div className="mt-8 bg-teal-50 border-2 border-teal-200 rounded-xl p-6">
                 <div className="flex items-start gap-4 mb-4">
+
                   <div className="w-10 h-10 bg-teal-600 rounded-lg flex items-center justify-center flex-shrink-0">
+
                     <Percent className="w-5 h-5 text-white" />
+
                   </div>
+
                   <div className="flex-1">
+
                     <h3 className="font-bold text-teal-900 text-lg mb-2">Interest Rate Verification Required</h3>
+
                     <div className="grid grid-cols-2 gap-3 mb-4">
+
                       <div className="bg-white border border-teal-200 rounded-lg p-3">
+
                         <p className="text-xs text-slate-500 uppercase font-bold mb-1">Claimant (You)</p>
+
                         <p className="font-bold text-slate-900 capitalize">{claimData.claimant.type}</p>
+
                       </div>
+
                       <div className="bg-white border border-teal-200 rounded-lg p-3">
+
                         <p className="text-xs text-slate-500 uppercase font-bold mb-1">Defendant (Debtor)</p>
+
                         <p className="font-bold text-slate-900 capitalize">{claimData.defendant.type}</p>
+
                       </div>
+
                     </div>
+
                     <div className="bg-white border border-teal-200 rounded-lg p-3 mb-4">
+
                       <div className="flex justify-between items-center mb-2">
+
                         <span className="text-sm text-slate-600">Invoice Amount:</span>
+
                         <span className="font-bold text-slate-900">£{claimData.invoice.totalAmount.toFixed(2)}</span>
+
                       </div>
+
                       <div className="flex justify-between items-center mb-2">
+
                         <span className="text-sm text-slate-600">Interest Rate:</span>
+
                         <span className="font-bold text-teal-700">
+
                           {claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS ? '12.75%' : '8%'} p.a.
+
                         </span>
+
                       </div>
+
                       <div className="h-px bg-slate-200 my-2"></div>
+
                       <div className="flex justify-between items-center">
+
                         <span className="text-sm font-bold text-slate-700">Total Interest:</span>
+
                         <span className="font-bold text-lg text-slate-900">£{claimData.interest.totalInterest.toFixed(2)}</span>
+
                       </div>
+
                     </div>
+
                     <label className="flex items-start gap-3 cursor-pointer group">
+
                       <input
+
                         type="checkbox"
+
                         checked={claimData.hasVerifiedInterest || false}
+
                         onChange={(e) => setClaimData(prev => ({ ...prev, hasVerifiedInterest: e.target.checked }))}
+
                         className="mt-1 w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-2 focus:ring-teal-500 cursor-pointer"
+
                       />
+
                       <span className="text-sm text-teal-900">
+
                         <span className="font-bold">I verify that:</span> The party types are correct, and I understand the interest rate is based on{' '}
+
                         {claimData.claimant.type === PartyType.BUSINESS && claimData.defendant.type === PartyType.BUSINESS
+
                           ? 'Late Payment of Commercial Debts Act 1998 (B2B)'
+
                           : 'County Courts Act 1984 s.69 (B2C/Mixed)'}
+
                         . Incorrect classification can lead to claim rejection or cost sanctions.
+
                       </span>
+
                     </label>
+
                   </div>
+
                 </div>
+
               </div>
+
             )}
 
-            <div className="sticky bottom-0 z-30 mt-6">
+
+
+            <div className="sticky bottom-0 z-30 mt-8">
               <div className="bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
-                <div className="max-w-7xl mx-auto flex justify-end">
+
+                <div className="max-w-5xl mx-auto flex justify-end">
                   <Button
+
                     variant="ghost"
+
                     onClick={() => handleStepChange(claimData.chatHistory.length > 0 ? Step.DATA_REVIEW : Step.TIMELINE)}
                     className="mr-auto"
+
                     icon={<ArrowLeft className="w-4 h-4" />}
+
                   >
+
                     Back
+
                   </Button>
+
                   <Tooltip
+
                     content={
+
                       !claimData.selectedDocType ? "Select a document type first" :
+
                       !claimData.hasVerifiedInterest ? "Verify the interest calculation to continue" :
+
                       (claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && !hasAcknowledgedLbaWarning) ? "Acknowledge LBA warning to proceed" :
+
                       ""
+
                     }
+
                     wrapDisabled
+
                     position="top"
+
                   >
+
                     <Button
+
                       onClick={() => handleDraftClaim(false)}
+
                       disabled={!claimData.selectedDocType || !claimData.hasVerifiedInterest || (claimData.selectedDocType === DocumentType.FORM_N1 && !hasLBA && !hasAcknowledgedLbaWarning)}
+
                       isLoading={isProcessing}
+
                       icon={!isProcessing && <Wand2 className="w-5 h-5" />}
+
                     >
+
                       Generate Document
+
                     </Button>
+
                   </Tooltip>
+
                 </div>
+
               </div>
+
             </div>
+
           </div>
+
         );
+
       }
+
       case Step.DRAFT:
+
         return (
-            <div className="max-w-7xl mx-auto animate-fade-in py-6">
-                 <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-200 flex flex-col h-[calc(100vh-140px)] relative">
+
+            <div className="max-w-5xl mx-auto animate-fade-in py-10">
+                 <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 flex flex-col min-h-[500px] max-h-[calc(100vh-200px)] md:max-h-none md:flex-1 relative">
                     <div className="flex justify-between items-center mb-6">
+
                         <div>
+
                           <h2 className="text-2xl font-bold text-slate-900 font-display">Draft: {claimData.selectedDocType}</h2>
+
                           <p className="text-sm text-slate-500">Review and edit the generated content below.</p>
+
                           <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
+
                             <Sparkles className="w-3 h-3" />
+
                             <span>Generated by Claude AI (Anthropic)</span>
+
                           </div>
+
                         </div>
+
                         <div className="flex items-center gap-2">
+
                              <Button
+
                                variant={showRefineInput ? 'primary' : 'secondary'}
+
                                onClick={() => setShowRefineInput(!showRefineInput)}
+
                                icon={<Sparkles className={`w-3 h-3 ${showRefineInput ? 'text-white' : 'text-teal-600'}`} />}
+
                                className={showRefineInput ? 'bg-slate-900 hover:bg-slate-800' : ''}
+
                              >
+
                                {showRefineInput ? 'Close Director Mode' : 'Refine with AI'}
+
                              </Button>
+
                         </div>
+
                     </div>
 
+
+
                     {/* Refine AI Input Box - Director Mode Overlay */}
+
                     {showRefineInput && (
+
                         <div className="absolute top-24 left-8 right-8 z-20 bg-slate-900 p-6 rounded-xl shadow-2xl border border-slate-800 animate-fade-in">
+
                             <div className="flex items-center gap-2 mb-3">
+
                                 <Command className="w-4 h-4 text-amber-400" />
+
                                 <h4 className="text-sm font-bold text-white">Director Mode: Give instructions to the Associate</h4>
+
                             </div>
+
                             <div className="flex gap-3">
+
                                 <input 
+
                                     type="text" 
+
                                     className="flex-grow px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-amber-500 text-white placeholder-slate-500 outline-none font-mono text-sm"
+
                                     placeholder="e.g. 'Make the tone more aggressive', 'Emphasize the overdue interest', 'Shorten the conclusion'"
+
                                     value={refineInstruction}
+
                                     onChange={(e) => setRefineInstruction(e.target.value)}
+
                                     onKeyDown={(e) => e.key === 'Enter' && handleRefineDraft()}
+
                                     autoFocus
+
                                 />
+
                                 <Button
+
                                     onClick={handleRefineDraft}
+
                                     disabled={!refineInstruction}
+
                                     isLoading={isProcessing}
+
                                     className="bg-amber-500 text-slate-900 hover:bg-amber-400"
+
                                 >
+
                                     Execute
+
                                 </Button>
+
                             </div>
+
                         </div>
+
                     )}
+
                     
+
                     {/* N1 Brief Details Editor */}
+
                     {claimData.selectedDocType === DocumentType.FORM_N1 && claimData.generated && (
+
                        <div className="mb-6 bg-teal-50 p-4 rounded-xl border border-teal-100">
+
                           <label className="block text-sm font-bold text-slate-800 mb-2">N1 Form Summary (Max 30 words)</label>
+
                           <p className="text-xs text-slate-500 mb-2">This text appears in the "Brief details of claim" box on the front page.</p>
+
                           <Input
+
                             label="Brief details of claim"
+
                             hideLabel
+
                             noMargin
+
                             value={claimData.generated.briefDetails || ''}
+
                             onChange={(e) => setClaimData(prev => prev.generated ? ({...prev, generated: {...prev.generated!, briefDetails: e.target.value}}) : prev)}
+
                             maxLength={200}
+
                           />
+
                        </div>
+
                     )}
+
+
 
                     {claimData.generated && (
+
                         <textarea 
-                            className="w-full flex-grow p-6 border border-slate-200 bg-slate-50/50 rounded-xl font-serif text-base leading-relaxed text-slate-800 focus:ring-2 focus:ring-teal-500 focus:bg-white transition-colors resize-none shadow-inner" 
+
+                            className="w-full flex-grow p-8 border border-slate-200 bg-slate-50/50 rounded-xl font-serif text-base leading-relaxed text-slate-800 focus:ring-2 focus:ring-teal-500 focus:bg-white transition-colors resize-none shadow-inner" 
                             value={claimData.generated.content} 
+
                             onChange={(e) => setClaimData(prev => prev.generated ? ({...prev, generated: {...prev.generated!, content: e.target.value}}) : prev)}
+
                         />
+
                     )}
+
             <div className="flex justify-between mt-6 pt-6 border-t border-slate-100">
+
                 <Button
+
                     variant="ghost"
+
                     onClick={() => handleStepChange(Step.RECOMMENDATION)}
                     icon={<ArrowLeft className="w-4 h-4" />}
+
                 >
+
                     Back to Selection
+
                 </Button>
+
                 <Button
+
                     onClick={handlePrePreview}
+
                     isLoading={isProcessing}
+
                     rightIcon={!isProcessing && <ArrowRight className="w-5 h-5" />}
+
                 >
+
                     Finalize & Preview
+
                 </Button>
+
             </div>
+
                  </div>
+
             </div>
+
         );
+
       case Step.PREVIEW:
         return <DocumentPreview
+
           data={claimData}
+
           onBack={() => handleStepChange(Step.DRAFT)}
+
           isFinalized={isFinalized}
+
           onConfirm={handleConfirmDraft}
+
           onUpdateSignature={(sig) => setClaimData(p => ({...p, signature: sig}))}
+
           onUpdateContent={(content) => setClaimData(p => ({
+
             ...p,
+
             generated: p.generated ? { ...p.generated, content } : null
+
           }))}
+
           onSendPhysicalMail={mailServiceAvailable ? sendPhysicalLetter : undefined}
+
           onOpenMcol={() => {
+
             setShowMcolSidecar(true);
+
             window.open('https://www.moneyclaim.gov.uk/web/mcol/welcome', '_blank');
+
           }}
+
           mailSuccess={!!mailSuccess}
+
           onPaymentComplete={handlePaymentComplete}
+
         />;
+
     }
+
   };
 
+
+
   // RENDER VIEW SWITCHER
+
   if (view === 'privacy') {
+
     return <PrivacyPolicy onBack={() => setView('landing')} />;
   }
 
+
+
   if (view === 'terms') {
+
     return <TermsOfService onBack={() => setView('landing')} />;
   }
 
+
+
   // Calendar now renders in main layout with sidebar
 
+
+
   if (view === 'settings' && userProfile) {
+
     return (
+
       <SettingsPage
+
         profile={userProfile}
+
         onSave={handleSettingsSave}
+
         onBack={() => setView('dashboard')}
-        onExportAllData={handleExportAllData}
-        onDeleteAllData={handleDeleteAllData}
+
       />
+
     );
+
   }
+
+
 
   if (view === 'onboarding') {
+
     return (
+
       <OnboardingFlow
+
         onComplete={handleOnboardingFlowComplete}
+
         onCancel={() => setView('landing')}
+
         existingProfile={userProfile}
+
       />
+
     );
+
   }
 
+
+
   if (view === 'landing') {
+
     return (
+
       <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden selection:bg-teal-100 selection:text-teal-900">
+
          {/* Navigation */}
+
          <div className="absolute top-0 left-0 right-0 z-50 py-6">
+
             <div className="container mx-auto px-6 flex items-center justify-between">
+
                 <div className="flex items-center gap-2 font-display font-bold text-xl tracking-tight">
+
                     <div className="w-8 h-8 bg-gradient-to-tr from-teal-600 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-teal-500/20">
+
                         <Scale className="w-5 h-5 text-white" />
+
                     </div>
+
                     <span className="text-slate-900">ClaimCraft</span>
+
                 </div>
+
                 <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+
                     <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-teal-600 transition-colors">Features</button>
+
                     <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-teal-600 transition-colors">How it Works</button>
+
                     <button onClick={() => setView('terms')} className="hover:text-teal-600 transition-colors">Legal</button>
                 </div>
+
                 <button
+
                     onClick={handleEnterApp}
+
                     className="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white transition-all text-sm font-semibold shadow-sm"
+
                 >
+
                     {userProfile ? 'Continue' : 'Get Started'}
+
                 </button>
+
             </div>
+
          </div>
+
+
 
          {/* Hero Section */}
+
          <div className="relative pt-40 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-slate-50">
+
             {/* Abstract Background Elements */}
+
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[800px] bg-teal-100/40 blur-[130px] rounded-full pointer-events-none"></div>
+
             <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-teal-100/40 blur-[120px] rounded-full pointer-events-none"></div>
+
             
+
             <div className="container mx-auto px-4 relative z-10 flex flex-col items-center text-center">
+
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-teal-100 text-teal-700 text-xs font-bold uppercase tracking-widest mb-8 hover:border-teal-200 transition-all cursor-default shadow-sm animate-fade-in">
+
                   <Sparkles className="w-3.5 h-3.5" /> AI-Powered Debt Recovery
+
                 </div>
+
                 
+
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-bold tracking-tight mb-8 leading-[1.1] md:leading-[1.1] text-slate-900 animate-fade-in-up animation-delay-100">
+
                   Recover Unpaid Debts <br/>
+
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-emerald-600">Without the Lawyers</span>
+
                 </h1>
+
                 
+
                 <p className="text-lg md:text-xl text-slate-600 max-w-2xl mb-12 font-light leading-relaxed animate-fade-in-up animation-delay-200">
+
                   Generate court-ready <strong className="text-slate-900 font-medium">Letters Before Action</strong> and <strong className="text-slate-900 font-medium">Form N1 claims</strong> in minutes. 
+
                   Our AI handles the legal complexity, statutory interest, and compliance checks for you.
+
                 </p>
 
+
+
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-lg z-20 animate-fade-in-up animation-delay-300">
+
                    <button
+
                       onClick={handleEnterApp}
+
                       className="w-full sm:w-auto bg-teal-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-teal-700 transition-all transform hover:-translate-y-1 shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2 group"
+
                    >
+
                       Start Your Claim Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+
                    </button>
+
                    <button
+
                       onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+
                       className="w-full sm:w-auto bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold text-lg transition-all shadow-sm hover:shadow-md"
+
                    >
+
                       See How It Works
+
                    </button>
+
                 </div>
+
                 
+
                 {/* Social Proof Mini */}
+
                 <div className="mt-12 flex items-center gap-8 animate-fade-in-up animation-delay-400">
+
                     <div className="flex items-center gap-2 text-sm text-slate-500">
+
                         <CheckCircle className="w-4 h-4 text-teal-600" /> No Win, No Fee (Optional)
+
                     </div>
+
                     <div className="flex items-center gap-2 text-sm text-slate-500">
+
                         <CheckCircle className="w-4 h-4 text-teal-600" /> UK GDPR Compliant
+
                     </div>
+
                     <div className="flex items-center gap-2 text-sm text-slate-500">
+
                         <CheckCircle className="w-4 h-4 text-teal-600" /> HMCTS Approved Formats
+
                     </div>
+
                 </div>
+
             </div>
+
          </div>
 
+
+
          {/* Trust/Stats Banner */}
+
          <div className="border-y border-slate-200 bg-white">
+
             <div className="container mx-auto px-4 py-12">
+
                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+
                   <div className="text-center">
+
                      <p className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">£2.4M+</p>
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Recovered</p>
                   </div>
+
                   <div className="text-center">
+
                      <p className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">450+</p>
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Active Claims</p>
                   </div>
+
                   <div className="text-center">
+
                      <p className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">14 Days</p>
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Avg. Settlement</p>
                   </div>
+
                   <div className="text-center">
+
                      <p className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">£0</p>
                      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">Upfront Legal Fees</p>
                   </div>
+
                </div>
+
                <p className="mt-8 text-center text-xs text-slate-400">
+
                  Metrics shown are illustrative unless otherwise stated.
                </p>
+
             </div>
+
          </div>
+
+
 
          {/* Features Grid */}
+
          <div id="features" className="py-24 bg-slate-50 relative">
+
             <div className="container mx-auto px-4">
+
                <div className="text-center max-w-3xl mx-auto mb-16">
+
                   <h2 className="text-3xl md:text-4xl font-display font-bold mb-6 text-slate-900">Everything you need to get paid</h2>
+
                   <p className="text-slate-600 text-lg">We've codified the entire UK small claims process into a simple, intelligent workflow.</p>
+
                </div>
+
+
 
                <div className="grid md:grid-cols-3 gap-6">
+
                   {[
+
                      { 
+
                         icon: Wand2, 
+
                         color: "text-teal-600", 
+
                         bg: "bg-teal-50",
+
                         title: "AI Legal Drafting",
+
                         desc: "Claude AI drafts professional Letters Before Action and N1 forms tailored to your specific case details."
+
                      },
+
                      { 
+
                         icon: PoundSterling, 
+
                         color: "text-emerald-600", 
+
                         bg: "bg-emerald-50",
+
                         title: "Smart Calculations",
+
                         desc: "Automatically calculate statutory interest (8% + Base), compensation fees (£40-£100), and court fees."
+
                      },
+
                      { 
+
                         icon: ShieldCheck, 
+
                         color: "text-teal-600", 
+
                         bg: "bg-teal-50",
+
                         title: "Protocol Compliance",
+
                         desc: "Built-in checks ensure you follow the Pre-Action Protocol, protecting your right to claim costs."
+
                      },
+
                      { 
+
                         icon: Zap, 
+
                         color: "text-amber-600", 
+
                         bg: "bg-amber-50",
+
                         title: "Instant Integration",
+
                         desc: "Connect Xero or upload CSVs to import invoices instantly. No manual data entry required."
+
                      },
+
                      { 
+
                         icon: Calendar, 
+
                         color: "text-red-600", 
+
                         bg: "bg-red-50",
+
                         title: "Evidence Timeline",
+
                         desc: "Build a rock-solid audit trail of every email, call, and invoice to prove your case in court."
+
                      },
+
                      { 
+
                         icon: MessageSquareText, 
+
                         color: "text-violet-600", 
+
                         bg: "bg-violet-50",
+
                         title: "AI Consultation",
+
                         desc: "Not sure about next steps? Chat with our legal AI to get instant guidance on strategy."
+
                      }
+
                   ].map((feature, i) => (
+
                      <div key={i} className="group p-8 rounded-2xl bg-white border border-slate-200 hover:border-teal-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+
                         <div className={`w-12 h-12 rounded-xl ${feature.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+
                            <feature.icon className={`w-6 h-6 ${feature.color}`} />
+
                         </div>
+
                         <h3 className="text-xl font-bold text-slate-900 mb-3">{feature.title}</h3>
+
                         <p className="text-slate-500 leading-relaxed text-sm">{feature.desc}</p>
+
                      </div>
+
                   ))}
+
                </div>
+
             </div>
-         </div>
-         
-         {/* How It Works */}
-         <div id="how-it-works" className="py-24 bg-white">
-            <div className="container mx-auto px-4">
-                <div className="text-center mb-16">
-                    <h2 className="text-3xl md:text-4xl font-display font-bold mb-4 text-slate-900">How it works</h2>
-                    <p className="text-slate-600 text-lg">From unpaid invoice to court claim in 4 simple steps.</p>
-                </div>
-                
-                <div className="grid md:grid-cols-4 gap-8">
-                    {[
-                        { step: "01", title: "Import Data", desc: "Connect Xero or upload your invoice details." },
-                        { step: "02", title: "Build Case", desc: "Our AI helps you organize evidence and timeline." },
-                        { step: "03", title: "Generate", desc: "Create compliant Letters Before Action or N1 Forms." },
-                        { step: "04", title: "Recover", desc: "Send to debtor or file with HMCTS to get paid." }
-                    ].map((item, i) => (
-                        <div key={i} className="relative p-6 rounded-2xl bg-slate-50 border border-slate-100">
-                            <div className="text-5xl font-display font-bold text-teal-100 mb-4 select-none absolute top-4 right-4">{item.step}</div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-2 relative z-10">{item.title}</h3>
-                            <p className="text-slate-500 text-sm relative z-10">{item.desc}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
+
          </div>
 
-         {/* CTA Section */}
-         <div className="py-24 relative overflow-hidden bg-slate-900">
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-900/20 to-slate-900 z-0"></div>
-            <div className="container mx-auto px-4 relative z-10 text-center">
-               <h2 className="text-4xl md:text-5xl font-display font-bold mb-8 text-white">Stop chasing. Start recovering.</h2>
-               <p className="text-slate-300 text-lg mb-10 max-w-2xl mx-auto">
-                  Join hundreds of UK businesses using ClaimCraft to recover unpaid invoices faster and cheaper than solicitors.
-               </p>
-               <button
-                  onClick={handleEnterApp}
-                  className="bg-white text-slate-900 px-10 py-4 rounded-xl font-bold text-lg hover:bg-teal-50 transition-all transform hover:-translate-y-1 shadow-lg inline-flex items-center gap-2"
-               >
-                  Create Your First Claim <ArrowRight className="w-5 h-5" />
-               </button>
-            </div>
-         </div>
          
+
+         {/* How It Works */}
+
+         <div id="how-it-works" className="py-24 bg-white">
+
+            <div className="container mx-auto px-4">
+
+                <div className="text-center mb-16">
+
+                    <h2 className="text-3xl md:text-4xl font-display font-bold mb-4 text-slate-900">How it works</h2>
+
+                    <p className="text-slate-600 text-lg">From unpaid invoice to court claim in 4 simple steps.</p>
+
+                </div>
+
+                
+
+                <div className="grid md:grid-cols-4 gap-8">
+
+                    {[
+
+                        { step: "01", title: "Import Data", desc: "Connect Xero or upload your invoice details." },
+
+                        { step: "02", title: "Build Case", desc: "Our AI helps you organize evidence and timeline." },
+
+                        { step: "03", title: "Generate", desc: "Create compliant Letters Before Action or N1 Forms." },
+
+                        { step: "04", title: "Recover", desc: "Send to debtor or file with HMCTS to get paid." }
+
+                    ].map((item, i) => (
+
+                        <div key={i} className="relative p-6 rounded-2xl bg-slate-50 border border-slate-100">
+
+                            <div className="text-5xl font-display font-bold text-teal-100 mb-4 select-none absolute top-4 right-4">{item.step}</div>
+
+                            <h3 className="text-xl font-bold text-slate-900 mb-2 relative z-10">{item.title}</h3>
+
+                            <p className="text-slate-500 text-sm relative z-10">{item.desc}</p>
+
+                        </div>
+
+                    ))}
+
+                </div>
+
+            </div>
+
+         </div>
+
+
+
+         {/* CTA Section */}
+
+         <div className="py-24 relative overflow-hidden bg-slate-900">
+
+            <div className="absolute inset-0 bg-gradient-to-br from-teal-900/20 to-slate-900 z-0"></div>
+
+            <div className="container mx-auto px-4 relative z-10 text-center">
+
+               <h2 className="text-4xl md:text-5xl font-display font-bold mb-8 text-white">Stop chasing. Start recovering.</h2>
+
+               <p className="text-slate-300 text-lg mb-10 max-w-2xl mx-auto">
+
+                  Join hundreds of UK businesses using ClaimCraft to recover unpaid invoices faster and cheaper than solicitors.
+
+               </p>
+
+               <button
+
+                  onClick={handleEnterApp}
+
+                  className="bg-white text-slate-900 px-10 py-4 rounded-xl font-bold text-lg hover:bg-teal-50 transition-all transform hover:-translate-y-1 shadow-lg inline-flex items-center gap-2"
+
+               >
+
+                  Create Your First Claim <ArrowRight className="w-5 h-5" />
+
+               </button>
+
+            </div>
+
+         </div>
+
+         
+
          {/* Footer */}
+
          <footer className="border-t border-slate-200 py-12 bg-white text-slate-500 text-sm">
+
             <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
+
                 <div>&copy; 2025 ClaimCraft UK. All rights reserved.</div>
+
                 <div className="flex gap-6">
+
                     <button onClick={() => setView('privacy')} className="hover:text-teal-600 transition-colors">Privacy Policy</button>
                     <button onClick={() => setView('terms')} className="hover:text-teal-600 transition-colors">Terms of Service</button>
                 </div>
+
             </div>
+
          </footer>
+
       </div>
+
     );
+
   }
 
+
+
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-slate-50 font-sans text-slate-900 selection:bg-violet-200 selection:text-violet-900 overflow-hidden">
+
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-violet-200 selection:text-violet-900">
+
       {/* Skip Navigation Link - Accessibility */}
+
       <a
+
         href="#main-content"
+
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:bg-teal-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2"
+
       >
+
         Skip to main content
+
       </a>
 
+
+
       <div className="md:hidden flex-shrink-0">
+
          <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
+
       </div>
+
+
 
       {/* Desktop Sidebar */}
+
       <div className="w-72 flex-shrink-0 hidden md:block h-full">
-        <Sidebar
-          view={view}
-          currentStep={step}
-          maxStepReached={maxStepReached}
-          onDashboardClick={handleExitWizard}
-          onCalendarClick={handleCalendarClick}
-          onSettingsClick={handleSettingsClick}
-          onLegalClick={() => setView('terms')}
-          onStepSelect={setStep}
-          upcomingDeadlinesCount={upcomingDeadlinesCount}
-          userProfile={userProfile}
-        />
+
+        <Sidebar view={view} currentStep={step} maxStepReached={maxStepReached} onDashboardClick={handleExitWizard} onCalendarClick={handleCalendarClick} onSettingsClick={handleSettingsClick} onStepSelect={setStep} upcomingDeadlinesCount={upcomingDeadlinesCount} userProfile={userProfile} />
       </div>
 
+
+
       {/* Mobile Sidebar Drawer */}
-      <div className={`fixed inset-0 z-40 md:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
-         <div className={`absolute left-0 top-0 bottom-0 w-72 bg-white transition-transform duration-300 shadow-2xl border-r border-slate-200 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-             <Sidebar
-               view={view}
-               currentStep={step}
-               maxStepReached={maxStepReached}
-               onDashboardClick={handleExitWizard}
-               onCalendarClick={handleCalendarClick}
-               onSettingsClick={handleSettingsClick}
-               onLegalClick={() => setView('terms')}
-               onCloseMobile={() => setIsMobileMenuOpen(false)}
-               onStepSelect={setStep}
-               upcomingDeadlinesCount={upcomingDeadlinesCount}
-               userProfile={userProfile}
-             />
+
+      <div className={`fixed inset-0 z-[45] md:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+
+         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} aria-hidden="true"></div>
+
+         <div className={`absolute left-0 top-0 bottom-0 w-72 z-[46] bg-white transition-transform duration-300 shadow-2xl border-r border-slate-200 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+
+             <Sidebar view={view} currentStep={step} maxStepReached={maxStepReached} onDashboardClick={handleExitWizard} onCalendarClick={handleCalendarClick} onSettingsClick={handleSettingsClick} onCloseMobile={() => setIsMobileMenuOpen(false)} onStepSelect={setStep} upcomingDeadlinesCount={upcomingDeadlinesCount} userProfile={userProfile} />
          </div>
+
       </div>
+
+
 
       <main
         id="main-content"
-        className={`flex-1 relative scroll-smooth bg-slate-50 ${view === 'conversation' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        className="flex-1 min-h-0 relative scroll-smooth bg-slate-50 overflow-y-auto"
         tabIndex={-1}
       >
-         <div
-           className={`${
-             view === 'conversation'
-               ? 'h-full p-0'
-               : view === 'wizard'
-                 ? 'md:px-8 md:pt-4 pb-10'
-                 : 'md:pl-8 md:pr-8 md:pt-8 pb-20'
-           } min-h-full`}
-         >
+         <div className="md:pl-8 md:pr-8 md:pt-8 pb-20 min-h-full">
             {view === 'dashboard' && <Dashboard
+
               claims={dashboardClaims}
+
               onCreateNew={handleStartNewClaim}
+
               onResume={handleResumeClaim}
+
               onDelete={handleDeleteClaim}
+
               onImportCsv={() => setShowCsvModal(true)}
+
               accountingConnection={accountingConnection}
+
               onConnectAccounting={handleOpenAccountingModal}
+
               onExportAllData={handleExportAllData}
+
               onDeleteAllData={handleDeleteAllData}
+
               onCreateDemo={handleCreateDemoClaim}
+
               onStartManualWizard={handleStartManualWizard}
+
               deadlines={deadlines}
+
               onDeadlineClick={handleDeadlineClick}
+
               onCompleteDeadline={handleCompleteDeadline}
+
               onViewAllDeadlines={handleViewAllDeadlines}
+
             />}
+
             {view === 'calendar' && (
+
               <CalendarView
+
                 deadlines={deadlines}
+
                 claims={dashboardClaims}
+
                 onBack={() => setView('dashboard')}
+
                 onDeadlineClick={handleDeadlineClick}
+
                 onCompleteDeadline={handleCompleteDeadline}
+
+                onAddDeadline={handleAddDeadline}
+
               />
+
             )}
+
             {/* Magic Transition Screen */}
+
             {isTransitioning && (
+
                 <div className="absolute inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center text-white animate-fade-in">
+
                     <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-500 to-teal-400 flex items-center justify-center mb-6 shadow-2xl shadow-teal-500/30 animate-pulse">
+
                         <Sparkles className="w-8 h-8 text-white" />
+
                     </div>
+
                     <h2 className="text-3xl font-bold font-display mb-2">Structuring Your Claim</h2>
+
                     <p className="text-slate-400 mb-8 text-lg">Organizing evidence and preparing legal assessment...</p>
+
                     
+
                     <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+
                         <div className="h-full bg-teal-500 rounded-full animate-[loading_1.5s_ease-in-out_infinite]"></div>
+
                     </div>
+
                     
+
                     <div className="mt-8 grid grid-cols-1 gap-3 text-sm text-slate-500 opacity-80">
+
                          <div className="flex items-center gap-2 animate-fade-in-up animation-delay-100">
+
                              <CheckCircle className="w-4 h-4 text-teal-500" /> Calculating interest
+
                          </div>
+
                          <div className="flex items-center gap-2 animate-fade-in-up animation-delay-300">
+
                              <CheckCircle className="w-4 h-4 text-teal-500" /> Verifying dates
+
                          </div>
+
                          <div className="flex items-center gap-2 animate-fade-in-up animation-delay-500">
+
                              <CheckCircle className="w-4 h-4 text-teal-500" /> Draft preparation
+
                          </div>
+
                     </div>
+
                 </div>
+
             )}
+
             {view === 'conversation' && (
+
               <ConversationEntry
+
                 userProfile={userProfile}
+
                 onComplete={handleConversationComplete}
+
               />
+
             )}
+
             {view === 'wizard' && (
+
               <div className="flex flex-col min-h-full">
+
                 {/* Accessibility: Screen reader announcement for step changes */}
+
                 <h2
+
                   ref={stepHeadingRef}
+
                   tabIndex={-1}
+
                   className="sr-only"
+
                   aria-live="polite"
+
                 >
+
                   Step {step} of {WIZARD_STEPS.length}: {WIZARD_STEPS[step - 1]?.label}
                 </h2>
 
+
+
                 {/* Header with Save & Exit */}
-                <div className="max-w-7xl mx-auto px-4 md:px-0 w-full flex justify-between items-center pt-4 pb-1">
+
+                <div className="max-w-5xl mx-auto px-4 md:px-0 w-full flex justify-between items-center pt-6 pb-2">
                    <h2 className="text-xl md:text-2xl font-bold text-slate-900 font-display hidden md:block" aria-hidden="true">
+
                       {step === Step.SOURCE ? 'New Claim' : 'Continue Claim'}
                    </h2>
+
                    <div className="flex items-center gap-3 ml-auto">
+
                       <button
+
                         onClick={handleExitWizard}
+
                         className="group flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm hover:shadow-md"
+
                         title="Save progress and return to dashboard"
+
                       >
+
                         <Save className="w-4 h-4 text-slate-400 group-hover:text-teal-500 transition-colors" />
+
                         <span className="font-medium">Save & Exit</span>
+
                       </button>
+
                    </div>
+
                 </div>
 
+
+
                 {/* Error Banner */}
+
                 {error && (
-                  <div className="max-w-7xl mx-auto px-4 md:px-0 mb-6 animate-fade-in">
+
+                  <div className="max-w-5xl mx-auto px-4 md:px-0 mb-6 animate-fade-in">
                     <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-start gap-4">
+
                       <AlertCircle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+
                       <div className="flex-1">
+
                         <h4 className="font-bold text-red-900 mb-2">Missing Information</h4>
+
                         <div className="text-red-800 text-sm whitespace-pre-line mb-4">{error}</div>
+
                         <div className="flex gap-3">
+
                           <Button
+
                             variant="danger"
+
                             size="sm"
+
                             onClick={() => {
+
                               setError(null);
+
                               handleStepChange(Step.DETAILS);
                             }}
+
                           >
                             Go to Claim Details
                           </Button>
@@ -3490,122 +6099,241 @@ const App: React.FC = () => {
                           >
                             Go to Timeline
                           </Button>
+
                           <Button
+
                             variant="ghost"
+
                             size="sm"
+
                             onClick={() => setError(null)}
+
                             className="text-red-700 hover:text-red-900"
+
                           >
+
                             Dismiss
+
                           </Button>
+
                         </div>
+
                       </div>
+
                     </div>
+
                   </div>
+
                 )}
 
+
+
                 {/* Progress Indicator - Mobile & Desktop */}
-                <div className="max-w-7xl mx-auto px-4 md:px-0 mb-4">
+
+                <div className="max-w-5xl mx-auto px-4 md:px-0 mb-6">
                   <div className="hidden md:block">
+
                     {/* Desktop - Hidden on mobile as sidebar shows progress */}
+
                   </div>
+
                   <div className="block md:hidden">
+
                     {/* Mobile - Compact progress bar */}
+
                     <ProgressStepsCompact
+
                       steps={WIZARD_STEPS}
+
                       currentStep={step}
+
                     />
+
                   </div>
+
                 </div>
+
                 {renderWizardStep()}
+
               </div>
+
             )}
+
           </div>
+
       </main>
 
+
+
       {/* Legacy Onboarding Modal (Disclaimer + Eligibility) - kept for backwards compatibility */}
+
       <OnboardingModal
         isOpen={showOnboarding}
         onComplete={handleOnboardingComplete}
         onDecline={handleOnboardingDecline}
       />
 
+
       <CsvImportModal isOpen={showCsvModal} onClose={() => setShowCsvModal(false)} onImport={handleBulkImport} />
+
       <AccountingIntegration
+
         isOpen={showAccountingModal}
+
         onClose={() => setShowAccountingModal(false)}
+
         onImportClick={() => {
+
           setShowAccountingModal(false);
+
           setShowXeroImporter(true);
+
         }}
+
         onConnectionChange={handleAccountingConnectionChange}
+
       />
+
+
 
       {showMcolSidecar && (
+
         <McolSidecar 
+
           claim={claimData} 
+
           onClose={() => setShowMcolSidecar(false)} 
+
         />
+
       )}
+
       <XeroInvoiceImporter
+
         isOpen={showXeroImporter}
+
         onClose={() => setShowXeroImporter(false)}
+
         onImport={handleXeroImport}
+
         claimant={claimData.claimant}
+
       />
+
+
 
       {/* Compliance Modals */}
+
       <LitigantInPersonModal
+
         isOpen={showLiPModal}
+
         onClose={() => {
+
           setShowLiPModal(false);
+
           setPendingAction(null);
+
         }}
+
         onProceed={async () => {
+
           setShowLiPModal(false);
+
           if (pendingAction) {
+
             await pendingAction();
+
             setPendingAction(null);
+
           }
+
         }}
+
         claimValue={claimData.invoice.totalAmount + claimData.interest.totalInterest + claimData.compensation + claimData.courtFee}
+
       />
+
+
 
       {/* Court Form Data Modal (N225A, N180, N225) */}
+
       <CourtFormDataModal
+
         isOpen={showCourtFormModal}
+
         onClose={() => setShowCourtFormModal(false)}
+
         onSubmit={handleCourtFormDataSubmit}
+
         documentType={claimData.selectedDocType}
+
         existingData={claimData.courtFormData}
+
       />
 
+
+
       {/* Viability Warning Modal */}
+
       <ViabilityBlockModal
+
         isOpen={showViabilityWarning}
+
         onClose={() => setShowViabilityWarning(false)}
+
         onProceed={() => {
+
           setHasAcknowledgedViability(true);
+
           setShowViabilityWarning(false);
+
           // Auto-advance to the next step since user has acknowledged
+
           handleStepChange(Step.VIABILITY);
         }}
+
         issues={viabilityIssues}
+
       />
+
       <ConfirmModal
+
         isOpen={showRegenerateConfirm}
+
         onClose={() => setShowRegenerateConfirm(false)}
+
         onConfirm={() => {
+
           setShowRegenerateConfirm(false);
+
           handleDraftClaim(true);
+
         }}
+
         title="Regenerate Document?"
+
         message="You already have a generated draft. Regenerating will overwrite any manual edits you may have made. Are you sure you want to continue?"
+
         confirmText="Yes, Regenerate"
+
         variant="warning"
+
       />
+
+      <AddDeadlineModal
+        isOpen={showAddDeadlineModal}
+        onClose={() => setShowAddDeadlineModal(false)}
+        onSave={handleSaveManualDeadline}
+        claims={dashboardClaims}
+      />
+
     </div>
+
   );
+
 };
+
+
 
 export default App;

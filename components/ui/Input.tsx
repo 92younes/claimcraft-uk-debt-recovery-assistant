@@ -88,13 +88,13 @@ export const Input: React.FC<InputProps> = ({
           className={`
             w-full px-4 py-3 bg-white border rounded-xl transition-all duration-200
             text-base text-slate-900 placeholder-slate-400
-            focus:outline-none focus:ring-2 focus:ring-offset-0
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0
             disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
             ${icon ? 'pl-11' : ''}
-            ${hasError ? 'border-red-300 focus:ring-red-500/30 focus:border-red-500 pr-11' :
-              hasSuccess ? 'border-teal-300 focus:ring-teal-500/30 focus:border-teal-500 pr-11' :
-              isFocused ? 'border-teal-400 focus:ring-teal-500/30' :
-              'border-slate-200 hover:border-slate-300 focus:ring-teal-500/30 focus:border-teal-500'}
+            ${hasError ? 'border-red-300 focus-visible:ring-red-500/30 focus:border-red-500 pr-11' :
+              hasSuccess ? 'border-teal-300 focus-visible:ring-teal-500/30 focus:border-teal-500 pr-11' :
+              isFocused ? 'border-teal-400 focus-visible:ring-teal-500/30' :
+              'border-slate-200 hover:border-slate-300 focus-visible:ring-teal-500/30 focus:border-teal-500'}
             ${className}
           `}
           value={value}
@@ -196,9 +196,9 @@ export const Select: React.FC<SelectProps> = ({
         className={`
           px-4 py-3 bg-white border rounded-xl transition-all duration-200
           text-base text-slate-900
-          focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus:border-teal-500
           disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
-          ${hasError ? 'border-red-300 focus:ring-red-500/30' : 'border-slate-200 hover:border-slate-300'}
+          ${hasError ? 'border-red-300 focus-visible:ring-red-500/30' : 'border-slate-200 hover:border-slate-300'}
           ${className}
         `}
         aria-required={required}
@@ -295,11 +295,11 @@ export const TextArea: React.FC<TextAreaProps> = ({
         className={`
           px-4 py-3 bg-white border rounded-xl transition-all duration-200
           text-base text-slate-900 placeholder-slate-400
-          focus:outline-none focus:ring-2 focus:ring-offset-0
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0
           disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
-          ${hasError ? 'border-red-300 focus:ring-red-500/30 focus:border-red-500' :
-            hasSuccess ? 'border-teal-300 focus:ring-teal-500/30 focus:border-teal-500' :
-            'border-slate-200 hover:border-slate-300 focus:ring-teal-500/30 focus:border-teal-500'}
+          ${hasError ? 'border-red-300 focus-visible:ring-red-500/30 focus:border-red-500' :
+            hasSuccess ? 'border-teal-300 focus-visible:ring-teal-500/30 focus:border-teal-500' :
+            'border-slate-200 hover:border-slate-300 focus-visible:ring-teal-500/30 focus:border-teal-500'}
           ${className}
         `}
         rows={5}

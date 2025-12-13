@@ -10,6 +10,7 @@ import {
   PartyType
 } from '../types';
 import { UK_LEGAL_DEADLINES, DEFAULT_REMINDER_DAYS } from '../constants';
+import { getLbaResponsePeriodDays } from './legalRules';
 
 // ==========================================
 // Helper Functions
@@ -87,12 +88,12 @@ export const updateDeadlinePriority = (deadline: Deadline): Deadline => {
  * Get the appropriate LBA response period based on defendant type
  * Consumers (Individuals): 30 days recommended
  * Businesses: 14 days minimum
+ *
+ * Note: This is a convenience wrapper around getLbaResponsePeriodDays from legalRules
  */
 export const getLbaResponsePeriod = (claim: ClaimState): number => {
-  const isConsumer = claim.defendant.type === PartyType.INDIVIDUAL;
-  return isConsumer
-    ? UK_LEGAL_DEADLINES.LBA_RESPONSE_PERIOD_CONSUMER
-    : UK_LEGAL_DEADLINES.LBA_RESPONSE_PERIOD;
+  // Use the centralized function from legalRules to avoid duplication
+  return getLbaResponsePeriodDays(claim.defendant.type);
 };
 
 /**

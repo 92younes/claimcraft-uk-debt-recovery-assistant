@@ -363,16 +363,22 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
             })}
           </div>
 
-          {/* Setup Instructions */}
-          <div className="bg-teal-50 border border-teal-200 rounded-xl p-4">
-            <h4 className="text-sm font-bold text-teal-900 mb-2">⚙️ Setup Instructions</h4>
-            <ul className="space-y-1 text-xs text-teal-800">
-              <li>• <strong>Step 1:</strong> Get your Nango secret key from <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a></li>
-              <li>• <strong>Step 2:</strong> Add <code className="bg-teal-100 px-1 rounded">NANGO_SECRET_KEY=your_key</code> to your .env file</li>
-              <li>• <strong>Step 3:</strong> Run <code className="bg-teal-100 px-1 rounded">npm run dev:full</code> (starts backend + frontend)</li>
-              <li>• Configure the Xero integration in Nango dashboard with ID: <code className="bg-teal-100 px-1 rounded">xero</code></li>
-            </ul>
-          </div>
+          {/* Setup Instructions - Developer Only (Hidden in production) */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 opacity-60 hover:opacity-100 transition-opacity">
+              <h4 className="text-sm font-bold text-teal-900 mb-2 flex items-center gap-2">
+                <span>⚙️</span>
+                Setup Instructions
+                <span className="text-[10px] bg-teal-200 text-teal-800 px-1.5 py-0.5 rounded uppercase tracking-wider">Dev Only</span>
+              </h4>
+              <ul className="space-y-1 text-xs text-teal-800">
+                <li>• <strong>Step 1:</strong> Get your Nango secret key from <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a></li>
+                <li>• <strong>Step 2:</strong> Add <code className="bg-teal-100 px-1 rounded">NANGO_SECRET_KEY=your_key</code> to your .env file</li>
+                <li>• <strong>Step 3:</strong> Run <code className="bg-teal-100 px-1 rounded">npm run dev:full</code> (starts backend + frontend)</li>
+                <li>• Configure the Xero integration in Nango dashboard with ID: <code className="bg-teal-100 px-1 rounded">xero</code></li>
+              </ul>
+            </div>
+          )}
 
           {/* Security Note */}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">

@@ -22,7 +22,7 @@ export const OnboardingSidebar: React.FC<OnboardingSidebarProps> = ({
   onCancel
 }) => {
   return (
-    <div className="w-80 bg-slate-50 border-r border-slate-200 flex flex-col h-full">
+    <div className="w-full sm:w-72 lg:w-80 bg-slate-50 border-r border-slate-200 flex flex-col h-full">
       {/* Logo/Brand */}
       <div className="p-6 border-b border-slate-200">
         <div className="flex items-center gap-3">

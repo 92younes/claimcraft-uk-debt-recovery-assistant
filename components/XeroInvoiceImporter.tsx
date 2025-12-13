@@ -17,6 +17,7 @@ interface XeroInvoiceImporterProps {
   onClose: () => void;
   onImport: (claims: ClaimState[]) => void;
   claimant: Party; // User's business details
+  existingClaims?: ClaimState[]; // To prevent duplicate imports
 }
 
 type FilterType = 'all' | '30days' | '60days' | '90days';
@@ -25,13 +26,15 @@ interface InvoiceRow {
   invoice: XeroInvoice;
   daysOverdue: number;
   selected: boolean;
+  isAlreadyImported: boolean;
 }
 
 export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
   isOpen,
   onClose,
   onImport,
-  claimant
+  claimant,
+  existingClaims = []
 }) => {
   const [invoiceRows, setInvoiceRows] = useState<InvoiceRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,16 +63,25 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
     try {
       const allInvoices = await XeroPuller.fetchInvoices();
       const overdueInvoices = XeroPuller.filterOverdueInvoices(allInvoices);
+      
+      // Create a set of existing invoice numbers for fast lookup
+      const existingInvoiceNumbers = new Set(
+        existingClaims
+          .filter(c => c.source === 'xero' || c.invoice?.invoiceNumber)
+          .map(c => c.invoice.invoiceNumber)
+      );
 
       const rows: InvoiceRow[] = overdueInvoices.map(invoice => {
         // Use AmountDue (outstanding balance) for interest calculation, not Total
         // This is consistent with xeroPuller.ts transformToClaim()
         const principal = invoice.AmountDue > 0 ? invoice.AmountDue : invoice.Total;
         const interest = XeroPuller.calculateInterest(principal, invoice.DueDate);
+        
         return {
           invoice,
           daysOverdue: interest.daysOverdue,
-          selected: false
+          selected: false,
+          isAlreadyImported: existingInvoiceNumbers.has(invoice.InvoiceNumber)
         };
       });
 
@@ -103,9 +115,12 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
   }, [filteredRows]);
 
   const handleToggleRow = (index: number) => {
+    const row = filteredRows[index];
+    if (row.isAlreadyImported) return; // Prevent selecting already imported
+
     setInvoiceRows(prev => {
       const newRows = [...prev];
-      const globalIndex = prev.indexOf(filteredRows[index]);
+      const globalIndex = prev.indexOf(row);
       newRows[globalIndex] = {
         ...newRows[globalIndex],
         selected: !newRows[globalIndex].selected
@@ -120,8 +135,8 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
 
     setInvoiceRows(prev => {
       return prev.map(row => {
-        // Only toggle rows that are currently visible in filtered view
-        if (filteredRows.includes(row)) {
+        // Only toggle rows that are currently visible AND not already imported
+        if (filteredRows.includes(row) && !row.isAlreadyImported) {
           return { ...row, selected: newSelectAll };
         }
         return row;
@@ -298,21 +313,26 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
                 {filteredRows.map((row, index) => {
                   const urgency = getUrgencyBadge(row.daysOverdue);
                   const Icon = urgency.icon;
+                  const isDisabled = row.isAlreadyImported;
 
                   return (
                     <div
                       key={row.invoice.InvoiceID}
-                      onClick={() => handleToggleRow(index)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
-                        row.selected
-                          ? 'border-teal-500 bg-teal-50'
-                          : 'border-slate-200 bg-white hover:border-teal-300 hover:shadow-sm'
+                      onClick={() => !isDisabled && handleToggleRow(index)}
+                      className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                        isDisabled
+                          ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
+                          : row.selected
+                            ? 'border-teal-500 bg-teal-50 cursor-pointer'
+                            : 'border-slate-200 bg-white hover:border-teal-300 hover:shadow-sm cursor-pointer'
                       }`}
                     >
                       <div className="flex items-center gap-4">
                         {/* Checkbox */}
                         <div className="shrink-0">
-                          {row.selected ? (
+                          {isDisabled ? (
+                            <CheckCircle className="w-5 h-5 text-slate-300" />
+                          ) : row.selected ? (
                             <CheckSquare className="w-5 h-5 text-teal-600" />
                           ) : (
                             <Square className="w-5 h-5 text-slate-400" />
@@ -321,7 +341,14 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
 
                         {/* Invoice Number */}
                         <div className="min-w-[120px]">
-                          <p className="font-mono font-bold text-slate-900">{row.invoice.InvoiceNumber}</p>
+                          <p className="font-mono font-bold text-slate-900 flex items-center gap-2">
+                            {row.invoice.InvoiceNumber}
+                            {isDisabled && (
+                              <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase font-sans tracking-wide">
+                                Imported
+                              </span>
+                            )}
+                          </p>
                           <p className="text-xs text-slate-500">
                             Due: {parseXeroDate(row.invoice.DueDate).toLocaleDateString('en-GB')}
                           </p>

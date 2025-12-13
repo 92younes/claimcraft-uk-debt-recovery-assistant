@@ -1,18 +1,31 @@
-/*
-  Global stylesheet placeholder.
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  The app currently uses Tailwind via CDN (configured in `index.html`) plus inline global styles.
-  This file exists because `index.html` references `/index.css` and some hosts will otherwise 404 it.
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 
-  Keep minimal styles here unless you decide to migrate inline styles out of `index.html`.
-*/
+  body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
 
-/* Reduced motion support (important for an animation-heavy UI) */
+  /* Make in-page anchors land below sticky headers when applicable */
+  [id] {
+    scroll-margin-top: 5rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html:focus-within {
     scroll-behavior: auto;
   }
-
   *,
   *::before,
   *::after {
@@ -22,5 +35,3 @@
     scroll-behavior: auto !important;
   }
 }
-
-

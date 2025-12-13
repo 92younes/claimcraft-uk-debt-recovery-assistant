@@ -3,6 +3,7 @@ import { User, Building2, Users, Briefcase, HelpCircle } from 'lucide-react';
 import { UserProfile, BusinessType } from '../../../types';
 import { BUSINESS_TYPES } from '../../../constants';
 import { requiresCompanyNumber } from '../../../services/userProfileService';
+import { Input } from '../../ui/Input';
 
 interface BusinessDetailsStepProps {
   data: Partial<UserProfile>;
@@ -49,14 +50,17 @@ export const BusinessDetailsStep: React.FC<BusinessDetailsStepProps> = ({
           </p>
         </div>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="group" aria-label="Business type selection">
           {BUSINESS_TYPES.map((type) => (
             <button
               key={type.value}
               type="button"
               onClick={() => handleBusinessTypeSelect(type.value as BusinessType)}
+              aria-pressed={data.businessType === type.value}
+              aria-label={`${type.label}: ${type.description}`}
               className={`
                 w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
                 ${data.businessType === type.value
                   ? 'border-teal-500 bg-teal-50'
                   : 'border-slate-200 bg-white hover:border-slate-300'
@@ -69,7 +73,7 @@ export const BusinessDetailsStep: React.FC<BusinessDetailsStepProps> = ({
                   ? 'bg-teal-500 text-white'
                   : 'bg-slate-100 text-teal-600'
                 }
-              `}>
+              `} aria-hidden="true">
                 {businessTypeIcons[type.value]}
               </div>
               <div className="flex-1">
@@ -84,7 +88,7 @@ export const BusinessDetailsStep: React.FC<BusinessDetailsStepProps> = ({
           ))}
         </div>
         {errors.businessType && (
-          <p className="text-sm text-red-500">{errors.businessType}</p>
+          <p className="text-sm text-red-500" role="alert" aria-live="polite">{errors.businessType}</p>
         )}
       </div>
 
@@ -100,71 +104,49 @@ export const BusinessDetailsStep: React.FC<BusinessDetailsStepProps> = ({
         </div>
 
         {/* Business Name */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700">
-            Business name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={data.businessName || ''}
-            onChange={(e) => onChange({ businessName: e.target.value })}
-            placeholder="Enter your business name"
-            className={`
-              w-full px-4 py-3 border rounded-xl bg-white text-slate-900
-              focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
-              ${errors.businessName ? 'border-red-300' : 'border-slate-200'}
-            `}
-          />
-          {errors.businessName && (
-            <p className="text-sm text-red-500">{errors.businessName}</p>
-          )}
-        </div>
+        <Input
+          label="Business name"
+          value={data.businessName || ''}
+          onChange={(e) => onChange({ businessName: e.target.value })}
+          placeholder="Enter your business name"
+          required
+          error={errors.businessName}
+        />
 
         {/* Business Description */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700">
-            Business description
-          </label>
-          <input
-            type="text"
-            value={data.businessDescription || ''}
-            onChange={(e) => onChange({ businessDescription: e.target.value })}
-            placeholder="e.g., Accounting, Construction, Consulting"
-            className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
-          />
-          <p className="text-xs text-slate-400">Optional - helps us understand your business</p>
-        </div>
+        <Input
+          label="Business description"
+          value={data.businessDescription || ''}
+          onChange={(e) => onChange({ businessDescription: e.target.value })}
+          placeholder="e.g., Accounting, Construction, Consulting"
+          helpText="Optional - helps us understand your business"
+        />
 
         {/* Company Number (conditional) */}
         {data.businessType && requiresCompanyNumber(data.businessType as BusinessType) && (
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">
-              Company registration number <span className="text-red-500">*</span>
-            </label>
             <div className="relative">
-              <input
-                type="text"
+              <Input
+                label="Company registration number"
                 value={data.companyNumber || ''}
                 onChange={(e) => onChange({ companyNumber: e.target.value.toUpperCase() })}
                 placeholder="e.g., 12345678 or SC123456"
-                className={`
-                  w-full px-4 py-3 border rounded-xl bg-white text-slate-900
-                  focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
-                  ${errors.companyNumber ? 'border-red-300' : 'border-slate-200'}
-                `}
+                required
+                error={errors.companyNumber}
+                noMargin
               />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="absolute right-3 top-9 -translate-y-1/2">
                 <div className="group relative">
-                  <HelpCircle className="w-4 h-4 text-slate-400" />
-                  <div className="absolute right-0 bottom-full mb-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <HelpCircle className="w-4 h-4 text-slate-400" aria-hidden="true" />
+                  <div
+                    role="tooltip"
+                    className="absolute right-0 bottom-full mb-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none z-10"
+                  >
                     Find your company number on Companies House or your certificate of incorporation
                   </div>
                 </div>
               </div>
             </div>
-            {errors.companyNumber && (
-              <p className="text-sm text-red-500">{errors.companyNumber}</p>
-            )}
             <p className="text-xs text-slate-400">
               You can find this on{' '}
               <a

@@ -27,7 +27,7 @@ export const BOE_RATE_LAST_UPDATED = '2025-01-01';
 // Late Payment of Commercial Debts (Interest) Act 1998
 // Statutory rate = BoE base rate + 8%
 export const STATUTORY_INTEREST_ADDITION = 8.0;
-export const LATE_PAYMENT_ACT_RATE = BOE_BASE_RATE + STATUTORY_INTEREST_ADDITION; // 12.75%
+export const LATE_PAYMENT_ACT_RATE = BOE_BASE_RATE + STATUTORY_INTEREST_ADDITION;
 
 export const DAILY_INTEREST_DIVISOR = 365;
 
@@ -219,6 +219,7 @@ export const UK_LEGAL_DEADLINES = {
 
   // Statutory Limits
   LIMITATION_PERIOD_YEARS: 6,           // Limitation Act 1980
+  SMALL_CLAIMS_LIMIT: 10000,            // CPR Part 27 - Small Claims Track limit
 };
 
 /**
@@ -229,7 +230,7 @@ export const DEADLINE_COLORS: Record<string, { bg: string; border: string; text:
   critical: { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-700', dot: 'bg-red-500' },
   high: { bg: 'bg-orange-50', border: 'border-orange-500', text: 'text-orange-700', dot: 'bg-orange-500' },
   medium: { bg: 'bg-amber-50', border: 'border-amber-500', text: 'text-amber-700', dot: 'bg-amber-500' },
-  low: { bg: 'bg-slate-50', border: 'border-slate-300', text: 'text-slate-700', dot: 'bg-slate-400' },
+  low: { bg: 'bg-blue-50', border: 'border-blue-500', text: 'text-blue-700', dot: 'bg-blue-500' },
 };
 
 /**

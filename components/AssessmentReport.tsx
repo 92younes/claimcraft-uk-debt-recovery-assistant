@@ -6,9 +6,10 @@ import { CheckCircle, XCircle, AlertTriangle, Scale, Clock, Building2, MessageSq
 interface AssessmentReportProps {
   assessment: AssessmentResult;
   onContinue: () => void;
+  hideButton?: boolean; // Hide continue button when shown inline (e.g., in VERIFY step)
 }
 
-export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, onContinue }) => {
+export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, onContinue, hideButton = false }) => {
   return (
     <div className="max-w-7xl mx-auto animate-fade-in">
       {/* Header Section - Horizontal Layout */}
@@ -138,14 +139,16 @@ export const AssessmentReport: React.FC<AssessmentReportProps> = ({ assessment, 
         </div>
       </div>
 
-      <div className="flex justify-center">
-        <button
-          onClick={onContinue}
-          className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 rounded-xl shadow-sm font-semibold transition-all duration-200 flex items-center gap-2 btn-primary hover:shadow-teal-md hover:-translate-y-0.5"
-        >
-          Proceed to Timeline <Clock className="w-4 h-4" />
-        </button>
-      </div>
+      {!hideButton && (
+        <div className="flex justify-center">
+          <button
+            onClick={onContinue}
+            className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 rounded-xl shadow-sm font-semibold transition-all duration-200 flex items-center gap-2 btn-primary hover:shadow-teal-md hover:-translate-y-0.5"
+          >
+            Continue to Document Selection <Clock className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

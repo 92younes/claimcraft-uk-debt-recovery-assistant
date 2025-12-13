@@ -14,6 +14,8 @@ export function useModalFocus(
   modalRef: RefObject<HTMLElement>
 ) {
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const previousBodyOverflowRef = useRef<string | null>(null);
+  const previousBodyPaddingRightRef = useRef<string | null>(null);
 
   // Save focus when modal opens, restore when it closes
   useEffect(() => {
@@ -27,12 +29,23 @@ export function useModalFocus(
       }, 0);
 
       // Prevent body scroll
-      document.body.style.overflow = 'hidden';
+      const body = document.body;
+      previousBodyOverflowRef.current = body.style.overflow ?? '';
+      previousBodyPaddingRightRef.current = body.style.paddingRight ?? '';
+
+      // Avoid layout shift when scrollbar disappears
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      body.style.overflow = 'hidden';
+      if (scrollbarWidth > 0) {
+        body.style.paddingRight = `${scrollbarWidth}px`;
+      }
     }
 
     return () => {
       // Restore body scroll
-      document.body.style.overflow = 'unset';
+      const body = document.body;
+      body.style.overflow = previousBodyOverflowRef.current ?? '';
+      body.style.paddingRight = previousBodyPaddingRightRef.current ?? '';
 
       // Restore focus to previous element
       if (previousFocusRef.current) {

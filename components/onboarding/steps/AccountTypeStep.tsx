@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, X, AlertTriangle, CheckCircle } from 'lucide-react';
 import { UserProfile } from '../../../types';
 import { REFERRAL_SOURCES } from '../../../constants';
+import { Select } from '../../ui/Input';
 
 interface AccountTypeStepProps {
   data: Partial<UserProfile>;
@@ -48,12 +49,15 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4" role="group" aria-label="Authority verification selection">
           <button
             type="button"
             onClick={() => handleAuthoritySelect(true)}
+            aria-pressed={data.hasAuthority === true}
+            aria-label="Yes, I have authority to verify this company"
             className={`
               relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200 text-left
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
               ${data.hasAuthority === true
                 ? 'border-teal-500 bg-teal-50'
                 : 'border-slate-200 bg-white hover:border-slate-300'
@@ -64,7 +68,7 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
               w-10 h-10 rounded-lg flex items-center justify-center
               ${data.hasAuthority === true ? 'bg-teal-500 text-white' : 'bg-slate-100 text-teal-600'}
             `}>
-              <Check className="w-5 h-5" />
+              <Check className="w-5 h-5" aria-hidden="true" />
             </div>
             <div>
               <p className={`font-semibold ${data.hasAuthority === true ? 'text-teal-700' : 'text-slate-900'}`}>
@@ -79,8 +83,11 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
           <button
             type="button"
             onClick={() => handleAuthoritySelect(false)}
+            aria-pressed={data.hasAuthority === false}
+            aria-label="No, I do not have authority to verify this company"
             className={`
               relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200 text-left
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
               ${data.hasAuthority === false
                 ? 'border-red-300 bg-red-50'
                 : 'border-slate-200 bg-white hover:border-slate-300'
@@ -91,7 +98,7 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
               w-10 h-10 rounded-lg flex items-center justify-center
               ${data.hasAuthority === false ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-red-400'}
             `}>
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" aria-hidden="true" />
             </div>
             <div>
               <p className={`font-semibold ${data.hasAuthority === false ? 'text-red-700' : 'text-slate-900'}`}>
@@ -104,7 +111,7 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
           </button>
         </div>
         {errors.hasAuthority && (
-          <p className="text-sm text-red-500">{errors.hasAuthority}</p>
+          <p className="text-sm text-red-500" role="alert" aria-live="polite">{errors.hasAuthority}</p>
         )}
       </div>
 
@@ -119,25 +126,18 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
           </p>
         </div>
 
-        <select
+        <Select
+          label="Referral source"
+          hideLabel
           value={data.referralSource || ''}
           onChange={handleReferralChange}
-          className={`
-            w-full px-4 py-3 border rounded-xl bg-white text-slate-900
-            focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500
-            ${errors.referralSource ? 'border-red-300' : 'border-slate-200'}
-          `}
-        >
-          <option value="">Select an option</option>
-          {REFERRAL_SOURCES.map(source => (
-            <option key={source.value} value={source.value}>
-              {source.label}
-            </option>
-          ))}
-        </select>
-        {errors.referralSource && (
-          <p className="text-sm text-red-500">{errors.referralSource}</p>
-        )}
+          options={[
+            { value: '', label: 'Select an option' },
+            ...REFERRAL_SOURCES
+          ]}
+          error={errors.referralSource}
+          noMargin
+        />
       </div>
 
       {/* Disclaimer Section */}
@@ -221,17 +221,19 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
                 handleTosAccept(e.target.checked);
                 handleDisclaimerAccept(e.target.checked);
               }}
-              className="sr-only"
+              aria-label="Accept Terms of Service and acknowledge legal disclaimer"
+              className="sr-only peer"
             />
             <div className={`
               w-5 h-5 rounded border-2 flex items-center justify-center transition-colors
+              peer-focus-visible:ring-2 peer-focus-visible:ring-teal-500/30 peer-focus-visible:ring-offset-2
               ${data.tosAcceptedAt && data.disclaimerAcceptedAt
                 ? 'bg-teal-500 border-teal-500'
                 : 'border-slate-300 group-hover:border-teal-400'
               }
             `}>
               {data.tosAcceptedAt && data.disclaimerAcceptedAt && (
-                <Check className="w-3 h-3 text-white" />
+                <Check className="w-3 h-3 text-white" aria-hidden="true" />
               )}
             </div>
           </div>
@@ -244,7 +246,7 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
           </span>
         </label>
         {(errors.tosAccepted || errors.disclaimerAccepted) && (
-          <p className="text-sm text-red-500">{errors.tosAccepted || errors.disclaimerAccepted}</p>
+          <p className="text-sm text-red-500" role="alert" aria-live="polite">{errors.tosAccepted || errors.disclaimerAccepted}</p>
         )}
       </div>
     </div>

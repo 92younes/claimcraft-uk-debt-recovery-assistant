@@ -9,7 +9,7 @@ interface EvidenceUploadProps {
   files: EvidenceFile[];
   onAddFiles: (files: EvidenceFile[]) => void;
   onRemoveFile: (index: number) => void;
-  onAnalyze: () => void;
+  onAnalyze?: () => void;
   isProcessing: boolean;
 }
 
@@ -19,6 +19,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [fileTypeError, setFileTypeError] = useState<string | null>(null);
+  const maxFileSizeBytes = 10 * 1024 * 1024; // 10MB, aligned with ConversationEntry
 
   useEffect(() => {
     return () => {
@@ -37,21 +38,38 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
 
       const fileList = Array.from(e.target.files);
       const validFiles: File[] = [];
-      const invalidFiles: File[] = [];
+      const invalidTypeFiles: File[] = [];
+      const tooLargeFiles: File[] = [];
 
       fileList.forEach((file: File) => {
+        if (file.size > maxFileSizeBytes) {
+          tooLargeFiles.push(file);
+          return;
+        }
         if (validateFileType(file)) {
           validFiles.push(file);
         } else {
-          invalidFiles.push(file);
+          invalidTypeFiles.push(file);
         }
       });
 
-      if (invalidFiles.length > 0) {
-        const errorMsg = invalidFiles.length === 1
-          ? getFileTypeError(invalidFiles[0])
-          : `${invalidFiles.length} file(s) rejected: ${invalidFiles.map(f => f.name).join(', ')}. Only PDF, JPG, PNG, and Word documents are accepted.`;
-
+      const errorParts: string[] = [];
+      if (invalidTypeFiles.length > 0) {
+        errorParts.push(
+          invalidTypeFiles.length === 1
+            ? getFileTypeError(invalidTypeFiles[0])
+            : `${invalidTypeFiles.length} file(s) rejected (type): ${invalidTypeFiles.map(f => f.name).join(', ')}. Please upload a PDF or an image (JPG, PNG, GIF, WebP).`
+        );
+      }
+      if (tooLargeFiles.length > 0) {
+        errorParts.push(
+          tooLargeFiles.length === 1
+            ? `"${tooLargeFiles[0].name}" is too large. Maximum size is 10MB.`
+            : `${tooLargeFiles.length} file(s) rejected (size > 10MB): ${tooLargeFiles.map(f => f.name).join(', ')}.`
+        );
+      }
+      if (errorParts.length > 0) {
+        const errorMsg = errorParts.join(' ');
         setFileTypeError(errorMsg);
         errorTimeoutRef.current = setTimeout(() => setFileTypeError(null), 8000);
       }
@@ -76,7 +94,8 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
             classification: undefined
           });
           processedCount++;
-          if (processedCount === fileList.length) {
+          // IMPORTANT: only compare to the number of valid files (mixed selections are allowed)
+          if (processedCount === validFiles.length) {
             onAddFiles(newFiles);
             if (fileInputRef.current) fileInputRef.current.value = '';
           }
@@ -94,7 +113,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
           type="file"
           multiple
           className="hidden"
-          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,application/pdf,image/jpeg,image/png,image/gif,image/webp"
           onChange={handleFileChange}
           disabled={isProcessing}
           ref={fileInputRef}
@@ -104,7 +123,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
             <Upload className="w-5 h-5 text-teal-500" />
           </div>
           <p className="font-medium text-slate-700">Click to upload Documents</p>
-          <p className="text-xs text-slate-400 mt-1">PDF, PNG, JPG, Word supported</p>
+          <p className="text-xs text-slate-400 mt-1">PDF or images (JPG, PNG, GIF, WebP) • Max 10MB each</p>
         </div>
       </label>
 
@@ -154,16 +173,18 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
         </div>
       )}
 
-      {/* Analyze Button - Teal themed */}
-      <Button
-        onClick={onAnalyze}
-        disabled={files.length === 0 || isProcessing}
-        isLoading={isProcessing}
-        fullWidth
-        className="py-3"
-      >
-        Analyze Documents
-      </Button>
+      {/* Analyze Button - only show when analysis is available in this context */}
+      {onAnalyze && (
+        <Button
+          onClick={onAnalyze}
+          disabled={files.length === 0 || isProcessing}
+          isLoading={isProcessing}
+          fullWidth
+          className="py-3"
+        >
+          Analyze Documents
+        </Button>
+      )}
     </div>
   );
 };

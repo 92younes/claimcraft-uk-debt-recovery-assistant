@@ -34,16 +34,13 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReached, onDashboardClick, onCalendarClick, onSettingsClick, onLegalClick, onCloseMobile, onStepSelect, upcomingDeadlinesCount, userProfile }) => {
 
+  // 5-step wizard flow (ASSESSMENT merged into VERIFY)
   const steps = [
-    { id: 1, displayNum: 1, label: 'Evidence Source', sublabel: 'Import your data', icon: Upload },
-    { id: 2, displayNum: 2, label: 'Details & Analysis', sublabel: 'Review claim details', icon: SearchCheck },
-    { id: 3, displayNum: 3, label: 'Legal Viability', sublabel: 'Check requirements', icon: Scale },
-    { id: 4, displayNum: 4, label: 'Timeline', sublabel: 'Build chronology', icon: CalendarClock },
-    { id: 5, displayNum: 5, label: 'Clarification', sublabel: 'AI consultation', icon: MessageSquareText },
-    { id: 6, displayNum: 6, label: 'Data Review', sublabel: 'Verify details', icon: FileText },
-    { id: 7, displayNum: 7, label: 'Strategy', sublabel: 'Select approach', icon: ShieldCheck },
-    { id: 8, displayNum: 8, label: 'Drafting', sublabel: 'Generate documents', icon: FileSignature },
-    { id: 9, displayNum: 9, label: 'Final Review', sublabel: 'Ready to send', icon: CheckCircle2 },
+    { id: 1, displayNum: 1, label: 'Evidence', sublabel: 'Upload or import', icon: Upload },
+    { id: 2, displayNum: 2, label: 'Verify & Assess', sublabel: 'Review & legal check', icon: FileText },
+    { id: 3, displayNum: 3, label: 'Strategy', sublabel: 'Select document', icon: ShieldCheck },
+    { id: 4, displayNum: 4, label: 'Draft', sublabel: 'Generate & edit', icon: FileSignature },
+    { id: 5, displayNum: 5, label: 'Review', sublabel: 'Ready to send', icon: CheckCircle2 },
   ];
 
   return (
@@ -74,9 +71,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
 
       {/* User Profile */}
       <div className="px-5 pb-5 flex-shrink-0">
-         <div
-           className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
+         <button
+           type="button"
+           className="w-full text-left flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
            onClick={() => { onSettingsClick?.(); onCloseMobile?.(); }}
+           aria-label={userProfile ? 'Open profile settings' : 'Open settings'}
          >
             <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">
                {userProfile?.businessName?.charAt(0).toUpperCase() || 'G'}
@@ -86,32 +85,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                <p className="text-xs text-slate-400">{userProfile ? 'Click to edit profile' : 'Local Session'}</p>
             </div>
             {userProfile && <Settings className="w-4 h-4 text-slate-400" />}
-         </div>
+         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 overflow-y-auto">
+      <nav className="flex-1 min-h-0 px-4 overflow-y-auto">
          {view === 'dashboard' || view === 'calendar' ? (
              <>
                 <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-3 tracking-wider">Main Menu</p>
-                <div
+                <button
+                  type="button"
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                  className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
                     view === 'dashboard'
                       ? 'bg-teal-50 text-teal-700 border-l-4 border-teal-500'
                       : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
                   }`}
+                  aria-current={view === 'dashboard' ? 'page' : undefined}
                 >
                     <LayoutDashboard className={`w-4 h-4 ${view === 'dashboard' ? 'text-teal-500' : ''}`} />
                     <span className={`text-sm ${view === 'dashboard' ? 'font-semibold' : 'font-medium'}`}>Dashboard</span>
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   onClick={() => { onCalendarClick?.(); onCloseMobile?.(); }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 mt-1 ${
+                  className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 mt-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
                     view === 'calendar'
                       ? 'bg-teal-50 text-teal-700 border-l-4 border-teal-500'
                       : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
                   }`}
+                  aria-current={view === 'calendar' ? 'page' : undefined}
                 >
                     <Calendar className={`w-4 h-4 ${view === 'calendar' ? 'text-teal-500' : ''}`} />
                     <span className={`text-sm ${view === 'calendar' ? 'font-semibold' : 'font-medium'}`}>Calendar</span>
@@ -120,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                         {upcomingDeadlinesCount}
                       </span>
                     )}
-                </div>
+                </button>
                 <div
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 cursor-not-allowed transition-all duration-200 mt-1"
                   title="Coming soon"
@@ -136,13 +139,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
          ) : view === 'conversation' ? (
              <>
                {/* Back to Dashboard */}
-               <div
+               <button
+                  type="button"
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
-                  className="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 cursor-pointer transition-all duration-200 mb-6"
+                  className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 transition-all duration-200 mb-6 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                >
                    <LayoutDashboard className="w-4 h-4" />
                    <span className="text-sm font-medium">Back to Dashboard</span>
-               </div>
+               </button>
 
                {/* Conversation Entry Indicator */}
                <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-4 tracking-wider">New Claim</p>
@@ -163,13 +167,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
          ) : (
              <>
                {/* Back to Dashboard */}
-               <div
+               <button
+                  type="button"
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
-                  className="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 cursor-pointer transition-all duration-200 mb-6"
+                  className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 transition-all duration-200 mb-6 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                >
                    <LayoutDashboard className="w-4 h-4" />
                    <span className="text-sm font-medium">Back to Dashboard</span>
-               </div>
+               </button>
 
                {/* Workflow Steps */}
                <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-4 tracking-wider">Workflow Steps</p>
@@ -181,7 +186,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                     const canClick = step.id <= effectiveMax;
 
                     return (
-                       <div
+                       <button
+                         type="button"
                          key={step.id}
                          onClick={() => {
                              if (canClick && onStepSelect) {
@@ -189,7 +195,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                                  onCloseMobile?.();
                              }
                          }}
-                         className={`flex items-center gap-3 px-4 py-3 rounded-r-xl transition-all duration-200 relative ${
+                         disabled={!canClick}
+                         aria-current={isActive ? 'step' : undefined}
+                         className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-r-xl transition-all duration-200 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
                             isActive
                               ? 'bg-teal-50 border-l-4 border-teal-500'
                               : canClick
@@ -224,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                           {isActive && (
                             <ChevronRight className="w-4 h-4 text-teal-500 flex-shrink-0" />
                           )}
-                       </div>
+                       </button>
                     );
                  })}
                </div>
@@ -239,7 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
              onLegalClick?.();
              onCloseMobile?.();
            }}
-           className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all duration-200"
+           className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
            title="View legal information"
          >
             <ShieldCheck className="w-4 h-4" />
