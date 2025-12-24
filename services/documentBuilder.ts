@@ -1,7 +1,41 @@
-import { ClaimState, GeneratedContent, DocumentType, PartyType, Party } from '../types';
+import { ClaimState, GeneratedContent, DocumentType, PartyType, Party, UserProfile, PaymentDetails } from '../types';
 import { getTemplate, generateBriefDetails, getDisclaimer } from './documentTemplates';
 import { logDocumentGeneration } from './complianceLogger';
 import { DEFAULT_PAYMENT_TERMS_DAYS } from '../constants';
+
+/**
+ * Format payment details for inclusion in documents
+ * Returns a formatted string or fallback placeholder
+ */
+const formatPaymentDetails = (paymentDetails?: PaymentDetails): string => {
+  if (!paymentDetails) {
+    return '[ADD YOUR BANK DETAILS HERE]';
+  }
+
+  const { bankAccountHolder, bankName, sortCode, accountNumber, paymentReference } = paymentDetails;
+
+  // Check if we have the minimum required fields
+  if (!bankAccountHolder || !sortCode || !accountNumber) {
+    return '[ADD YOUR BANK DETAILS HERE]';
+  }
+
+  const lines: string[] = [
+    `Account Name: ${bankAccountHolder}`,
+  ];
+
+  if (bankName) {
+    lines.push(`Bank: ${bankName}`);
+  }
+
+  lines.push(`Sort Code: ${sortCode}`);
+  lines.push(`Account Number: ${accountNumber}`);
+
+  if (paymentReference) {
+    lines.push(`Reference: ${paymentReference}`);
+  }
+
+  return lines.join('\n');
+};
 
 /**
  * HYBRID TEMPLATE + AI DOCUMENT BUILDER
@@ -57,7 +91,7 @@ export class DocumentBuilder {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: options.model || 'claude-3-5-sonnet-20241022',
+        model: options.model || 'claude-sonnet-4-20250514',
         max_tokens: options.max_tokens || 4000,
         temperature: options.temperature ?? 0.1,
         messages,
@@ -84,7 +118,7 @@ export class DocumentBuilder {
    * STEP 1: Fill template with hard facts (NO AI)
    * This eliminates risk of hallucinated amounts, dates, names
    */
-  private static fillTemplate(template: string, data: ClaimState): string {
+  private static fillTemplate(template: string, data: ClaimState, paymentDetails?: PaymentDetails): string {
     // B2B includes Sole Traders per Late Payment of Commercial Debts (Interest) Act 1998
     const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
     const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
@@ -120,9 +154,16 @@ export class DocumentBuilder {
     // Use actual due date if provided, otherwise default to invoice date + default payment terms
     let interestStartDate: Date;
     if (data.invoice.dueDate) {
-      interestStartDate = new Date(data.invoice.dueDate);
+      const parsedDueDate = this.parseDate(data.invoice.dueDate);
+      if (!parsedDueDate) {
+        throw new Error('Invalid due date format. Please enter a valid date.');
+      }
+      interestStartDate = parsedDueDate;
     } else {
-      const invoiceDate = new Date(data.invoice.dateIssued);
+      const invoiceDate = this.parseDate(data.invoice.dateIssued);
+      if (!invoiceDate) {
+        throw new Error('Invalid invoice date format. Please enter a valid date.');
+      }
       interestStartDate = new Date(invoiceDate);
       interestStartDate.setDate(interestStartDate.getDate() + DEFAULT_PAYMENT_TERMS_DAYS);
     }
@@ -136,6 +177,9 @@ export class DocumentBuilder {
     const compensationClause = data.compensation > 0
       ? `Fixed compensation of £${data.compensation.toFixed(2)} pursuant to the Late Payment of Commercial Debts (Interest) Act 1998`
       : "No compensation claimed";
+
+    // Pre-Action Protocol standard response time for debt claims
+    const LBA_RESPONSE_DAYS = 30;
 
     // Perform all replacements
     let filled = template
@@ -158,11 +202,12 @@ export class DocumentBuilder {
       .replace(/\[INTEREST_START_DATE\]/g, this.formatDate(interestStartDate.toISOString()))
       .replace(/\[PAYMENT_DUE_DESCRIPTION\]/g, paymentDueDesc)
       .replace(/\[COMPENSATION_CLAUSE\]/g, compensationClause)
+      .replace(/\[LBA_RESPONSE_DAYS\]/g, LBA_RESPONSE_DAYS.toString())
       // Additional placeholders for new document types
       .replace(/\[DUE_DATE\]/g, data.invoice.dueDate ? this.formatDate(data.invoice.dueDate) : 'N/A')
       .replace(/\[DAYS_OVERDUE\]/g, data.interest.daysOverdue.toString())
       .replace(/\[SETTLEMENT_AMOUNT\]/g, (parseFloat(totalClaim) * 0.85).toFixed(2)) // 15% discount as settlement
-      .replace(/\[PAYMENT_DETAILS\]/g, '[TO BE SPECIFIED BY CLAIMANT]')
+      .replace(/\[PAYMENT_DETAILS\]/g, formatPaymentDetails(paymentDetails))
       .replace(/\[NUMBER_OF_INSTALLMENTS\]/g, '6') // Default 6 month plan
       .replace(/\[INSTALLMENT_AMOUNT\]/g, (parseFloat(totalClaim) / 6).toFixed(2))
       .replace(/\[FIRST_PAYMENT_DATE\]/g, this.formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())); // 30 days from now
@@ -190,7 +235,56 @@ export class DocumentBuilder {
       ? data.evidence.map(e => `- ${e.name}: ${e.classification || 'Unclassified'}`).join('\n')
       : 'No evidence files uploaded.';
 
-    const prompt = `You are a legal document preparation assistant for UK Small Claims Court proceedings.
+    // Determine document type for appropriate instructions
+    const isPoliteReminder = data.selectedDocType === DocumentType.POLITE_CHASER;
+    const isLBA = data.selectedDocType === DocumentType.LBA;
+
+    // Determine party types for legal basis
+    const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
+    const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
+    const isB2B = isClaimantBusiness && isDefendantBusiness;
+
+    const prompt = isPoliteReminder
+      ? `You are a business communication assistant helping draft a polite payment reminder.
+
+TASK: Complete the template below by filling in ONLY the bracketed sections. This is an INFORMAL, FRIENDLY reminder - not a legal document.
+
+IMPORTANT FACTS (DO NOT MODIFY):
+- From: ${data.claimant.name} (${data.claimant.type === PartyType.BUSINESS ? 'Business' : 'Individual'})
+- To: ${data.defendant.name} (${data.defendant.type === PartyType.BUSINESS ? 'Business' : 'Individual'})
+- Invoice Number: ${data.invoice.invoiceNumber}
+- Invoice Amount: £${data.invoice.totalAmount.toFixed(2)}
+- Invoice Date: ${data.invoice.dateIssued}
+
+BRACKETED SECTIONS TO FILL:
+- [CLAIMANT_DESCRIPTION] - Usually leave empty for polite reminders
+- [DEFENDANT_DESCRIPTION] - Usually leave empty for polite reminders
+- [CONTRACT_DESCRIPTION] - Usually leave empty for polite reminders
+- [LEGAL_BASIS_PARAGRAPH] - Usually leave empty for polite reminders
+- [BREACH_DETAILS] - Usually leave empty for polite reminders
+- [CLOSING_PARAGRAPH] - Usually leave empty for polite reminders
+- [ADDITIONAL_PARAGRAPHS] - Usually leave empty for polite reminders
+
+CONTEXT FROM CONVERSATION:
+${chatContext}
+
+EVIDENCE AVAILABLE:
+${evidenceList}
+
+TONE AND STYLE:
+1. Keep it friendly, polite, and professional
+2. Assume good faith - suggest possible reasons for oversight (invoice lost, query about service, payment overlooked)
+3. Use softer language - "may have", "might be", "perhaps" are APPROPRIATE here
+4. DO NOT threaten legal action - this is pre-LBA
+5. DO NOT cite legal acts or statutes - this is not a legal letter
+6. Keep it brief and conversational
+7. Most bracketed sections should be left empty - the template already has good content
+
+TEMPLATE TO COMPLETE:
+${filledTemplate}
+
+OUTPUT: Return ONLY the completed template with all brackets filled. No commentary, explanations, markdown, or code blocks.`
+      : `You are a legal document preparation assistant for UK Small Claims Court proceedings.
 
 TASK: Complete the template below by filling in ONLY the bracketed sections. These sections require professional legal writing based on the context provided.
 
@@ -201,13 +295,13 @@ IMPORTANT CLAIM FACTS (DO NOT MODIFY):
 - Invoice Amount: £${data.invoice.totalAmount.toFixed(2)}
 - Invoice Date: ${data.invoice.dateIssued}
 
-BRACKETED SECTIONS TO FILL:
+BRACKETED SECTIONS TO FILL (ALL MUST BE FILLED - DO NOT LEAVE ANY BRACKETS):
 - [CLAIMANT_DESCRIPTION] - Brief description (e.g., "${data.claimant.type === PartyType.BUSINESS ? 'a limited company trading as [business type]' : 'an individual'}")
 - [DEFENDANT_DESCRIPTION] - Brief description of the defendant (e.g., "${data.defendant.type === PartyType.BUSINESS ? 'a company' : 'an individual'}")
 - [CONTRACT_DESCRIPTION] - Describe the contract/agreement in 1-2 sentences. Be specific about goods/services if mentioned in context.
-- [LEGAL_BASIS_PARAGRAPH] - One sentence: "The Defendant is liable for the sum claimed under the contract for [goods/services provided]."
-- [BREACH_DETAILS] - If there are specific breach details from the chat (e.g., "The Defendant acknowledged the debt on [date]" or "A partial payment of £X was made"), include them. Otherwise write: "The Defendant has failed to make payment despite demands."
-- [CLOSING_PARAGRAPH] - Leave empty (this is for letters, not N1 forms)
+- [LEGAL_BASIS_PARAGRAPH] - REQUIRED. Write: "The Defendant is liable to pay the Claimant the sum of £${(data.invoice.totalAmount + data.interest.totalInterest + data.compensation).toFixed(2)} under the contract for [goods/services]. The Claimant is entitled to statutory interest under ${isB2B ? 'the Late Payment of Commercial Debts (Interest) Act 1998' : 'section 69 of the County Courts Act 1984'}."
+- [BREACH_DETAILS] - If there are specific breach details from the chat (e.g., "The Defendant acknowledged the debt on [date]" or "A partial payment of £X was made"), include them. Otherwise write: "The Defendant has failed to make payment despite repeated demands."
+- [CLOSING_PARAGRAPH] - ${isLBA ? 'REQUIRED for LBA. Write a professional closing such as "We trust you will treat this matter with the urgency it deserves. Failure to respond or pay will result in court proceedings being commenced without further notice."' : 'Leave empty for N1 forms.'}
 - [ADDITIONAL_PARAGRAPHS] - Only add if there's genuinely unique information (partial payment, dispute, admission). Otherwise leave empty.
 
 CONTEXT FROM CLIENT CONSULTATION:
@@ -236,7 +330,7 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       const result = await this.callAnthropicAPI(
         [{ role: 'user', content: prompt }],
         {
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-sonnet-4-20250514',
           max_tokens: 4000,
           temperature: 0.1  // LOW temperature for consistency and safety
         }
@@ -258,14 +352,57 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
   private static fillTemplateFallback(template: string, data: ClaimState): string {
     const isIndividualClaimant = data.claimant.type === PartyType.INDIVIDUAL;
     const isIndividualDefendant = data.defendant.type === PartyType.INDIVIDUAL;
+    const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
+    const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
+    const isB2B = isClaimantBusiness && isDefendantBusiness;
 
+    // For Polite Reminder, keep bracketed sections empty (template already has good content)
+    if (data.selectedDocType === DocumentType.POLITE_CHASER) {
+      return template
+        .replace(/\[CLAIMANT_DESCRIPTION\]/g, '')
+        .replace(/\[DEFENDANT_DESCRIPTION\]/g, '')
+        .replace(/\[CONTRACT_DESCRIPTION\]/g, '')
+        .replace(/\[LEGAL_BASIS_PARAGRAPH\]/g, '')
+        .replace(/\[BREACH_DETAILS\]/g, '')
+        .replace(/\[CLOSING_PARAGRAPH\]/g, '')
+        .replace(/\[ADDITIONAL_PARAGRAPHS\]/g, '');
+    }
+
+    // Determine claimant description
+    const claimantDesc = isIndividualClaimant
+      ? 'an individual'
+      : data.claimant.type === PartyType.SOLE_TRADER
+        ? 'a sole trader'
+        : 'a limited company';
+
+    // Determine defendant description
+    const defendantDesc = isIndividualDefendant
+      ? 'an individual'
+      : data.defendant.type === PartyType.SOLE_TRADER
+        ? 'a sole trader'
+        : 'a limited company';
+
+    // Legal basis with correct interest act
+    const totalClaim = (data.invoice.totalAmount + data.interest.totalInterest + data.compensation).toFixed(2);
+    const interestAct = isB2B
+      ? 'the Late Payment of Commercial Debts (Interest) Act 1998'
+      : 'section 69 of the County Courts Act 1984';
+
+    const legalBasisParagraph = `The Defendant is liable to pay the Claimant the sum of £${totalClaim} under the contract for goods and/or services supplied. The Claimant is entitled to statutory interest under ${interestAct}.`;
+
+    // Closing paragraph for LBA
+    const closingParagraph = data.selectedDocType === DocumentType.LBA
+      ? 'We trust you will treat this matter with the urgency it deserves. Failure to respond or pay within the stated time will result in court proceedings being commenced without further notice, which may result in additional costs being awarded against you.'
+      : '';
+
+    // For formal legal documents
     return template
-      .replace(/\[CLAIMANT_DESCRIPTION\]/g, isIndividualClaimant ? 'an individual' : 'a business entity')
-      .replace(/\[DEFENDANT_DESCRIPTION\]/g, isIndividualDefendant ? 'an individual' : 'a business entity')
-      .replace(/\[CONTRACT_DESCRIPTION\]/g, `The Claimant supplied goods/services to the Defendant pursuant to an agreement, evidenced by invoice ${data.invoice.invoiceNumber}.`)
-      .replace(/\[LEGAL_BASIS_PARAGRAPH\]/g, 'The Claimant is entitled to recover the principal sum under the contract, together with statutory interest and costs.')
-      .replace(/\[BREACH_DETAILS\]/g, 'Despite repeated requests for payment, the Defendant has failed to pay the outstanding sum.')
-      .replace(/\[CLOSING_PARAGRAPH\]/g, 'We look forward to your prompt response to avoid unnecessary court proceedings.')
+      .replace(/\[CLAIMANT_DESCRIPTION\]/g, claimantDesc)
+      .replace(/\[DEFENDANT_DESCRIPTION\]/g, defendantDesc)
+      .replace(/\[CONTRACT_DESCRIPTION\]/g, `The Claimant supplied goods and/or services to the Defendant pursuant to a contract, as evidenced by invoice ${data.invoice.invoiceNumber} dated ${this.formatDate(data.invoice.dateIssued)}.`)
+      .replace(/\[LEGAL_BASIS_PARAGRAPH\]/g, legalBasisParagraph)
+      .replace(/\[BREACH_DETAILS\]/g, 'Despite repeated demands for payment, the Defendant has failed to pay the outstanding sum.')
+      .replace(/\[CLOSING_PARAGRAPH\]/g, closingParagraph)
       .replace(/\[ADDITIONAL_PARAGRAPHS\]/g, '');
   }
 
@@ -276,6 +413,9 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
   private static validate(document: string, data: ClaimState): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
+
+    // Determine if this is a formal legal document or an informal reminder
+    const isFormalDocument = data.selectedDocType !== DocumentType.POLITE_CHASER;
 
     // 1. Check for unfilled placeholders
     const placeholderMatch = document.match(/\[([A-Z_]+)\]/g);
@@ -290,36 +430,50 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       data.compensation
     ).toFixed(2);
 
-    if (!document.includes(totalClaim)) {
-      errors.push(`Total claim amount £${totalClaim} is missing from the document`);
+    // For Polite Reminder, only check principal amount (it doesn't include interest/compensation)
+    if (data.selectedDocType === DocumentType.POLITE_CHASER) {
+      if (!document.includes(data.invoice.totalAmount.toFixed(2))) {
+        errors.push(`Principal amount £${data.invoice.totalAmount.toFixed(2)} is missing`);
+      }
+    } else {
+      // For formal documents, check total claim amount
+      if (!document.includes(totalClaim)) {
+        errors.push(`Total claim amount £${totalClaim} is missing from the document`);
+      }
+
+      if (!document.includes(data.invoice.totalAmount.toFixed(2))) {
+        errors.push(`Principal amount £${data.invoice.totalAmount.toFixed(2)} is missing`);
+      }
     }
 
-    if (!document.includes(data.invoice.totalAmount.toFixed(2))) {
-      errors.push(`Principal amount £${data.invoice.totalAmount.toFixed(2)} is missing`);
+    // 3. Check legal act is cited correctly (ONLY for formal legal documents)
+    // Polite Reminder doesn't require legal citations - it's an informal friendly reminder
+    if (isFormalDocument) {
+      // B2B includes Sole Traders per Late Payment of Commercial Debts (Interest) Act 1998
+      const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
+      const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
+      const isB2B = isClaimantBusiness && isDefendantBusiness;
+
+      const requiredAct = isB2B
+        ? 'Late Payment of Commercial Debts'
+        : 'County Courts Act 1984';
+
+      if (!document.includes(requiredAct)) {
+        errors.push(`Missing required interest legislation citation: ${requiredAct}`);
+      }
     }
 
-    // 3. Check legal act is cited correctly
-    // B2B includes Sole Traders per Late Payment of Commercial Debts (Interest) Act 1998
-    const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
-    const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
-    const isB2B = isClaimantBusiness && isDefendantBusiness;
+    // 4. Check for uncertain/unprofessional language (ONLY for formal legal documents)
+    // Polite Reminder is intentionally informal and uses softer language like "may have"
+    if (isFormalDocument) {
+      const uncertainWords = ['allegedly', 'may have', 'possibly', 'might', 'perhaps', 'probably'];
+      const foundUncertain = uncertainWords.filter(word =>
+        document.toLowerCase().includes(word)
+      );
 
-    const requiredAct = isB2B
-      ? 'Late Payment of Commercial Debts'
-      : 'County Courts Act 1984';
-
-    if (!document.includes(requiredAct)) {
-      errors.push(`Missing required interest legislation citation: ${requiredAct}`);
-    }
-
-    // 4. Check for uncertain/unprofessional language
-    const uncertainWords = ['allegedly', 'may have', 'possibly', 'might', 'perhaps', 'probably'];
-    const foundUncertain = uncertainWords.filter(word =>
-      document.toLowerCase().includes(word)
-    );
-
-    if (foundUncertain.length > 0) {
-      errors.push(`Uncertain language detected (not suitable for legal documents): ${foundUncertain.join(', ')}`);
+      if (foundUncertain.length > 0) {
+        errors.push(`Uncertain language detected (not suitable for legal documents): ${foundUncertain.join(', ')}`);
+      }
     }
 
     // 5. Check party names are present
@@ -369,7 +523,41 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       errors.push(`AI-generated case law citations detected (prohibited): ${filteredCases.slice(0, 3).join(', ')}${filteredCases.length > 3 ? '...' : ''}. Remove all case citations.`);
     }
 
-    // 7. Warnings (non-critical but recommended)
+    // 7. Additional validation for LBA documents
+    if (data.selectedDocType === DocumentType.LBA) {
+      // Check that LBA_RESPONSE_DAYS is present
+      if (!document.includes('30 days')) {
+        warnings.push('LBA response deadline (30 days) may be missing. Verify the letter includes the Pre-Action Protocol response time.');
+      }
+
+      // Check for essential LBA elements
+      if (!document.toLowerCase().includes('pre-action protocol')) {
+        errors.push('LBA must reference the Pre-Action Protocol for Debt Claims');
+      }
+    }
+
+    // 8. Additional validation for N1 documents
+    if (data.selectedDocType === DocumentType.FORM_N1) {
+      // Check for required N1 structure
+      if (!document.includes('PARTICULARS OF CLAIM')) {
+        errors.push('N1 must include "PARTICULARS OF CLAIM" heading');
+      }
+
+      if (!document.includes('THE PARTIES')) {
+        errors.push('N1 must include "THE PARTIES" section');
+      }
+
+      if (!document.includes('AND the Claimant claims:')) {
+        errors.push('N1 must include the formal claims section starting with "AND the Claimant claims:"');
+      }
+
+      // Check for continuing interest clause
+      if (!document.toLowerCase().includes('continuing interest')) {
+        warnings.push('N1 should include continuing interest provision');
+      }
+    }
+
+    // 9. Warnings (non-critical but recommended)
     if (data.evidence.length === 0) {
       warnings.push('No evidence uploaded. Upload invoices, contracts, or email chains to strengthen your case (especially important if debtor disputes the claim).');
     }
@@ -382,9 +570,13 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       warnings.push('No AI legal consultation conducted. Use the chat feature (Step 5) to identify potential weaknesses in your case before sending the letter.');
     }
 
-    // 8. Workflow-based warnings
+    // 10. Workflow-based warnings
     if (data.invoice.dueDate) {
-      const dueDate = new Date(data.invoice.dueDate);
+      const dueDate = this.parseDate(data.invoice.dueDate);
+      if (!dueDate) {
+        errors.push('Invalid due date format');
+        return { isValid: false, errors, warnings };
+      }
       const now = new Date();
       const daysSinceDue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -414,7 +606,7 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
         userId: data.claimant.email || 'unknown',
         documentType: data.selectedDocType,
         generatedAt: new Date().toISOString(),
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-20250514',
         templateVersion: '1.0',
         inputData: {
           principal: data.invoice.totalAmount,
@@ -463,16 +655,49 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
   }
 
   /**
+   * Validate and parse a date string
+   * Returns a valid Date object or null if invalid
+   */
+  private static parseDate(dateString: string): Date | null {
+    if (!dateString || typeof dateString !== 'string') {
+      return null;
+    }
+
+    const date = new Date(dateString);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+
+    // Check if date is within reasonable range (1900-2100)
+    const year = date.getFullYear();
+    if (year < 1900 || year > 2100) {
+      return null;
+    }
+
+    return date;
+  }
+
+  /**
    * Format date in UK legal format
+   * Returns the original string if date is invalid
    */
   private static formatDate(isoDate: string): string {
     try {
-      return new Date(isoDate).toLocaleDateString('en-GB', {
+      const date = this.parseDate(isoDate);
+      if (!date) {
+        console.warn('Invalid date for formatting:', isoDate);
+        return isoDate;
+      }
+
+      return date.toLocaleDateString('en-GB', {
         day: 'numeric',
         month: 'long',
         year: 'numeric'
       });
-    } catch {
+    } catch (error) {
+      console.error('Error formatting date:', error, isoDate);
       return isoDate;
     }
   }
@@ -518,8 +743,10 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
   /**
    * MAIN PUBLIC METHOD
    * Generates a legal document using the hybrid template + AI approach
+   * @param data - The claim data
+   * @param userProfile - Optional user profile for payment details in documents
    */
-  public static async generateDocument(data: ClaimState): Promise<GeneratedContent> {
+  public static async generateDocument(data: ClaimState, userProfile?: UserProfile): Promise<GeneratedContent> {
     try {
       // Pre-validation: Ensure we have minimum required data
       if (!data.invoice.totalAmount || data.invoice.totalAmount <= 0) {
@@ -534,11 +761,28 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
         throw new Error('No document type selected. Please choose Letter Before Action or Form N1.');
       }
 
+      // Validate invoice date
+      if (!data.invoice.dateIssued) {
+        throw new Error('Invoice date is required.');
+      }
+      const invoiceDate = this.parseDate(data.invoice.dateIssued);
+      if (!invoiceDate) {
+        throw new Error('Invalid invoice date format. Please enter a valid date in DD/MM/YYYY format.');
+      }
+
+      // Validate due date if provided
+      if (data.invoice.dueDate) {
+        const dueDate = this.parseDate(data.invoice.dueDate);
+        if (!dueDate) {
+          throw new Error('Invalid due date format. Please enter a valid date in DD/MM/YYYY format.');
+        }
+      }
+
       // Step 1: Get the appropriate template
       const template = getTemplate(data.selectedDocType);
 
       // Step 2: Fill template with hard facts (no AI)
-      const filledTemplate = this.fillTemplate(template, data);
+      const filledTemplate = this.fillTemplate(template, data, userProfile?.paymentDetails);
 
       // Step 3: Refine customizable sections with AI
       const refinedDocument = await this.refineWithAI(filledTemplate, data);
@@ -614,12 +858,27 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
 
 --- SOURCE OF TRUTH ---
 Claimant: ${data.claimant.name}
+Claimant Address: ${data.claimant.address || ''}, ${data.claimant.city || ''}, ${data.claimant.postcode || ''}
 Defendant: ${data.defendant.name}
-Invoice: ${data.invoice.invoiceNumber} (£${data.invoice.totalAmount.toFixed(2)})
-Total Claim (ex fee): £${totalClaimValue}
+Defendant Address: ${data.defendant.address || ''}, ${data.defendant.city || ''}, ${data.defendant.postcode || ''}
 
-TIMELINE:
-${JSON.stringify(data.timeline)}
+INVOICE DETAILS:
+- Invoice Number: ${data.invoice.invoiceNumber}
+- Invoice Amount: £${data.invoice.totalAmount.toFixed(2)}
+- Invoice Date: ${data.invoice.dateIssued || 'Not specified'}
+- Due Date: ${data.invoice.dueDate || 'Not specified'}
+- Description: ${data.invoice.description || 'Not specified'}
+
+CLAIM TOTALS:
+- Principal: £${data.invoice.totalAmount.toFixed(2)}
+- Interest: £${data.interest?.totalInterest?.toFixed(2) || '0.00'}
+- Compensation: £${data.compensation?.toFixed(2) || '0.00'}
+- Total Claim (ex court fee): £${totalClaimValue}
+
+TIMELINE (Events entered by user):
+${data.timeline.map(t => `- ${t.date}: ${t.description} [${t.type}]`).join('\n') || 'No timeline events'}
+
+LBA STATUS: ${data.lbaAlreadySent ? `Sent on ${data.lbaSentDate || 'date not recorded'}` : 'Not yet sent'}
 
 TRANSCRIPT:
 ${chatTranscript || 'No consultation conducted.'}
@@ -628,11 +887,13 @@ ${chatTranscript || 'No consultation conducted.'}
 ${document}
 
 Check for:
-1. Factual Hallucinations (Dates/Events not in source)
-2. Financial Errors (wrong amounts)
-3. Role Swaps (Claimant vs Defendant mixed up)
-4. Missing Act Reference (e.g. 1984 Act or 1998 Act)
-5. Party names and addresses correct
+1. Factual Hallucinations - ONLY flag facts that are NOT in the SOURCE OF TRUTH above. Dates and events from the user's timeline are NOT hallucinations.
+2. Financial Errors - amounts must match the CLAIM TOTALS above
+3. Role Swaps - Claimant vs Defendant names/roles mixed up
+4. Missing Act Reference - must cite Late Payment of Commercial Debts Act 1998 (B2B) or County Courts Act 1984 (B2C)
+5. Party names and addresses must match SOURCE OF TRUTH
+
+IMPORTANT: The invoice date, due date, timeline events, and LBA status shown above were entered by the user. These are NOT hallucinations - they are verified source data.
 
 Output JSON with this EXACT structure (no markdown):
 {
@@ -641,13 +902,13 @@ Output JSON with this EXACT structure (no markdown):
   "improvements": ["List of specific issues if any"]
 }
 
-If the document is accurate and complete, set isPass to true with an empty improvements array.`;
+If the document is accurate and matches the SOURCE OF TRUTH, set isPass to true with an empty improvements array.`;
 
     try {
       const result = await this.callAnthropicAPI(
         [{ role: 'user', content: prompt }],
         {
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
           temperature: 0
         }
@@ -713,7 +974,7 @@ OUTPUT: Return ONLY the refined document text. No commentary or explanations.`;
       const result = await this.callAnthropicAPI(
         [{ role: 'user', content: prompt }],
         {
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-sonnet-4-20250514',
           max_tokens: 4000,
           temperature: 0.2
         }

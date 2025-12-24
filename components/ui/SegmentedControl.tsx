@@ -19,7 +19,7 @@ export function SegmentedControl<T extends string>({
   className = '',
 }: SegmentedControlProps<T>) {
   return (
-    <div className={`flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm overflow-x-auto max-w-full ${className}`}>
+    <div className={`flex flex-wrap gap-2 ${className}`}>
       {options.map((opt) => {
         const selected = opt.value === value;
         return (
@@ -27,8 +27,8 @@ export function SegmentedControl<T extends string>({
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
-              selected ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+            className={`flex-1 min-w-[140px] px-4 py-3 text-sm font-medium rounded-xl border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
+              selected ? 'bg-teal-600 text-white border-teal-600 shadow-md' : 'bg-white text-slate-700 border-slate-200 hover:border-teal-300 hover:bg-slate-50'
             }`}
             aria-pressed={selected}
           >

@@ -57,6 +57,31 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
   const [sharedConnections, setSharedConnections] = useState<SharedConnection[]>([]);
   const [showSharedOptions, setShowSharedOptions] = useState(false);
 
+  // Sanitize error messages for end users
+  const sanitizeErrorMessage = (error: unknown): string => {
+    if (!(error instanceof Error)) {
+      return 'Something went wrong. Please try again.';
+    }
+
+    const message = error.message;
+
+    // Replace technical/developer messages with user-friendly ones
+    if (message.includes('Backend server') || message.includes('npm run') || message.includes('Nango not initialized')) {
+      return 'Unable to connect at the moment. Please check your internet connection and try again.';
+    }
+
+    if (message.includes('OAuth flow cancelled')) {
+      return 'Connection cancelled. Click "Connect" to try again.';
+    }
+
+    if (message.includes('connection expired')) {
+      return 'Your connection has expired. Please reconnect to continue.';
+    }
+
+    // Return the error message if it's already user-friendly
+    return message;
+  };
+
   // Load all connections on mount
   useEffect(() => {
     if (isOpen) {
@@ -100,7 +125,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
       const newConnection = NangoClient.getConnection(provider);
 
       setConnections(prev => new Map(prev).set(provider, newConnection));
-      setSuccess(`✅ Successfully connected to ${newConnection?.organizationName || provider}!`);
+      setSuccess(`Successfully connected to ${newConnection?.organizationName || provider}!`);
 
       // Notify parent (backward compatibility - only for Xero)
       if (onConnectionChange && newConnection && provider === 'xero') {
@@ -110,7 +135,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
       // Auto-close success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to connect to ${provider}`);
+      setError(sanitizeErrorMessage(err));
       console.error('Connection error:', err);
     } finally {
       setConnectingProvider(null);
@@ -138,7 +163,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
       // Auto-close success message
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disconnect');
+      setError(sanitizeErrorMessage(err));
     } finally {
       setDisconnectingProvider(null);
     }
@@ -162,7 +187,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to use shared connection');
+      setError(sanitizeErrorMessage(err));
     } finally {
       setConnectingProvider(null);
     }
@@ -191,8 +216,8 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Accounting Integration"
-      description="Connect your accounting system to import overdue invoices."
+      title="Connect Your Accounting Software"
+      description="Quickly import overdue invoices from your accounting system to start recovering payments."
       maxWidthClassName="max-w-4xl"
       bodyClassName="p-0"
       titleIcon={(
@@ -209,7 +234,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
       <div className="p-6 space-y-6">
           {/* Error/Success Messages */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
+            <div className="bg-red-50/30 border border-slate-200 border-l-4 border-l-red-500 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium text-red-900">Connection Error</p>
@@ -219,7 +244,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
           )}
 
           {success && (
-            <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
+            <div className="bg-teal-50/30 border border-slate-200 border-l-4 border-l-teal-500 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
               <CheckCircle className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
               <p className="font-medium text-teal-900">{success}</p>
             </div>
@@ -329,7 +354,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                               onClick={() => setShowSharedOptions(!showSharedOptions)}
                               className="w-full text-teal-600 hover:text-teal-700 text-xs font-medium py-1"
                             >
-                              {showSharedOptions ? 'Hide' : 'Or use existing connection'} ({sharedConnections.length} available)
+                              {showSharedOptions ? 'Hide organizations' : 'Or select an organization'} ({sharedConnections.length} available)
                             </button>
 
                             {showSharedOptions && (
@@ -341,7 +366,6 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                                     className="w-full p-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg text-left text-xs transition-colors"
                                   >
                                     <span className="font-medium text-teal-900">{shared.organizationName}</span>
-                                    <span className="text-teal-700 ml-2">(Use shared)</span>
                                   </button>
                                 ))}
                               </div>
@@ -355,7 +379,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
                   {/* Help Text */}
                   {!isConnected && (
                     <p className="mt-2 text-xs text-slate-500 text-center">
-                      OAuth authorization required
+                      Connect to import your invoices
                     </p>
                   )}
                 </div>
@@ -363,33 +387,36 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
             })}
           </div>
 
-          {/* Setup Instructions - Developer Only (Hidden in production) */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 opacity-60 hover:opacity-100 transition-opacity">
-              <h4 className="text-sm font-bold text-teal-900 mb-2 flex items-center gap-2">
-                <span>⚙️</span>
-                Setup Instructions
-                <span className="text-[10px] bg-teal-200 text-teal-800 px-1.5 py-0.5 rounded uppercase tracking-wider">Dev Only</span>
-              </h4>
-              <ul className="space-y-1 text-xs text-teal-800">
-                <li>• <strong>Step 1:</strong> Get your Nango secret key from <a href="https://app.nango.dev/" target="_blank" rel="noopener noreferrer" className="underline">app.nango.dev</a></li>
-                <li>• <strong>Step 2:</strong> Add <code className="bg-teal-100 px-1 rounded">NANGO_SECRET_KEY=your_key</code> to your .env file</li>
-                <li>• <strong>Step 3:</strong> Run <code className="bg-teal-100 px-1 rounded">npm run dev:full</code> (starts backend + frontend)</li>
-                <li>• Configure the Xero integration in Nango dashboard with ID: <code className="bg-teal-100 px-1 rounded">xero</code></li>
-              </ul>
+          {/* Security & Privacy */}
+          <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900 mb-2">Your data is secure</h4>
+                <ul className="space-y-1.5 text-sm text-slate-600">
+                  <li className="flex items-start gap-2">
+                    <span className="text-teal-600 shrink-0 mt-0.5">✓</span>
+                    <span>Bank-level encryption protects your connection</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-teal-600 shrink-0 mt-0.5">✓</span>
+                    <span>We only read invoices and customer details</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-teal-600 shrink-0 mt-0.5">✓</span>
+                    <span>We never modify or delete your accounting data</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-teal-600 shrink-0 mt-0.5">✓</span>
+                    <span>Disconnect anytime without affecting your accounts</span>
+                  </li>
+                </ul>
+              </div>
             </div>
-          )}
-
-          {/* Security Note */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-            <h4 className="text-sm font-bold text-slate-900 mb-2">🔒 Security & Privacy</h4>
-            <ul className="space-y-1 text-xs text-slate-600">
-              <li>• We use Nango for secure OAuth authentication</li>
-              <li>• We only request READ access to invoices and contacts</li>
-              <li>• We NEVER modify your accounting data</li>
-              <li>• You can disconnect at any time</li>
-              <li>• Imported data is stored locally in your browser</li>
-            </ul>
           </div>
       </div>
     </Modal>

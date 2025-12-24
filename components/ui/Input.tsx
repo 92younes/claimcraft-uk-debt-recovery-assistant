@@ -86,8 +86,8 @@ export const Input: React.FC<InputProps> = ({
         <input
           id={inputId}
           className={`
-            w-full px-4 py-3 bg-white border rounded-xl transition-all duration-200
-            text-base text-slate-900 placeholder-slate-400
+            w-full px-4 py-3 bg-white border rounded-xl transition-all duration-200 shadow-soft
+            text-base text-slate-900 placeholder:text-slate-500
             focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0
             disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
             ${icon ? 'pl-11' : ''}
@@ -194,7 +194,7 @@ export const Select: React.FC<SelectProps> = ({
       <select
         id={selectId}
         className={`
-          px-4 py-3 bg-white border rounded-xl transition-all duration-200
+          px-4 py-3 bg-white border rounded-xl transition-all duration-200 shadow-soft
           text-base text-slate-900
           focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus:border-teal-500
           disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
@@ -206,6 +206,7 @@ export const Select: React.FC<SelectProps> = ({
         aria-describedby={`${helpText ? helpTextId : ''} ${error ? errorId : ''}`.trim()}
         {...props}
       >
+        <option value="">-- Select {label || 'an option'} --</option>
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
@@ -293,8 +294,8 @@ export const TextArea: React.FC<TextAreaProps> = ({
       <textarea
         id={textareaId}
         className={`
-          px-4 py-3 bg-white border rounded-xl transition-all duration-200
-          text-base text-slate-900 placeholder-slate-400
+          px-4 py-3 bg-white border rounded-xl transition-all duration-200 shadow-soft
+          text-base text-slate-900 placeholder:text-slate-500
           focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0
           disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed
           ${hasError ? 'border-red-300 focus-visible:ring-red-500/30 focus:border-red-500' :

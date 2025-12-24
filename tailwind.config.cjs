@@ -1,11 +1,22 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./index.html', './**/*.{js,jsx,ts,tsx}'],
+  content: [
+    './index.html',
+    './index.tsx',
+    './components/**/*.{js,jsx,ts,tsx}',
+    './pages/**/*.{js,jsx,ts,tsx}',
+    './layouts/**/*.{js,jsx,ts,tsx}',
+    './hooks/**/*.{js,jsx,ts,tsx}',
+    './services/**/*.{js,jsx,ts,tsx}',
+    './store/**/*.{js,jsx,ts,tsx}',
+    './utils/**/*.{js,jsx,ts,tsx}',
+  ],
   theme: {
     extend: {
-      // Custom font family for headings
+      // Custom font families
       fontFamily: {
-        display: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['"Crimson Text"', 'Georgia', 'serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
 
       // Design tokens for consistent colors
@@ -128,3 +139,4 @@ module.exports = {
   },
   plugins: [],
 };
+

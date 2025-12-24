@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input, Select, TextArea } from './ui/Input';
+import { DateInput } from './ui/DateInput';
 import { ClaimState, DeadlinePriority } from '../types';
 import { Calendar, AlertCircle, Clock, AlertTriangle } from 'lucide-react';
 
@@ -79,11 +80,10 @@ export const AddDeadlineModal: React.FC<AddDeadlineModalProps> = ({
         />
 
         {/* Due Date */}
-        <Input
+        <DateInput
           label="Due Date"
-          type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(value) => setDate(value)}
           required
           noMargin
         />
@@ -148,3 +148,4 @@ export const AddDeadlineModal: React.FC<AddDeadlineModalProps> = ({
     </Modal>
   );
 };
+

@@ -1,12 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
+import { Button } from '../components/ui/Button';
 import { Scale, Sparkles, ArrowRight, CheckCircle, Wand2, PoundSterling, ShieldCheck, Zap, Calendar, MessageSquareText } from 'lucide-react';
 import { useClaimStore } from '../store/claimStore';
 
 export const LandingPage = () => {
   const navigate = useNavigate();
-  const { userProfile, createNewClaim } = useClaimStore();
+  const { userProfile } = useClaimStore();
 
   const handleEnterApp = () => {
     if (!userProfile) {
@@ -32,16 +33,16 @@ export const LandingPage = () => {
                     <span className="text-slate-900">ClaimCraft</span>
                 </div>
                 <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
-                    <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-teal-600 transition-colors">Features</button>
-                    <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-teal-600 transition-colors">How it Works</button>
-                    <button onClick={() => openLegal('terms')} className="hover:text-teal-600 transition-colors">Legal</button>
+                    <Button variant="link" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}>Features</Button>
+                    <Button variant="link" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>How it Works</Button>
+                    <Button variant="link" onClick={() => openLegal('terms')}>Legal</Button>
                 </div>
-                <button
+                <Button
+                    variant="secondary"
                     onClick={handleEnterApp}
-                    className="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white transition-all text-sm font-semibold shadow-sm"
                 >
                     {userProfile ? 'Continue' : 'Get Started'}
-                </button>
+                </Button>
             </div>
          </div>
 
@@ -67,18 +68,23 @@ export const LandingPage = () => {
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-lg z-20 animate-fade-in-up animation-delay-300">
-                   <button
+                   <Button
+                      variant="primary"
+                      size="lg"
                       onClick={handleEnterApp}
-                      className="w-full sm:w-auto bg-teal-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-teal-700 transition-all transform hover:-translate-y-1 shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2 group"
+                      rightIcon={<ArrowRight className="w-5 h-5" />}
+                      className="w-full sm:w-auto shadow-lg shadow-teal-500/20"
                    >
-                      Start Your Claim Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                   </button>
-                   <button
+                      Start Your Claim Free
+                   </Button>
+                   <Button
+                      variant="outline"
+                      size="lg"
                       onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
-                      className="w-full sm:w-auto bg-white border border-slate-200 hover:border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold text-lg transition-all shadow-sm hover:shadow-md"
+                      className="w-full sm:w-auto"
                    >
                       See How It Works
-                   </button>
+                   </Button>
                 </div>
                 
                 {/* Social Proof Mini */}
@@ -221,12 +227,15 @@ export const LandingPage = () => {
                <p className="text-slate-300 text-lg mb-10 max-w-2xl mx-auto">
                   Join hundreds of UK businesses using ClaimCraft to recover unpaid invoices faster and cheaper than solicitors.
                </p>
-               <button
+               <Button
+                  variant="outline"
+                  size="lg"
                   onClick={handleEnterApp}
-                  className="bg-white text-slate-900 px-10 py-4 rounded-xl font-bold text-lg hover:bg-teal-50 transition-all transform hover:-translate-y-1 shadow-lg inline-flex items-center gap-2"
+                  rightIcon={<ArrowRight className="w-5 h-5" />}
+                  className="bg-white hover:bg-teal-50 shadow-lg"
                >
-                  Create Your First Claim <ArrowRight className="w-5 h-5" />
-               </button>
+                  Create Your First Claim
+               </Button>
             </div>
          </div>
          
@@ -235,8 +244,8 @@ export const LandingPage = () => {
             <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div>&copy; 2025 ClaimCraft UK. All rights reserved.</div>
                 <div className="flex gap-6">
-                    <button onClick={() => openLegal('privacy')} className="hover:text-teal-600 transition-colors">Privacy Policy</button>
-                    <button onClick={() => openLegal('terms')} className="hover:text-teal-600 transition-colors">Terms of Service</button>
+                    <Button variant="link" onClick={() => openLegal('privacy')}>Privacy Policy</Button>
+                    <Button variant="link" onClick={() => openLegal('terms')}>Terms of Service</Button>
                 </div>
             </div>
          </footer>

@@ -158,6 +158,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setDisqualified(reason);
   };
 
+  const handleStepClick = (stepId: number) => {
+    // Allow navigation to completed steps or current step
+    if (completedSteps.includes(stepId) || stepId === currentStep) {
+      setErrors({});
+      setCurrentStep(stepId);
+    }
+  };
+
   const renderStepContent = () => {
     if (disqualified) {
       return (
@@ -168,12 +176,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             </div>
             <h2 className="text-xl font-bold text-red-800 mb-2">Unable to Continue</h2>
             <p className="text-red-600 mb-6">{disqualified}</p>
-            <button
-              onClick={onCancel}
-              className="w-full px-6 py-3 bg-white border border-red-200 text-red-700 font-medium rounded-xl hover:bg-red-50 transition-colors"
-            >
-              Close
-            </button>
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="w-full px-6 py-3 bg-white border border-red-200 text-red-700 font-medium rounded-xl hover:bg-red-50 transition-colors"
+              >
+                Close
+              </button>
+            )}
           </div>
         </div>
       );
@@ -229,7 +239,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
   return (
     <div
-      className={`flex bg-white ${
+      ref={modalRef}
+      tabIndex={-1}
+      className={`flex bg-white outline-none ${
         layout === 'fullscreen'
           ? 'h-screen'
           : 'rounded-2xl border border-slate-200 shadow-sm overflow-hidden'
@@ -240,6 +252,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         currentStep={currentStep}
         completedSteps={completedSteps}
         onCancel={onCancel}
+        onStepClick={handleStepClick}
       />
 
       {/* Main Content */}
@@ -261,7 +274,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 disabled={currentStep === 1}
                 icon={<ArrowLeft className="w-4 h-4" />}
               >
-                Go back
+                Back
               </Button>
 
               <Button

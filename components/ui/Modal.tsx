@@ -33,7 +33,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   maxWidthClassName = 'max-w-md',
-  maxHeightClassName = 'max-h-[90vh]',
+  maxHeightClassName = 'max-h-[85vh] sm:max-h-[90vh]',
   bodyClassName = 'p-5',
   headerClassName = '',
   titleClassName = '',
@@ -71,7 +71,7 @@ export const Modal: React.FC<ModalProps> = ({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`bg-white rounded-2xl shadow-2xl ${responsiveWidthClass} ${maxHeightClassName} overflow-hidden border border-slate-200 outline-none flex flex-col animate-scale-in`}
+        className={`bg-white rounded-2xl shadow-soft-lg ${responsiveWidthClass} max-w-[640px] ${maxHeightClassName} overflow-hidden border border-slate-200 outline-none flex flex-col animate-scale-in`}
       >
         {hideHeader ? (
           <div className="sr-only">

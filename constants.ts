@@ -34,6 +34,24 @@ export const DAILY_INTEREST_DIVISOR = 365;
 // Default payment terms (days)
 export const DEFAULT_PAYMENT_TERMS_DAYS = 30;
 
+// Payment terms options for invoice form
+export const PAYMENT_TERMS_OPTIONS = [
+  { value: 'net_7', label: 'Net 7 days', days: 7 },
+  { value: 'net_14', label: 'Net 14 days', days: 14 },
+  { value: 'net_30', label: 'Net 30 days', days: 30 },
+  { value: 'net_60', label: 'Net 60 days', days: 60 },
+  { value: 'net_90', label: 'Net 90 days', days: 90 },
+  { value: 'custom', label: 'Custom', days: null }
+] as const;
+
+// Agreement/contract type options for invoice form
+export const AGREEMENT_TYPE_OPTIONS = [
+  { value: 'goods', label: 'Sale of Goods' },
+  { value: 'services', label: 'Services Provided' },
+  { value: 'ongoing_contract', label: 'Ongoing Contract' },
+  { value: 'one_time_purchase', label: 'One-Time Purchase' }
+] as const;
+
 /**
  * UK Postcode to County/Region Mapping
  * Maps postcode area prefixes to their ceremonial/administrative counties

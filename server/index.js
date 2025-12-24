@@ -12,7 +12,9 @@ import express from 'express';
 import cors from 'cors';
 import { Nango } from '@nangohq/node';
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 import { Resend } from 'resend';
+import Stripe from 'stripe';
 import dotenv from 'dotenv';
 
 // Load environment variables (load .env.local first, then .env as fallback)
@@ -27,7 +29,8 @@ app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
   credentials: true
 }));
-app.use(express.json());
+// Increase body size limit for multimodal requests with base64 file data
+app.use(express.json({ limit: '50mb' }));
 
 // Initialize Nango with secret key
 const nangoSecretKey = process.env.NANGO_SECRET_KEY;
@@ -52,6 +55,17 @@ if (anthropicApiKey) {
   console.warn('⚠️ ANTHROPIC_API_KEY not set - document generation will be limited');
 }
 
+// Initialize Google Gemini client (for AI chat and evidence analysis)
+const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+let gemini = null;
+
+if (geminiApiKey) {
+  gemini = new GoogleGenAI({ apiKey: geminiApiKey });
+  console.log('✅ Gemini API configured');
+} else {
+  console.warn('⚠️ GEMINI_API_KEY not set - AI chat will be limited');
+}
+
 // Initialize Resend for email notifications
 const resendApiKey = process.env.RESEND_API_KEY;
 let resend = null;
@@ -61,6 +75,17 @@ if (resendApiKey) {
   console.log('✅ Resend API configured');
 } else {
   console.warn('⚠️ RESEND_API_KEY not set - email notifications will be disabled');
+}
+
+// Initialize Stripe for payment processing
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+let stripe = null;
+
+if (stripeSecretKey && stripeSecretKey.trim().length > 0) {
+  stripe = new Stripe(stripeSecretKey);
+  console.log('✅ Stripe API configured');
+} else {
+  console.warn('⚠️ STRIPE_SECRET_KEY not set - payment processing will be disabled');
 }
 
 /**
@@ -449,8 +474,76 @@ app.post('/api/anthropic/messages', async (req, res) => {
   }
 });
 
-// Increase request body size limit for document generation (templates can be large)
-app.use(express.json({ limit: '1mb' }));
+/**
+ * Proxy Google Gemini API calls
+ * POST /api/gemini/generate
+ *
+ * This keeps the API key secure on the server side.
+ * Supports both text-only and multimodal (with files) requests.
+ *
+ * Body: {
+ *   model: string,           // e.g., 'gemini-2.5-flash'
+ *   contents: string | { parts: array },  // Text prompt or multimodal parts
+ *   config?: {
+ *     responseMimeType?: string,  // e.g., 'application/json'
+ *     responseSchema?: object     // JSON schema for structured output
+ *   }
+ * }
+ */
+app.post('/api/gemini/generate', async (req, res) => {
+  try {
+    if (!gemini) {
+      return res.status(503).json({
+        error: 'Gemini API not configured',
+        message: 'Please set GEMINI_API_KEY in your .env file'
+      });
+    }
+
+    const { model, contents, config } = req.body;
+
+    if (!model || !contents) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'model and contents are required'
+      });
+    }
+
+    console.log(`📝 Gemini request: ${model}, contents type: ${typeof contents === 'string' ? 'text' : 'multimodal'}`);
+
+    // Build the request parameters
+    const requestParams = {
+      model,
+      contents
+    };
+
+    // Add config if provided (for JSON mode with schema)
+    if (config) {
+      requestParams.config = config;
+    }
+
+    const response = await gemini.models.generateContent(requestParams);
+
+    console.log(`✅ Gemini response received`);
+
+    // Return the response text
+    res.json({
+      text: response.text || '',
+      // Include candidates if needed for debugging
+      candidates: response.candidates || []
+    });
+
+  } catch (error) {
+    console.error('❌ Gemini request failed:', error);
+
+    const statusCode = error.status || error.code === 'INVALID_ARGUMENT' ? 400 : 500;
+
+    res.status(statusCode).json({
+      error: 'Gemini request failed',
+      message: error.message || 'Unknown error',
+      status: statusCode
+    });
+  }
+});
 
 /**
  * Proxy Companies House API calls
@@ -689,6 +782,130 @@ app.post('/api/notifications/test', async (req, res) => {
   }
 });
 
+/**
+ * ============================================
+ * STRIPE PAYMENT ENDPOINTS
+ * ============================================
+ */
+
+/**
+ * Get payment service status
+ * GET /api/payments/status
+ */
+app.get('/api/payments/status', (req, res) => {
+  res.json({
+    configured: Boolean(stripe),
+    provider: 'stripe'
+  });
+});
+
+/**
+ * Create a PaymentIntent for document download
+ * POST /api/payments/create-intent
+ *
+ * Body: {
+ *   claimId: string,
+ *   documentType: string
+ * }
+ */
+app.post('/api/payments/create-intent', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({
+        error: 'Payment service not configured',
+        message: 'Stripe is not configured. Please set STRIPE_SECRET_KEY in your .env file'
+      });
+    }
+
+    const { claimId, documentType } = req.body;
+
+    if (!claimId || !documentType) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'claimId and documentType are required'
+      });
+    }
+
+    console.log(`💳 Creating payment intent for claim ${claimId}, document: ${documentType}`);
+
+    // Create PaymentIntent with £2.50 amount (250 pence)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: 250, // £2.50 in pence
+      currency: 'gbp',
+      metadata: {
+        claimId,
+        documentType,
+        timestamp: new Date().toISOString()
+      },
+      description: `ClaimCraft - ${documentType} document download`,
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
+
+    console.log(`✅ Payment intent created: ${paymentIntent.id}`);
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to create payment intent:', error);
+    res.status(500).json({
+      error: 'Failed to create payment',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Verify payment status
+ * GET /api/payments/verify/:paymentIntentId
+ */
+app.get('/api/payments/verify/:paymentIntentId', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({
+        error: 'Payment service not configured',
+        message: 'Stripe is not configured. Please set STRIPE_SECRET_KEY in your .env file'
+      });
+    }
+
+    const { paymentIntentId } = req.params;
+
+    if (!paymentIntentId) {
+      return res.status(400).json({
+        error: 'Missing payment intent ID'
+      });
+    }
+
+    console.log(`🔍 Verifying payment: ${paymentIntentId}`);
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    const isPaid = paymentIntent.status === 'succeeded';
+
+    console.log(`${isPaid ? '✅' : '⏳'} Payment status: ${paymentIntent.status}`);
+
+    res.json({
+      status: paymentIntent.status,
+      paid: isPaid,
+      claimId: paymentIntent.metadata.claimId || '',
+      documentType: paymentIntent.metadata.documentType || '',
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to verify payment:', error);
+    res.status(500).json({
+      error: 'Failed to verify payment',
+      message: error.message
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`
@@ -699,7 +916,9 @@ app.listen(PORT, () => {
 ║  Port: ${PORT}                                                 ║
 ║  Nango: Connected                                           ║
 ║  Anthropic: ${anthropic ? 'Connected' : 'Not Configured'}                                    ║
+║  Gemini: ${gemini ? 'Connected' : 'Not Configured'}                                      ║
 ║  Resend: ${resend ? 'Connected' : 'Not Configured'}                                       ║
+║  Stripe: ${stripe ? 'Connected' : 'Not Configured'}                                        ║
 ║  Companies House: ${companiesHouseApiKey ? 'Connected' : 'Not Configured'}                                ║
 ╠════════════════════════════════════════════════════════════╣
 ║  Endpoints:                                                 ║
@@ -709,11 +928,15 @@ app.listen(PORT, () => {
 ║  • GET  /api/nango/connections     - List connections       ║
 ║  • DELETE /api/nango/connections   - Delete connection      ║
 ║  • POST /api/anthropic/messages    - Claude AI proxy        ║
+║  • POST /api/gemini/generate       - Gemini AI proxy        ║
 ║  • GET  /api/companies-house/search - Company search        ║
 ║  • GET  /api/companies-house/company/:num - Company profile ║
 ║  • GET  /api/notifications/status  - Email service status   ║
 ║  • POST /api/notifications/send-reminder - Send reminder    ║
 ║  • POST /api/notifications/test    - Test email             ║
+║  • GET  /api/payments/status       - Payment service status ║
+║  • POST /api/payments/create-intent - Create payment intent ║
+║  • GET  /api/payments/verify/:id   - Verify payment status  ║
 ╚════════════════════════════════════════════════════════════╝
   `);
 });

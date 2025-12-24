@@ -1,16 +1,18 @@
 
 import React, { useState, useRef } from 'react';
 import { Upload, FileSpreadsheet, Download, Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
-import { ClaimState, INITIAL_STATE, PartyType, INITIAL_PARTY, INITIAL_INVOICE } from '../types';
+import { ClaimState, INITIAL_STATE, PartyType, INITIAL_PARTY, INITIAL_INVOICE, Party } from '../types';
 import { getCountyFromPostcode } from '../constants';
 import { validateImportedClaim, ImportValidationResult } from '../utils/validation';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
+import { calculateInterest, calculateCompensation } from '../services/legalRules';
 
 interface CsvImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (claims: ClaimState[]) => void;
+  defaultClaimant?: Party;
 }
 
 interface ParsedClaimWithValidation {
@@ -19,7 +21,7 @@ interface ParsedClaimWithValidation {
   rowNumber: number;
 }
 
-export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose, onImport }) => {
+export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose, onImport, defaultClaimant }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parsedClaims, setParsedClaims] = useState<ParsedClaimWithValidation[]>([]);
@@ -208,31 +210,51 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                 }
             }
 
+            const claimant = defaultClaimant || { ...INITIAL_PARTY };
+            const defendant = {
+                ...INITIAL_PARTY,
+                type: pType,
+                name: name,
+                email: idxEmail !== -1 ? row[idxEmail] : '',
+                address: idxAddress !== -1 ? row[idxAddress] : '',
+                city: idxCity !== -1 ? row[idxCity] : '',
+                postcode: postcode,
+                county: county,
+            };
+            const invoice = {
+                ...INITIAL_INVOICE,
+                invoiceNumber: idxInvNum !== -1 ? row[idxInvNum] : `INV-${Math.floor(Math.random()*1000)}`,
+                dateIssued: idxDate !== -1 ? row[idxDate] : new Date().toISOString().split('T')[0],
+                dueDate: idxDue !== -1 ? row[idxDue] : '',
+                totalAmount: amount,
+                description: 'Imported via CSV'
+            };
+
+            // Calculate interest and compensation
+            const interest = calculateInterest(
+                invoice.totalAmount,
+                invoice.dateIssued,
+                invoice.dueDate,
+                claimant.type,
+                defendant.type
+            );
+            const compensation = calculateCompensation(
+                invoice.totalAmount,
+                claimant.type,
+                defendant.type
+            );
+
             const newClaim: ClaimState = {
                 ...INITIAL_STATE,
                 id: Math.random().toString(36).substr(2, 9),
                 status: status,
                 source: 'csv',
                 lastModified: Date.now(),
-                claimant: { ...INITIAL_PARTY, name: 'Your Company (Edit Later)' }, // Placeholder
-                defendant: {
-                    ...INITIAL_PARTY,
-                    type: pType,
-                    name: name,
-                    email: idxEmail !== -1 ? row[idxEmail] : '',
-                    address: idxAddress !== -1 ? row[idxAddress] : '',
-                    city: idxCity !== -1 ? row[idxCity] : '',
-                    postcode: postcode,
-                    county: county,
-                },
-                invoice: {
-                    ...INITIAL_INVOICE,
-                    invoiceNumber: idxInvNum !== -1 ? row[idxInvNum] : `INV-${Math.floor(Math.random()*1000)}`,
-                    dateIssued: idxDate !== -1 ? row[idxDate] : new Date().toISOString().split('T')[0],
-                    dueDate: idxDue !== -1 ? row[idxDue] : '',
-                    totalAmount: amount,
-                    description: 'Imported via CSV'
-                },
+                claimant,
+                defendant,
+                invoice,
+                interest,
+                compensation,
                 timeline: [{
                     date: idxDate !== -1 ? row[idxDate] : new Date().toISOString().split('T')[0],
                     description: `Invoice ${idxInvNum !== -1 ? row[idxInvNum] : ''} issued to ${name}`,
@@ -285,7 +307,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
       onClose={onClose}
       title="Import Claims (CSV)"
       description="Bulk create drafts from a spreadsheet."
-      maxWidthClassName="max-w-2xl"
+      maxWidthClassName="max-w-md"
       bodyClassName="p-0"
       titleIcon={(
         <div className="bg-teal-50 p-2 rounded-xl">
@@ -328,7 +350,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
                     </div>
 
                     {error && (
-                        <div className="flex items-center gap-3 bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 mb-6">
+                        <div className="flex items-center gap-3 bg-red-50/30 text-red-700 p-4 rounded-xl border border-slate-200 border-l-4 border-l-red-500 mb-6">
                             <AlertCircle className="w-5 h-5 flex-shrink-0" />
                             <p className="text-sm">{error}</p>
                         </div>
@@ -356,7 +378,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
 
                     {/* Skipped rows warning */}
                     {skippedRows.length > 0 && (
-                      <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-left">
+                      <div className="bg-red-50/30 border border-slate-200 border-l-4 border-l-red-500 rounded-xl p-4 mb-4 text-left">
                         <div className="flex items-center gap-2 mb-2">
                           <AlertCircle className="w-5 h-5 text-red-600" />
                           <h4 className="font-bold text-red-900 text-sm">
@@ -380,7 +402,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose,
 
                     {/* Warnings summary */}
                     {totalWarnings > 0 && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-left">
+                      <div className="bg-amber-50/30 border border-slate-200 border-l-4 border-l-amber-500 rounded-xl p-4 mb-4 text-left">
                         <div className="flex items-center gap-2 mb-2">
                           <AlertTriangle className="w-5 h-5 text-amber-600" />
                           <h4 className="font-bold text-amber-900 text-sm">

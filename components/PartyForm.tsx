@@ -103,11 +103,8 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
       return 'County is required';
     }
 
-    // Company number validation for businesses
-    if (field === 'companyNumber' && party.type === PartyType.BUSINESS) {
-      if (!value.trim()) {
-        return 'Company number is required for limited companies';
-      }
+    // Company number validation for businesses (optional but must be valid if provided)
+    if (field === 'companyNumber' && value.trim() && party.type === PartyType.BUSINESS) {
       if (!validateCompanyNumber(value)) {
         return 'Invalid company number format (e.g., 12345678 or SC123456)';
       }
@@ -133,8 +130,9 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
     newErrors.postcode = validateField('postcode', party.postcode);
     newErrors.county = validateField('county', party.county);
 
-    if (party.type === PartyType.BUSINESS) {
-      newErrors.companyNumber = validateField('companyNumber', party.companyNumber || '');
+    // Company number is optional but validate format if provided
+    if (party.type === PartyType.BUSINESS && party.companyNumber) {
+      newErrors.companyNumber = validateField('companyNumber', party.companyNumber);
     }
 
     if (party.email) {
@@ -200,64 +198,54 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
 
   return (
     <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 animate-fade-in">
-      <h2 className="text-lg font-semibold text-slate-900 mb-3 pb-2 border-b border-slate-200 font-display">{title}</h2>
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
+        <h2 className="text-lg font-semibold text-slate-900 font-display">{title}</h2>
+        <p className="text-xs text-slate-500"><span className="text-teal-500">*</span> Required fields</p>
+      </div>
 
-      <div className="mb-3">
+      <div className="mb-4">
         <div className="flex items-center gap-2 mb-2">
-          <label className="text-sm font-medium text-slate-700 block">Party Type</label>
+          <label htmlFor="party-type" className="text-sm font-medium text-slate-700 block">Party Type</label>
           <Tooltip content="Different rules apply. Businesses can claim £40-£100 compensation + 8% interest above base rate. Individuals claim 8% fixed interest.">
              <HelpCircle className="w-4 h-4 text-slate-400 hover:text-teal-500 cursor-help" />
           </Tooltip>
         </div>
-        <div className="flex gap-2 mb-2">
-          <button
-            onClick={() => handleChange('type', PartyType.INDIVIDUAL)}
-            disabled={readOnly}
-            className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:ring-offset-2 ${
-              party.type === PartyType.INDIVIDUAL
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Individual (Consumer)
-          </button>
-          <button
-            onClick={() => handleChange('type', PartyType.SOLE_TRADER)}
-            disabled={readOnly}
-            className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:ring-offset-2 ${
-              party.type === PartyType.SOLE_TRADER
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Sole Trader
-          </button>
-          <button
-            onClick={() => handleChange('type', PartyType.BUSINESS)}
-            disabled={readOnly}
-            className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:ring-offset-2 ${
-              party.type === PartyType.BUSINESS
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Limited Company
-          </button>
+        <Select
+          id="party-type"
+          options={[
+            { value: PartyType.INDIVIDUAL, label: 'Individual (Consumer)' },
+            { value: PartyType.SOLE_TRADER, label: 'Sole Trader' },
+            { value: PartyType.BUSINESS, label: 'Limited Company' },
+          ]}
+          value={party.type}
+          onChange={(e) => handleChange('type', e.target.value as PartyType)}
+          disabled={readOnly}
+          noMargin
+        />
+        {/* Info boxes with consistent height */}
+        <div className="min-h-[80px]">
+          {title.includes('Claimant') && (party.type === PartyType.BUSINESS || party.type === PartyType.SOLE_TRADER) && (
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-sm">
+              <p className="text-teal-900">
+                <strong>B2B Claim Benefits:</strong> {party.type === PartyType.SOLE_TRADER ? 'Sole Traders' : 'Businesses'} can claim Late Payment of Commercial Debts (Interest) Act 1998 interest (8% + Bank of England base rate) plus £40-£100 statutory compensation per invoice.
+              </p>
+            </div>
+          )}
+          {title.includes('Claimant') && party.type === PartyType.INDIVIDUAL && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm">
+              <p className="text-slate-700">
+                <strong>Consumer Claim:</strong> Individual claims use County Courts Act 1984 s.69 interest (8% per annum) but do not qualify for statutory compensation.
+              </p>
+            </div>
+          )}
+          {title.includes('Defendant') && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm">
+              <p className="text-slate-600">
+                <strong>Defendant Details:</strong> Enter accurate information for the party you are claiming against. Incorrect details may delay your claim.
+              </p>
+            </div>
+          )}
         </div>
-        {title.includes('Claimant') && (party.type === PartyType.BUSINESS || party.type === PartyType.SOLE_TRADER) && (
-          <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-sm">
-            <p className="text-teal-900">
-              <strong>B2B Claim Benefits:</strong> {party.type === PartyType.SOLE_TRADER ? 'Sole Traders' : 'Businesses'} can claim Late Payment of Commercial Debts (Interest) Act 1998 interest (8% + Bank of England base rate) plus £40-£100 statutory compensation per invoice.
-            </p>
-          </div>
-        )}
-        {title.includes('Claimant') && party.type === PartyType.INDIVIDUAL && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm">
-            <p className="text-slate-700">
-              <strong>Consumer Claim:</strong> Individual claims use County Courts Act 1984 s.69 interest (8% per annum) but do not qualify for statutory compensation.
-            </p>
-          </div>
-        )}
       </div>
 
       <Input
@@ -271,6 +259,18 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
         readOnly={readOnly}
       />
 
+      {/* Contact Person Field - for businesses and sole traders */}
+      {(party.type === PartyType.BUSINESS || party.type === PartyType.SOLE_TRADER) && (
+        <Input
+          label="Contact Person (Optional)"
+          placeholder="e.g. John Smith, Accounts Department"
+          value={party.contactName || ''}
+          onChange={(e) => handleChange('contactName', e.target.value)}
+          helpText="Named contact for correspondence"
+          readOnly={readOnly}
+        />
+      )}
+
       {party.type === PartyType.BUSINESS && (
         <div className="space-y-3">
           {/* Companies House Lookup UI - Only for Defendant */}
@@ -283,27 +283,29 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
               <p className="text-sm text-slate-600 mb-2">
                 Enter a company number or name below, then click search to auto-fill details.
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <input
-                    type="text"
+                  <Input
+                    label="Company Number or Name"
                     placeholder="Company number (e.g. 12345678) or name"
                     value={party.companyNumber || ''}
                     onChange={(e) => handleChange('companyNumber', e.target.value)}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 bg-white transition-colors"
+                    noMargin
                   />
                 </div>
-                <Button
-                  type="button"
-                  onClick={handleCompaniesHouseLookup}
-                  disabled={isSearching}
-                  isLoading={isSearching}
-                  variant="primary"
-                  className="px-4 py-2.5"
-                  icon={!isSearching && <Search className="w-4 h-4" />}
-                >
-                  Search
-                </Button>
+                <div className="pb-[1px]">
+                  <Button
+                    type="button"
+                    onClick={handleCompaniesHouseLookup}
+                    disabled={isSearching}
+                    isLoading={isSearching}
+                    variant="primary"
+                    className="px-4 py-3"
+                    icon={!isSearching && <Search className="w-4 h-4" />}
+                  >
+                    Search
+                  </Button>
+                </div>
               </div>
               {/* Search feedback */}
               {searchError && (
@@ -345,15 +347,14 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           {/* Regular Company Number Input (shown for claimant or if lookup not available) */}
           {(!isDefendant || readOnly) && (
             <Input
-              label="Company Number"
+              label="Company Number (Optional)"
               placeholder="e.g. 12345678"
               value={party.companyNumber || ''}
               onChange={(e) => handleChange('companyNumber', e.target.value)}
               onBlur={() => handleBlur('companyNumber')}
               error={touched.has('companyNumber') ? errors.companyNumber : undefined}
-              helpText="Companies House registration number (8 digits)"
+              helpText="Companies House registration number - optional"
               maxLength={8}
-              required
               readOnly={readOnly}
             />
           )}

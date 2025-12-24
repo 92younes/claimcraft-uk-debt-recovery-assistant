@@ -42,10 +42,10 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
       <div className="space-y-4">
         <div>
           <h3 className="font-semibold text-slate-900">
-            Are you authorised to verify this company?
+            Are you authorised to act on behalf of this business?
           </h3>
           <p className="text-sm text-slate-500 mt-1">
-            For security and compliance reasons, only company owners or authorised representatives can complete the verification process
+            For security and compliance reasons, only business owners or authorised representatives can complete the setup process
           </p>
         </div>
 
@@ -54,7 +54,7 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
             type="button"
             onClick={() => handleAuthoritySelect(true)}
             aria-pressed={data.hasAuthority === true}
-            aria-label="Yes, I have authority to verify this company"
+            aria-label="Yes, I have authority to act on behalf of this business"
             className={`
               relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200 text-left
               focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
@@ -75,7 +75,7 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
                 Yes
               </p>
               <p className="text-xs text-slate-500">
-                I have the authority to verify this company
+                I am authorised to act on behalf of this business
               </p>
             </div>
           </button>
@@ -84,7 +84,7 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
             type="button"
             onClick={() => handleAuthoritySelect(false)}
             aria-pressed={data.hasAuthority === false}
-            aria-label="No, I do not have authority to verify this company"
+            aria-label="No, I am not authorised to act on behalf of this business"
             className={`
               relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200 text-left
               focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2
@@ -105,7 +105,7 @@ export const AccountTypeStep: React.FC<AccountTypeStepProps> = ({
                 No
               </p>
               <p className="text-xs text-slate-500">
-                I do not have the authority to verify this company
+                I am not authorised to act on behalf of this business
               </p>
             </div>
           </button>

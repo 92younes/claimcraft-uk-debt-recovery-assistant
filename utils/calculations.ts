@@ -59,3 +59,49 @@ export const formatGrandTotal = (
 ): string => {
   return formatCurrency(calculateGrandTotal(principal, interest, compensation, courtFee));
 };
+
+/**
+ * Get currency symbol from currency code
+ * Defaults to GBP for UK debt recovery context
+ */
+export const getCurrencySymbol = (currency?: string): string => {
+  const symbols: Record<string, string> = {
+    'GBP': '\u00A3',
+    'USD': '$',
+    'EUR': '\u20AC',
+    'AUD': 'A$',
+    'CAD': 'C$'
+  };
+  return symbols[currency || 'GBP'] || '\u00A3';
+};
+
+/**
+ * Recalculate interest and compensation for a claim
+ * This should be called whenever invoice amount, dates, or party types change
+ * to ensure all views show consistent values
+ */
+export const recalculateClaimFinancials = (
+  claim: {
+    invoice: { totalAmount: number; dateIssued: string; dueDate: string };
+    claimant: { type: any };
+    defendant: { type: any };
+  },
+  calculateInterestFn: (amount: number, dateIssued: string, dueDate: string, claimantType: any, defendantType: any) => any,
+  calculateCompensationFn: (amount: number, claimantType: any, defendantType: any) => number
+) => {
+  const interest = calculateInterestFn(
+    claim.invoice.totalAmount,
+    claim.invoice.dateIssued,
+    claim.invoice.dueDate,
+    claim.claimant.type,
+    claim.defendant.type
+  );
+
+  const compensation = calculateCompensationFn(
+    claim.invoice.totalAmount,
+    claim.claimant.type,
+    claim.defendant.type
+  );
+
+  return { interest, compensation };
+};

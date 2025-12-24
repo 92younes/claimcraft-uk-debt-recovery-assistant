@@ -1,6 +1,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Eraser, Check } from 'lucide-react';
+import { Button } from './ui/Button';
 
 interface SignaturePadProps {
   onSave: (base64: string) => void;
@@ -134,19 +135,21 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave }) => {
           )}
        </div>
        <div className="flex justify-end gap-2 mt-3">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleClear}
-            className="text-slate-500 hover:text-slate-800 px-3 py-1.5 text-sm font-medium flex items-center gap-1 transition-colors"
+            icon={<Eraser className="w-4 h-4" />}
           >
-             <Eraser className="w-4 h-4" /> Clear
-          </button>
-          <button
+            Clear
+          </Button>
+          <Button
             onClick={handleSave}
             disabled={!hasContent}
-            className="bg-teal-600 text-white hover:bg-teal-700 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:bg-slate-300 transition-colors duration-200 shadow-sm"
+            icon={<Check className="w-4 h-4" />}
           >
-             <Check className="w-4 h-4" /> Apply Signature
-          </button>
+            Apply Signature
+          </Button>
        </div>
     </div>
   );

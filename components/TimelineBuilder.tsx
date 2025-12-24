@@ -1,55 +1,115 @@
 import React, { useState, useEffect } from 'react';
-import { TimelineEvent } from '../types';
-import { Calendar, Plus, Trash2, MessageCircle, FileText, PoundSterling, Mail, Zap, Clock, AlertCircle, Scale, CheckCircle, Truck, CreditCard, AlertTriangle } from 'lucide-react';
+import { TimelineEvent, Deadline, ClaimState, PartyType } from '../types';
+import { Calendar, Plus, Trash2, MessageCircle, FileText, PoundSterling, Mail, Zap, Clock, AlertCircle, Scale, CheckCircle, Truck, CreditCard, AlertTriangle, Bell, HandCoins, CalendarPlus, X } from 'lucide-react';
+import { Input, Select } from './ui/Input';
+import { DateInput } from './ui/DateInput';
+import { Button } from './ui/Button';
+import { safeFormatDate, isValidDate } from '../utils/formatters';
+import { getDeadlineFromTimelineEvent, calculateSuggestedDeadlines } from '../services/deadlineService';
 
 interface TimelineBuilderProps {
   events: TimelineEvent[];
   onChange: (events: TimelineEvent[]) => void;
   invoiceDate?: string;
+  /** Claim data for deadline calculations (defendant type, claim ID, etc.) */
+  claimData?: ClaimState;
+  /** Callback when a deadline should be added to the calendar */
+  onAddDeadline?: (deadline: Deadline) => void;
+  /** Existing deadlines to avoid duplicates */
+  existingDeadlines?: Deadline[];
+  /** Callback to navigate to Invoice tab when invoice date is missing */
+  onGoToInvoice?: () => void;
 }
 
-export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChange, invoiceDate }) => {
+export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({
+  events,
+  onChange,
+  invoiceDate,
+  claimData,
+  onAddDeadline,
+  existingDeadlines = [],
+  onGoToInvoice
+}) => {
   const [newEvent, setNewEvent] = useState<TimelineEvent>({
     date: '',
     description: '',
     type: 'communication'
   });
   const [orderWarning, setOrderWarning] = useState<string | null>(null);
+  const [suggestedDeadlines, setSuggestedDeadlines] = useState<Deadline[]>([]);
+  const [dismissedDeadlineIds, setDismissedDeadlineIds] = useState<Set<string>>(new Set());
+
+  // Calculate suggested deadlines when events change
+  useEffect(() => {
+    if (!claimData || !onAddDeadline) return;
+
+    // Create a temporary claim state with current events for calculation
+    const tempClaim: ClaimState = {
+      ...claimData,
+      timeline: events
+    };
+
+    const suggestions = calculateSuggestedDeadlines(tempClaim);
+
+    // Filter out already existing deadlines and dismissed ones
+    const existingTypes = new Set(existingDeadlines.map(d => `${d.type}_${d.claimId}`));
+    const newSuggestions = suggestions.filter(s =>
+      !existingTypes.has(`${s.type}_${s.claimId}`) &&
+      !dismissedDeadlineIds.has(`${s.type}_${s.dueDate}`)
+    );
+
+    setSuggestedDeadlines(newSuggestions);
+  }, [events, claimData, existingDeadlines, dismissedDeadlineIds, onAddDeadline]);
+
+  const handleAddDeadline = (deadline: Deadline) => {
+    if (onAddDeadline) {
+      onAddDeadline(deadline);
+      // Remove from suggestions
+      setSuggestedDeadlines(prev => prev.filter(d => d.id !== deadline.id));
+    }
+  };
+
+  const handleDismissDeadline = (deadline: Deadline) => {
+    setDismissedDeadlineIds(prev => new Set([...prev, `${deadline.type}_${deadline.dueDate}`]));
+    setSuggestedDeadlines(prev => prev.filter(d => d.id !== deadline.id));
+  };
 
   const validateEventOrder = (events: TimelineEvent[]): string | null => {
-    // Check for logical event sequence
-    const eventTypes = events.map(e => ({ type: e.type, date: new Date(e.date).getTime() }));
+    // Check for logical event sequence using actual dates (not array indices)
+    const getEventDate = (type: TimelineEvent['type']): number | null => {
+      const event = events.find(e => e.type === type);
+      return event ? new Date(event.date).getTime() : null;
+    };
 
-    // Find key events
-    const contractIdx = eventTypes.findIndex(e => e.type === 'contract');
-    const serviceIdx = eventTypes.findIndex(e => e.type === 'service_delivered');
-    const invoiceIdx = eventTypes.findIndex(e => e.type === 'invoice');
-    const paymentDueIdx = eventTypes.findIndex(e => e.type === 'payment_due');
-    const lbaIdx = eventTypes.findIndex(e => e.type === 'lba_sent');
+    const contractDate = getEventDate('contract');
+    const serviceDate = getEventDate('service_delivered');
+    const invoiceDate = getEventDate('invoice');
+    const paymentDueDate = getEventDate('payment_due');
+    const lbaDate = getEventDate('lba_sent');
 
     // Contract should come before service delivery (if both exist)
-    if (contractIdx !== -1 && serviceIdx !== -1 && contractIdx > serviceIdx) {
-      return 'Warning: Contract typically comes before service delivery';
+    if (contractDate !== null && serviceDate !== null && contractDate > serviceDate) {
+      return 'Warning: Contract date is after service delivery - contracts are typically signed before work begins';
     }
 
     // Service should come before invoice (if both exist)
-    if (serviceIdx !== -1 && invoiceIdx !== -1 && serviceIdx > invoiceIdx) {
-      return 'Warning: Service delivery typically comes before invoicing';
+    if (serviceDate !== null && invoiceDate !== null && serviceDate > invoiceDate) {
+      return 'Warning: Service delivery date is after invoice date - invoices are typically issued after work is completed';
     }
 
     // Contract should come before invoice (if both exist)
-    if (contractIdx !== -1 && invoiceIdx !== -1 && contractIdx > invoiceIdx) {
-      return 'Warning: Contract event typically comes before Invoice';
+    if (contractDate !== null && invoiceDate !== null && contractDate > invoiceDate) {
+      return 'Warning: Contract date is after invoice date - this is unusual and may weaken your claim';
     }
 
     // Invoice should come before payment due (if both exist)
-    if (invoiceIdx !== -1 && paymentDueIdx !== -1 && invoiceIdx > paymentDueIdx) {
-      return 'Warning: Invoice should be sent before Payment Due date';
+    if (invoiceDate !== null && paymentDueDate !== null && invoiceDate > paymentDueDate) {
+      return 'Warning: Invoice date is after payment due date - payment due date should follow the invoice';
     }
 
     // LBA should come after payment due (if both exist)
-    if (lbaIdx !== -1 && paymentDueIdx !== -1 && lbaIdx < paymentDueIdx) {
-      return 'Warning: Letter Before Action should be sent after payment is overdue';
+    if (lbaDate !== null && paymentDueDate !== null && lbaDate < paymentDueDate) {
+      return 'Warning: Letter Before Action is dated before payment due - LBA should only be sent after payment becomes overdue';
     }
 
     return null;
@@ -107,11 +167,13 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
       case 'chaser': return <Mail className="w-4 h-4 text-amber-500"/>;
       case 'lba_sent': return <Scale className="w-4 h-4 text-red-500"/>;
       case 'acknowledgment': return <CheckCircle className="w-4 h-4 text-teal-500"/>;
+      case 'payment_reminder': return <Bell className="w-4 h-4 text-blue-500"/>;
+      case 'promise_to_pay': return <HandCoins className="w-4 h-4 text-green-600"/>;
       default: return <MessageCircle className="w-4 h-4 text-slate-500"/>;
     }
   };
 
-  const isValidInvoiceDate = invoiceDate && !isNaN(new Date(invoiceDate).getTime());
+  const isValidInvoiceDate = isValidDate(invoiceDate);
 
   return (
     <div className="max-w-7xl mx-auto animate-fade-in">
@@ -133,7 +195,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                   <Zap className="w-4 h-4" /> Quick Add Timeline Events
               </p>
               <span className="text-xs text-teal-600 bg-white px-2 py-1 rounded-lg border border-teal-200 font-mono">
-                Invoice: {new Date(invoiceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                Invoice: {safeFormatDate(invoiceDate, { format: 'short', fallback: 'Not set' })}
               </span>
             </div>
             <p className="text-xs text-slate-600 mb-3">Add common debt recovery events based on your invoice date:</p>
@@ -148,9 +210,10 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                    </div>
                    <span className="text-[10px] text-slate-500 font-normal group-hover:text-teal-600">
                      {(() => {
-                       const date = new Date(invoiceDate);
+                       if (!isValidDate(invoiceDate)) return '(+30 days)';
+                       const date = new Date(invoiceDate!);
                        date.setDate(date.getDate() + 30);
-                       return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                       return safeFormatDate(date, { format: 'short' });
                      })()}
                      {' '}(+30 days)
                    </span>
@@ -165,9 +228,10 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                    </div>
                    <span className="text-[10px] text-slate-500 font-normal group-hover:text-amber-500">
                      {(() => {
-                       const date = new Date(invoiceDate);
+                       if (!isValidDate(invoiceDate)) return '(+7 days overdue)';
+                       const date = new Date(invoiceDate!);
                        date.setDate(date.getDate() + 37);
-                       return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                       return safeFormatDate(date, { format: 'short' });
                      })()}
                      {' '}(+7 days overdue)
                    </span>
@@ -182,9 +246,10 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                    </div>
                    <span className="text-[10px] text-slate-500 font-normal group-hover:text-orange-500">
                      {(() => {
-                       const date = new Date(invoiceDate);
+                       if (!isValidDate(invoiceDate)) return '(+14 days overdue)';
+                       const date = new Date(invoiceDate!);
                        date.setDate(date.getDate() + 44);
-                       return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                       return safeFormatDate(date, { format: 'short' });
                      })()}
                      {' '}(+14 days overdue)
                    </span>
@@ -199,13 +264,51 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                    </div>
                    <span className="text-[10px] text-slate-500 font-normal group-hover:text-red-500">
                      {(() => {
-                       const date = new Date(invoiceDate);
+                       if (!isValidDate(invoiceDate)) return '(+28 days overdue)';
+                       const date = new Date(invoiceDate!);
                        date.setDate(date.getDate() + 58);
-                       return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                       return safeFormatDate(date, { format: 'short' });
                      })()}
                      {' '}(+28 days overdue)
                    </span>
                    <span className="text-[10px] text-red-500 font-bold">REQUIRED before court</span>
+                </button>
+                <button
+                  onClick={() => addQuickEvent(35, 'payment_reminder', 'Payment Reminder sent via Email')}
+                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-all duration-200 flex flex-col items-start gap-1 group shadow-sm"
+                >
+                   <div className="flex items-center gap-2 w-full">
+                     <Bell className="w-4 h-4 text-blue-500" />
+                     <span>Payment Reminder Sent</span>
+                   </div>
+                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-blue-500">
+                     {(() => {
+                       if (!isValidDate(invoiceDate)) return '(+5 days overdue)';
+                       const date = new Date(invoiceDate!);
+                       date.setDate(date.getDate() + 35);
+                       return safeFormatDate(date, { format: 'short' });
+                     })()}
+                     {' '}(+5 days overdue)
+                   </span>
+                </button>
+                <button
+                  onClick={() => addQuickEvent(40, 'promise_to_pay', 'Debtor promised to pay by [DATE]')}
+                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:border-green-400 hover:bg-green-50 hover:text-green-600 transition-all duration-200 flex flex-col items-start gap-1 group shadow-sm"
+                >
+                   <div className="flex items-center gap-2 w-full">
+                     <HandCoins className="w-4 h-4 text-green-600" />
+                     <span>Promise to Pay Received</span>
+                   </div>
+                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-green-500">
+                     {(() => {
+                       if (!isValidDate(invoiceDate)) return '(+10 days overdue)';
+                       const date = new Date(invoiceDate!);
+                       date.setDate(date.getDate() + 40);
+                       return safeFormatDate(date, { format: 'short' });
+                     })()}
+                     {' '}(+10 days overdue)
+                   </span>
+                   <span className="text-[10px] text-green-600 font-medium">Record debtor's promise</span>
                 </button>
             </div>
             <div className="mt-2 text-[10px] text-slate-500 bg-white p-2 rounded-lg border border-slate-200">
@@ -215,9 +318,18 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
        ) : (
           <div className="mb-4 mt-4 flex items-start gap-3 text-xs text-amber-700 bg-amber-50 p-4 rounded-xl border border-amber-200">
              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-             <div>
+             <div className="flex-1">
                <p className="font-bold mb-1 text-amber-800">Invoice Date Required</p>
-               <p className="text-amber-600">Set an Invoice Date in the previous step to enable Quick Add timeline events based on standard payment terms.</p>
+               <p className="text-amber-600 mb-2">Set an Invoice Date in the Invoice tab to enable Quick Add timeline events based on standard payment terms.</p>
+               {onGoToInvoice && (
+                 <button
+                   onClick={onGoToInvoice}
+                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium rounded-lg transition-colors text-xs"
+                 >
+                   <Calendar className="w-3.5 h-3.5" />
+                   Set Invoice Date
+                 </button>
+               )}
              </div>
           </div>
        )}
@@ -225,50 +337,52 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
       {/* Input Area */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 grid grid-cols-1 md:grid-cols-12 gap-3 items-end shadow-sm">
         <div className="md:col-span-3">
-          <label className="text-xs font-bold text-slate-500 uppercase mb-1 block tracking-wider">Date</label>
-          <input
-            type="date"
+          <DateInput
+            label="Date"
             value={newEvent.date}
-            onChange={e => setNewEvent({...newEvent, date: e.target.value})}
-            className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none transition-colors"
+            onChange={value => setNewEvent({...newEvent, date: value})}
+            noMargin
+            maxToday
           />
         </div>
         <div className="md:col-span-3">
-           <label className="text-xs font-bold text-slate-500 uppercase mb-1 block tracking-wider">Event Type</label>
-           <select
-             value={newEvent.type}
-             onChange={e => setNewEvent({...newEvent, type: e.target.value as any})}
-             className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none transition-colors"
-           >
-             <option value="contract">Contract Signed</option>
-             <option value="service_delivered">Service/Goods Delivered</option>
-             <option value="invoice">Invoice Sent</option>
-             <option value="payment_due">Payment Due</option>
-             <option value="part_payment">Part Payment Received</option>
-             <option value="chaser">Chaser / Reminder</option>
-             <option value="lba_sent">Letter Before Action</option>
-             <option value="acknowledgment">Debtor Acknowledged</option>
-             <option value="communication">Other Comms</option>
-           </select>
+          <Select
+            label="Event Type"
+            value={newEvent.type}
+            onChange={e => setNewEvent({...newEvent, type: e.target.value as any})}
+            options={[
+              { value: 'contract', label: 'Contract Signed' },
+              { value: 'service_delivered', label: 'Service/Goods Delivered' },
+              { value: 'invoice', label: 'Invoice Sent' },
+              { value: 'payment_due', label: 'Payment Due' },
+              { value: 'part_payment', label: 'Part Payment Received' },
+              { value: 'payment_reminder', label: 'Payment Reminder Sent' },
+              { value: 'chaser', label: 'Chaser / Reminder' },
+              { value: 'promise_to_pay', label: 'Promise to Pay Received' },
+              { value: 'lba_sent', label: 'Letter Before Action' },
+              { value: 'acknowledgment', label: 'Debtor Acknowledged' },
+              { value: 'communication', label: 'Other Comms' },
+            ]}
+            noMargin
+          />
         </div>
         <div className="md:col-span-5">
-           <label className="text-xs font-bold text-slate-500 uppercase mb-1 block tracking-wider">Description</label>
-           <input
-             type="text"
-             placeholder="e.g. Called debtor, they promised payment by Friday"
-             value={newEvent.description}
-             onChange={e => setNewEvent({...newEvent, description: e.target.value})}
-             className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none transition-colors"
-           />
+          <Input
+            label="Description"
+            placeholder="e.g. Called debtor, they promised payment by Friday"
+            value={newEvent.description}
+            onChange={e => setNewEvent({...newEvent, description: e.target.value})}
+            noMargin
+          />
         </div>
         <div className="md:col-span-1">
-          <button
+          <Button
             onClick={addEvent}
             disabled={!newEvent.date || !newEvent.description}
-            className="w-full bg-teal-600 hover:bg-teal-700 text-white p-2.5 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:bg-slate-300 shadow-sm"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
+            icon={<Plus className="w-5 h-5" />}
+            iconOnly
+            className="w-full h-[46px]"
+          />
         </div>
       </div>
 
@@ -286,11 +400,83 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
         </div>
       )}
 
+      {/* Suggested Deadlines - Auto-generated from timeline events */}
+      {suggestedDeadlines.length > 0 && onAddDeadline && (
+        <div className="mb-6 bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-xl p-4 animate-fade-in">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-1.5 bg-teal-100 rounded-lg">
+              <CalendarPlus className="w-5 h-5 text-teal-600" />
+            </div>
+            <div>
+              <h4 className="font-bold text-teal-900 text-sm">Add to Calendar?</h4>
+              <p className="text-teal-700 text-xs">Track these important deadlines based on your timeline</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {suggestedDeadlines.map((deadline) => (
+              <div
+                key={deadline.id}
+                className="bg-white rounded-lg border border-teal-200 p-3 flex items-center justify-between gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-900 text-sm truncate">
+                      {deadline.title}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-medium whitespace-nowrap">
+                      {safeFormatDate(deadline.dueDate, { format: 'short' })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 line-clamp-2">
+                    {deadline.description}
+                  </p>
+                  {deadline.legalReference && (
+                    <p className="text-[10px] text-slate-500 mt-1 italic">
+                      Ref: {deadline.legalReference}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleAddDeadline(deadline)}
+                    icon={<CalendarPlus className="w-4 h-4" />}
+                  >
+                    Add
+                  </Button>
+                  <button
+                    onClick={() => handleDismissDeadline(deadline)}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    title="Dismiss suggestion"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-[10px] text-teal-600 mt-3">
+            <strong>Why these deadlines?</strong> Based on UK Pre-Action Protocol for Debt Claims and CPR Part 7.
+          </p>
+        </div>
+      )}
+
       {/* Timeline Visual */}
       <div className="relative border-l-2 border-slate-200 ml-4 space-y-3 pb-3">
         {events.length === 0 && (
-          <div className="pl-8 py-3 text-slate-500 italic text-sm border border-dashed border-slate-300 rounded-xl bg-slate-50 m-3 text-center">
-             No events added yet. Use the Quick Add buttons or enter manually above.
+          <div className="pl-8 py-6 border border-dashed border-slate-300 rounded-xl bg-gradient-to-br from-slate-50 to-white m-3 text-center">
+            <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-slate-900 mb-1">No events added yet</p>
+            <p className="text-xs text-slate-600 mb-3 max-w-xs mx-auto">
+              Build your timeline by adding key dates like invoice issuance, payment requests, and correspondence.
+            </p>
+            <p className="text-xs text-teal-600 font-medium">
+              Use the Quick Add buttons or enter manually above
+            </p>
           </div>
         )}
 
@@ -303,7 +489,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({ events, onChan
                   <div className="p-1 bg-slate-100 rounded-lg">
                     {getIcon(ev.type)}
                   </div>
-                  <span className="text-xs font-bold uppercase text-slate-500 tracking-wider font-mono">{new Date(ev.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  <span className="text-xs font-bold uppercase text-slate-500 tracking-wider font-mono">{safeFormatDate(ev.date, { format: 'short', fallback: 'No date' })}</span>
                 </div>
                 <p className="text-slate-700 font-medium text-sm mt-1">{ev.description}</p>
               </div>

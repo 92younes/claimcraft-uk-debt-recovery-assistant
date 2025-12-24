@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { DateInput } from './ui/DateInput';
 import { CourtFormData, DocumentType } from '../types';
 import { FileText, Calendar, Users, Scale, HelpCircle } from 'lucide-react';
 
@@ -63,7 +64,7 @@ export const CourtFormDataModal: React.FC<CourtFormDataModalProps> = ({
       onClose={onClose}
       title={getTitle()}
       description={getDescription()}
-      maxWidthClassName="max-w-2xl"
+      maxWidthClassName="max-w-lg"
       titleIcon={
         <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
           <FileText className="w-6 h-6 text-teal-600" />
@@ -93,11 +94,10 @@ export const CourtFormDataModal: React.FC<CourtFormDataModalProps> = ({
               <Calendar className="w-4 h-4 text-teal-600" />
               Admission Details
             </h3>
-            <Input
+            <DateInput
               label="Date Defendant Admitted"
-              type="date"
               value={formData.admissionDate || ''}
-              onChange={(e) => updateField('admissionDate', e.target.value)}
+              onChange={(value) => updateField('admissionDate', value)}
               required
             />
             <div className="space-y-2">

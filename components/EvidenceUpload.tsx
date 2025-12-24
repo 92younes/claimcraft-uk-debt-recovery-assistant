@@ -122,7 +122,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
           <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-105 transition-transform duration-200">
             <Upload className="w-5 h-5 text-teal-500" />
           </div>
-          <p className="font-medium text-slate-700">Click to upload Documents</p>
+          <p className="font-medium text-slate-700">Click to upload documents</p>
           <p className="text-xs text-slate-400 mt-1">PDF or images (JPG, PNG, GIF, WebP) • Max 10MB each</p>
         </div>
       </label>

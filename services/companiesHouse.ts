@@ -1,4 +1,5 @@
 import { Party, PartyType } from "../types";
+import { postcodeToCounty } from "../utils/postcodeToCounty";
 
 /**
  * Companies House API Integration
@@ -87,11 +88,24 @@ const parseAddress = (address: any): { address: string; city: string; county: st
   if (address.address_line_1) parts.push(address.address_line_1);
   if (address.address_line_2) parts.push(address.address_line_2);
 
+  const postcode = address.postal_code || '';
+
+  // Use region from Companies House if available, otherwise derive from postcode
+  let county = address.region || '';
+
+  // If no county provided by Companies House, try to derive from postcode
+  if (!county && postcode) {
+    const derivedCounty = postcodeToCounty(postcode);
+    if (derivedCounty) {
+      county = derivedCounty;
+    }
+  }
+
   return {
     address: parts.join(', '),
     city: address.locality || '',
-    county: address.region || '',
-    postcode: address.postal_code || ''
+    county: county,
+    postcode: postcode
   };
 };
 

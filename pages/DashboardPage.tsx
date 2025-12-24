@@ -6,31 +6,35 @@ import { CsvImportModal } from '../components/CsvImportModal';
 import { AccountingIntegration } from '../components/AccountingIntegration';
 import { XeroInvoiceImporter } from '../components/XeroInvoiceImporter';
 import { profileToClaimantParty } from '../services/userProfileService';
-import { 
-  exportAllUserData, 
+import {
+  exportAllUserData,
   deleteAllUserData,
   saveClaimToStorage,
   getStoredClaims,
   deleteDeadlinesForClaim,
-  deleteClaimFromStorage 
+  deleteClaimFromStorage
 } from '../services/storageService';
-import { ClaimState, Step, INITIAL_PARTY } from '../types';
+import { ClaimState, Step, INITIAL_PARTY, AccountingConnection } from '../types';
+import { getTodayISO } from '../utils/formatters';
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
-  const { 
-    dashboardClaims, 
-    setDashboardClaims, 
-    setClaimData, 
+  const {
+    dashboardClaims,
+    setDashboardClaims,
+    setClaimData,
     createNewClaim,
     setStep,
-    userProfile
+    userProfile,
+    deadlines,
+    accountingConnection,
+    setAccountingConnection,
+    completeDeadline
   } = useClaimStore();
 
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [showAccountingModal, setShowAccountingModal] = useState(false);
-  const [showXeroImporter, setShowXeroImporter] = useState(false);
-  const [accountingConnection, setAccountingConnection] = useState<any>(null); 
+  const [showXeroImporter, setShowXeroImporter] = useState(false); 
 
   const handleStartNewClaim = () => {
       createNewClaim();
@@ -39,29 +43,19 @@ export const DashboardPage = () => {
 
   const handleResumeClaim = (claim: ClaimState) => {
       setClaimData(claim);
-      // Determine resume step logic (simplified)
-      let resumeStep: Step = Step.EVIDENCE;
-
-      // If it has a generated document, resume at Draft unless it's already finalized/sent
-      if (claim.status === 'sent' || claim.status === 'court' || claim.status === 'judgment') {
-        resumeStep = Step.REVIEW;
-      } else if (claim.generated) {
-        resumeStep = Step.DRAFT;
-      } else if (claim.selectedDocType) {
-        resumeStep = Step.STRATEGY;
-      } else if (claim.assessment) {
-        resumeStep = Step.VERIFY;
-      } else {
-        resumeStep = Step.EVIDENCE;
-      }
-      
-      setStep(resumeStep); 
-      navigate('/wizard');
+      // Navigate to claim overview page instead of directly to wizard
+      navigate('/claim-overview');
   };
 
   const handleDeleteClaim = async (id: string) => {
       await deleteDeadlinesForClaim(id);
       await deleteClaimFromStorage(id);
+      const claims = await getStoredClaims();
+      setDashboardClaims(claims);
+  };
+
+  const handleUpdateClaim = async (claim: ClaimState) => {
+      await saveClaimToStorage(claim);
       const claims = await getStoredClaims();
       setDashboardClaims(claims);
   };
@@ -72,7 +66,7 @@ export const DashboardPage = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `claimcraft-backup-${new Date().toISOString().split('T')[0]}.json`;
+        link.download = `claimcraft-backup-${getTodayISO()}.json`;
         link.click();
         URL.revokeObjectURL(url);
       } catch (error) {
@@ -89,6 +83,15 @@ export const DashboardPage = () => {
       }
   };
 
+  const handleDeadlineClick = (deadline: import('../types').Deadline) => {
+    const claim = dashboardClaims.find(c => c.id === deadline.claimId);
+    if (claim) {
+      setClaimData(claim);
+      // Navigate to claim overview page
+      navigate('/claim-overview');
+    }
+  };
+
   return (
     <>
       <Dashboard
@@ -96,16 +99,21 @@ export const DashboardPage = () => {
         onCreateNew={handleStartNewClaim}
         onResume={handleResumeClaim}
         onDelete={handleDeleteClaim}
+        onUpdateClaim={handleUpdateClaim}
         onImportCsv={() => setShowCsvModal(true)}
         accountingConnection={accountingConnection}
         onConnectAccounting={() => setShowAccountingModal(true)}
         onExportAllData={handleExportAllData}
         onDeleteAllData={handleDeleteAllData}
+        deadlines={deadlines}
+        onDeadlineClick={handleDeadlineClick}
+        onCompleteDeadline={completeDeadline}
+        onViewAllDeadlines={() => navigate('/calendar')}
       />
       
-      <CsvImportModal 
-        isOpen={showCsvModal} 
-        onClose={() => setShowCsvModal(false)} 
+      <CsvImportModal
+        isOpen={showCsvModal}
+        onClose={() => setShowCsvModal(false)}
         onImport={async (claims) => {
             for (const claim of claims) {
                 await saveClaimToStorage(claim);
@@ -113,7 +121,12 @@ export const DashboardPage = () => {
             const stored = await getStoredClaims();
             setDashboardClaims(stored);
             setShowCsvModal(false);
-        }} 
+        }}
+        defaultClaimant={
+          userProfile
+            ? profileToClaimantParty(userProfile)
+            : undefined
+        }
       />
       
       <AccountingIntegration
@@ -123,7 +136,7 @@ export const DashboardPage = () => {
           setShowAccountingModal(false);
           setShowXeroImporter(true);
         }}
-        onConnectionChange={setAccountingConnection}
+        onConnectionChange={(connection) => setAccountingConnection(connection)}
       />
 
       <XeroInvoiceImporter

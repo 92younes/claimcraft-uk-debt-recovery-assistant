@@ -147,3 +147,51 @@ export const validateVerificationStep = (_profile: Partial<UserProfile>): StepVa
     errors: {}
   };
 };
+
+/**
+ * Validate payment details (optional but must be valid if provided)
+ * Sort code format: XX-XX-XX (6 digits with dashes)
+ * Account number: 8 digits
+ */
+export const validatePaymentDetailsStep = (profile: Partial<UserProfile>): StepValidation => {
+  const errors: Record<string, string> = {};
+  const payment = profile.paymentDetails;
+
+  // Payment details are optional, but if any field is provided, validate format
+  if (!payment) {
+    return { isValid: true, errors: {} };
+  }
+
+  const hasAnyField = payment.bankAccountHolder || payment.bankName || payment.sortCode || payment.accountNumber;
+
+  if (!hasAnyField) {
+    return { isValid: true, errors: {} };
+  }
+
+  // If sort code is provided, validate format
+  if (payment.sortCode) {
+    // Normalize and check format
+    const digits = payment.sortCode.replace(/\D/g, '');
+    if (digits.length !== 6) {
+      errors.sortCode = 'Sort code must be 6 digits (format: XX-XX-XX)';
+    }
+  }
+
+  // If account number is provided, validate format
+  if (payment.accountNumber) {
+    const digits = payment.accountNumber.replace(/\D/g, '');
+    if (digits.length !== 8) {
+      errors.accountNumber = 'Account number must be 8 digits';
+    }
+  }
+
+  // If reference is provided, check length
+  if (payment.paymentReference && payment.paymentReference.length > 20) {
+    errors.paymentReference = 'Payment reference must be 20 characters or less';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
+  };
+};

@@ -1,16 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
 import {
   Elements,
   CardElement,
   useStripe,
   useElements
 } from '@stripe/react-stripe-js';
-import { X, CreditCard, Lock, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { CreditCard, Lock, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { createPaymentIntent } from '../services/paymentService';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
-// Initialize Stripe with publishable key
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+// Validate Stripe publishable key
+const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const isStripeConfigured = Boolean(stripePublishableKey && stripePublishableKey.trim().length > 0);
+
+// Initialize Stripe only if properly configured
+let stripePromise: Promise<Stripe | null> | null = null;
+if (isStripeConfigured) {
+  stripePromise = loadStripe(stripePublishableKey);
+  console.log('Stripe initialized with publishable key');
+} else {
+  console.warn('Stripe not configured - VITE_STRIPE_PUBLISHABLE_KEY is missing or empty');
+}
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -159,31 +171,26 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
 
       {/* Footer */}
       <div className="bg-slate-50 border-t border-slate-200 p-6 flex gap-3">
-        <button
+        <Button
           type="button"
+          variant="secondary"
           onClick={onCancel}
           disabled={isProcessing}
-          className="flex-1 px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 rounded-xl font-medium transition-colors duration-200 disabled:opacity-50"
+          fullWidth
+          size="lg"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           disabled={!stripe || isProcessing}
-          className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold transition-colors duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          isLoading={isProcessing}
+          icon={!isProcessing ? <Lock className="w-4 h-4" /> : undefined}
+          fullWidth
+          size="lg"
         >
-          {isProcessing ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              <Lock className="w-4 h-4" />
-              Pay £2.50
-            </>
-          )}
-        </button>
+          {isProcessing ? 'Processing...' : 'Pay £2.50'}
+        </Button>
       </div>
     </form>
   );
@@ -226,102 +233,122 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const handleClose = () => {
     setClientSecret(null);
     setError(null);
     onClose();
   };
 
+  const handleRetry = () => {
+    setError(null);
+    setClientSecret(null);
+    setIsLoading(true);
+    createPaymentIntent(claimId, documentType)
+      .then((response) => {
+        setClientSecret(response.clientSecret);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message || 'Failed to initialize payment');
+        setIsLoading(false);
+      });
+  };
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-slide-up border border-slate-200">
-        {/* Header */}
-        <div className="bg-white border-b border-slate-200 p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center">
-              <CreditCard className="w-6 h-6" />
-            </div>
-            <h2 className="text-2xl font-bold font-display text-slate-900">Complete Payment</h2>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 rounded-lg transition-colors duration-200 hover:bg-slate-100 text-slate-400"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Complete Payment"
+      titleIcon={
+        <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center">
+          <CreditCard className="w-6 h-6" />
         </div>
-
-        {/* Loading state */}
-        {isLoading && (
-          <div className="p-12 flex flex-col items-center justify-center">
-            <Loader2 className="w-10 h-10 text-teal-600 animate-spin mb-4" />
-            <p className="text-slate-600">Preparing payment...</p>
-          </div>
-        )}
-
-        {/* Error state */}
-        {error && !isLoading && (
-          <div className="p-8">
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 mb-6">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-red-700 font-medium">Payment Error</p>
-                <p className="text-red-600 text-sm mt-1">{error}</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleClose}
-                className="flex-1 px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setError(null);
-                  setClientSecret(null);
-                  setIsLoading(true);
-                  createPaymentIntent(claimId, documentType)
-                    .then((response) => {
-                      setClientSecret(response.clientSecret);
-                      setIsLoading(false);
-                    })
-                    .catch((err) => {
-                      setError(err.message || 'Failed to initialize payment');
-                      setIsLoading(false);
-                    });
-                }}
-                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold"
-              >
-                Retry
-              </button>
+      }
+      maxWidthClassName="max-w-md"
+      bodyClassName="p-0"
+    >
+      {/* Stripe not configured warning */}
+      {!isStripeConfigured && (
+        <div className="p-8">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 mb-6">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-amber-900 font-medium">Payment System Not Configured</p>
+              <p className="text-amber-700 text-sm mt-1">
+                Stripe payment integration is not configured. Please contact the administrator to set up payment processing.
+              </p>
+              <p className="text-amber-600 text-xs mt-2">
+                Technical: VITE_STRIPE_PUBLISHABLE_KEY environment variable is missing or empty.
+              </p>
             </div>
           </div>
-        )}
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={handleClose}
+              fullWidth
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
 
-        {/* Payment form */}
-        {clientSecret && !isLoading && !error && (
-          <Elements
-            stripe={stripePromise}
-            options={{
-              clientSecret,
-              appearance: {
-                theme: 'stripe',
-              },
-            }}
-          >
-            <PaymentForm
-              clientSecret={clientSecret}
-              onSuccess={onPaymentSuccess}
-              onCancel={handleClose}
-              documentType={documentType}
-            />
-          </Elements>
-        )}
-      </div>
-    </div>
+      {/* Loading state */}
+      {isStripeConfigured && isLoading && (
+        <div className="p-12 flex flex-col items-center justify-center">
+          <Loader2 className="w-10 h-10 text-teal-600 animate-spin mb-4" />
+          <p className="text-slate-600">Preparing payment...</p>
+        </div>
+      )}
+
+      {/* Error state */}
+      {isStripeConfigured && error && !isLoading && (
+        <div className="p-8">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 mb-6">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-red-700 font-medium">Payment Error</p>
+              <p className="text-red-600 text-sm mt-1">{error}</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={handleClose}
+              fullWidth
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRetry}
+              fullWidth
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment form */}
+      {isStripeConfigured && clientSecret && !isLoading && !error && stripePromise && (
+        <Elements
+          stripe={stripePromise}
+          options={{
+            clientSecret,
+            appearance: {
+              theme: 'stripe',
+            },
+          }}
+        >
+          <PaymentForm
+            clientSecret={clientSecret}
+            onSuccess={onPaymentSuccess}
+            onCancel={handleClose}
+            documentType={documentType}
+          />
+        </Elements>
+      )}
+    </Modal>
   );
 };

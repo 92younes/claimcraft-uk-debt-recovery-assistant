@@ -71,7 +71,9 @@ export const getStoredClaims = async (): Promise<ClaimState[]> => {
       const store = transaction.objectStore(CLAIMS_STORE);
       const request = store.getAll();
 
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        resolve(request.result || []);
+      };
       request.onerror = () => reject(request.error);
     });
   } catch (e) {

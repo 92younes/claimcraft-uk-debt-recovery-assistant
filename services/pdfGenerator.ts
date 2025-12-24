@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { ClaimState, PartyType } from '../types';
+import { mapClaimToFormFields, validateForPdf, FormType } from './pdfFieldMapper';
 
 // ============================================================================
 // N1 FORM FILLABLE FIELD MAPPING
@@ -199,6 +200,16 @@ const N1_CHECKBOX_FIELDS: CheckboxFieldConfig[] = [
 // ============================================================================
 
 export const generateN1PDF = async (data: ClaimState): Promise<Uint8Array> => {
+  // 0. Validate data before PDF generation
+  const validation = validateForPdf(data, 'N1');
+  if (!validation.isValid) {
+    console.error('❌ N1 PDF validation failed:', validation.errors);
+    throw new Error(`Cannot generate N1: ${validation.errors.join(', ')}`);
+  }
+  if (validation.warnings.length > 0) {
+    console.warn('⚠️ N1 PDF warnings:', validation.warnings);
+  }
+
   // 1. Load the N1 template from the public folder
   let existingPdfBytes: ArrayBuffer;
   try {
@@ -216,32 +227,38 @@ export const generateN1PDF = async (data: ClaimState): Promise<Uint8Array> => {
 
   console.log(`📄 N1 PDF has ${pages.length} pages`);
 
-  // 2. Fill text fields using AcroForm field names
-  for (const fieldConfig of N1_TEXT_FIELDS) {
+  // 2. Get mapped field values using centralized mapper
+  const mappedFields = mapClaimToFormFields(data, 'N1');
+
+  if (!mappedFields.validation.isValid) {
+    console.warn('⚠️ N1 field mapping issues:', mappedFields.validation.errors);
+  }
+
+  // 3. Fill text fields using mapped values
+  for (const [fieldId, value] of Object.entries(mappedFields.textFields)) {
     try {
-      const field = form.getTextField(fieldConfig.fieldId);
-      const value = fieldConfig.getValue(data);
+      const field = form.getTextField(fieldId);
       if (value) {
         field.setText(value);
-        console.log(`✅ N1 Field '${fieldConfig.fieldId}' filled`);
+        console.log(`✅ N1 Field '${fieldId}' filled`);
       }
     } catch (e) {
-      console.warn(`⚠️ N1 Field '${fieldConfig.fieldId}' not found or error:`, e);
+      console.warn(`⚠️ N1 Field '${fieldId}' not found or error:`, e);
     }
   }
 
-  // 3. Fill checkbox fields
-  for (const checkConfig of N1_CHECKBOX_FIELDS) {
+  // 4. Fill checkbox fields using mapped values
+  for (const [fieldId, checked] of Object.entries(mappedFields.checkboxes)) {
     try {
-      const field = form.getCheckBox(checkConfig.fieldId);
-      if (checkConfig.condition(data)) {
+      const field = form.getCheckBox(fieldId);
+      if (checked) {
         field.check();
-        console.log(`✅ N1 Checkbox '${checkConfig.fieldId}' checked`);
+        console.log(`✅ N1 Checkbox '${fieldId}' checked`);
       } else {
         field.uncheck();
       }
     } catch (e) {
-      console.warn(`⚠️ N1 Checkbox '${checkConfig.fieldId}' not found or error:`, e);
+      console.warn(`⚠️ N1 Checkbox '${fieldId}' not found or error:`, e);
     }
   }
 

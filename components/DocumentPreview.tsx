@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ClaimState, DocumentType } from '../types';
-import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown, RefreshCw, ExternalLink, CreditCard, Settings, Mail } from 'lucide-react';
+import { ClaimState, DocumentType, PartyType } from '../types';
+import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown, RefreshCw, ExternalLink, CreditCard, Settings, Mail, ZoomIn, ZoomOut, Maximize2, FileText, Info, MessageSquare, Clock } from 'lucide-react';
+import { getCurrencySymbol } from '../utils/calculations';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { SegmentedControl } from './ui/SegmentedControl';
@@ -76,6 +77,13 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   // N1 Particulars editing modal state
   const [showParticularsModal, setShowParticularsModal] = useState(false);
   const [editedParticulars, setEditedParticulars] = useState('');
+
+  // Zoom controls state
+  const [zoom, setZoom] = useState(100);
+  const zoomLevels = [50, 75, 100, 125, 150];
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 150));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 50));
+  const handleZoomReset = () => setZoom(100);
 
   const review = data.generated?.review;
 
@@ -367,7 +375,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     const subject = encodeURIComponent(`Letter Before Action - Invoice ${data.invoice.invoiceNumber}`);
     const body = encodeURIComponent(`Dear ${data.defendant.name},
 
-Please find attached a Letter Before Action regarding the outstanding balance of £${data.invoice.totalAmount.toFixed(2)}.
+Please find attached a Letter Before Action regarding the outstanding balance of ${getCurrencySymbol(data.invoice.currency)}${data.invoice.totalAmount.toFixed(2)}.
 
 ${data.generated?.content?.substring(0, 200)}...
 
@@ -420,37 +428,12 @@ ${data.claimant.name}`);
      );
   }
 
-  return (
-    <div className="max-w-7xl mx-auto pb-20">
-      
-      {/* Validation Warnings Panel */}
-      {data.generated?.validation?.warnings && data.generated.validation.warnings.length > 0 && (
-        <div className="mb-6 bg-amber-50 border-2 border-amber-200 rounded-xl overflow-hidden animate-fade-in no-print mx-4 md:mx-0 shadow-lg">
-          <div className="p-4 bg-amber-100 border-b border-amber-200 flex items-center gap-3">
-            <div className="p-2 rounded-full bg-amber-200">
-              <AlertTriangle className="w-5 h-5 text-amber-700" />
-            </div>
-            <div>
-              <h3 className="font-bold text-amber-900">Quality Recommendations</h3>
-              <p className="text-sm text-amber-700">These suggestions may strengthen your claim, but are not required.</p>
-            </div>
-          </div>
-          <div className="p-5">
-            <ul className="space-y-2">
-              {data.generated.validation.warnings.map((warning, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm text-amber-900 bg-white p-3 rounded-lg border border-amber-200">
-                  <span className="text-amber-600 font-bold">•</span>
-                  <span>{warning}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-
-      {/* AI Review Panel - Always shows until approved */}
+  // Render warning panels - extracted for split-pane layout
+  const renderWarningPanels = () => (
+    <>
+      {/* CRITICAL: Compliance Check Panel - Shows FIRST (red warnings take priority) */}
       {!isFinalized && review && (
-        <div className="mb-8 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden animate-fade-in no-print ring-4 ring-slate-50 mx-4 md:mx-0">
+        <div className="mb-4 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden animate-fade-in no-print ring-4 ring-slate-50">
            <div className={`p-4 flex items-center justify-between ${review.isPass ? 'bg-green-50 border-b border-green-100' : 'bg-red-50 border-b border-red-100'}`}>
               <div className="flex items-center gap-3">
                  <div className={`p-2 rounded-full ${review.isPass ? 'bg-green-100' : 'bg-red-100'}`}>
@@ -497,7 +480,6 @@ ${data.claimant.name}`);
                  </Button>
                  <Button
                     onClick={() => {
-                      // If review failed, show confirmation dialog before approving
                       if (!review.isPass) {
                         setShowOverrideConfirm(true);
                       } else {
@@ -514,23 +496,78 @@ ${data.claimant.name}`);
         </div>
       )}
 
+      {/* Quality Recommendations Panel - Shows SECOND (amber suggestions) */}
+      {!isFinalized && (
+        <div className="mb-4 bg-white rounded-xl border border-amber-200 shadow-lg overflow-hidden animate-fade-in no-print">
+          <div className="p-4 flex items-center gap-3 bg-amber-50 border-b border-amber-100">
+            <div className="p-2 rounded-full bg-amber-100">
+              <Info className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-amber-900">Quality Recommendations</h3>
+              <p className="text-sm text-amber-700">Best practice suggestions for a stronger claim</p>
+            </div>
+          </div>
+          <div className="p-5">
+            <ul className="space-y-3">
+              {isLetter && !data.signature && (
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                  <PenTool className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span><strong>Add your signature</strong> – Signed letters carry more weight and show genuine intent.</span>
+                </li>
+              )}
+              {data.timeline.length < 2 && (
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span><strong>Consider adding more timeline events</strong> – A detailed timeline strengthens your narrative.</span>
+                </li>
+              )}
+              {!data.invoice.dueDate && (
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span><strong>Specify the due date</strong> – A clear due date is important for calculating interest accurately.</span>
+                </li>
+              )}
+              {isLetter && data.evidence.length === 0 && (
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                  <FileText className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span><strong>Attach supporting evidence</strong> – Consider including the original invoice or contract.</span>
+                </li>
+              )}
+              {(data.signature || !isLetter) && data.timeline.length >= 2 && data.invoice.dueDate && (data.evidence.length > 0 || !isLetter) && (
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                  <CheckCircle className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                  <span><strong>Looking good!</strong> – Review the document carefully before finalizing.</span>
+                </li>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Warning */}
       {!data.hasPaid && (
-        <div className="mt-6 mb-2 px-4 md:px-0 no-print">
+        <div className="mb-4 no-print">
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold">Preview is free</p>
               <p className="text-amber-800">
-                To download PDFs or send by post/email, you’ll be prompted to unlock this document.
+                To download PDFs or send by post/email, you'll be prompted to unlock this document.
               </p>
             </div>
           </div>
         </div>
       )}
+    </>
+  );
 
-      {/* Actions Bar */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 mt-8 no-print gap-4 px-4 md:px-0">
-        <Button 
+  return (
+    <div className="max-w-7xl mx-auto pb-20">
+
+      {/* Actions Bar - Always at top, full width */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 no-print gap-4 px-4 md:px-0">
+        <Button
           variant="secondary"
           onClick={onBack}
           icon={<ArrowLeft className="w-4 h-4" />}
@@ -540,20 +577,45 @@ ${data.claimant.name}`);
         </Button>
         <div className="flex flex-wrap gap-2 items-center justify-center">
            {isLetter && (
-             <SegmentedControl
-               value={viewMode}
-               onChange={setViewMode}
-               options={[
-                 { value: 'letter', label: 'Letter' },
-                 { value: 'info-sheet', label: 'Info Sheet' },
-                 { value: 'reply-form', label: 'Reply Form' },
-               ]}
-             />
+             <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
+               <button
+                 onClick={() => setViewMode('letter')}
+                 className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                   viewMode === 'letter'
+                     ? 'bg-white text-teal-700 shadow-sm'
+                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                 }`}
+               >
+                 <FileText className="w-4 h-4" />
+                 <span>Letter</span>
+               </button>
+               <button
+                 onClick={() => setViewMode('info-sheet')}
+                 className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                   viewMode === 'info-sheet'
+                     ? 'bg-white text-teal-700 shadow-sm'
+                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                 }`}
+               >
+                 <Info className="w-4 h-4" />
+                 <span>Info Sheet</span>
+               </button>
+               <button
+                 onClick={() => setViewMode('reply-form')}
+                 className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                   viewMode === 'reply-form'
+                     ? 'bg-white text-teal-700 shadow-sm'
+                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                 }`}
+               >
+                 <MessageSquare className="w-4 h-4" />
+                 <span>Reply Form</span>
+               </button>
+             </div>
            )}
 
           {isFinalized ? (
               <div className="flex gap-2">
-                {/* MCOL Sidecar Button (for N1 forms) */}
                 {onOpenMcol && !isLetter && (
                   <Button
                     onClick={onOpenMcol}
@@ -565,8 +627,7 @@ ${data.claimant.name}`);
                   </Button>
                 )}
 
-                {/* Mark as Filed Button (Issue 7: Unlocks post-filing documents) */}
-                {onMarkAsFiled && data.selectedDocType === DocumentType.FORM_N1 && data.claimLifecycle !== 'filed' && (
+                {onMarkAsFiled && data.selectedDocType === DocumentType.FORM_N1 && data.status !== 'court' && data.status !== 'judgment' && (
                   <Button
                     onClick={onMarkAsFiled}
                     variant="secondary"
@@ -603,7 +664,6 @@ ${data.claimant.name}`);
                   <span className="hidden md:inline">Print</span>
                 </Button>
 
-                {/* Download PDF Button for Letters */}
                 {isLetter && (
                   <Button
                     variant={data.hasPaid ? 'secondary' : 'primary'}
@@ -622,7 +682,6 @@ ${data.claimant.name}`);
                   </Button>
                 )}
 
-                {/* Email Button */}
                 {isLetter && (
                   <Button
                     variant={data.hasPaid ? 'secondary' : 'primary'}
@@ -636,7 +695,6 @@ ${data.claimant.name}`);
                   </Button>
                 )}
 
-                {/* Mailroom Button (for Letters) - only show if mail service available */}
                 {isLetter && onSendPhysicalMail && (
                   <Button
                     onClick={handleSend}
@@ -650,7 +708,7 @@ ${data.claimant.name}`);
                 )}
               </div>
            ) : (
-              <Button 
+              <Button
                 disabled
                 variant="secondary"
                 className="bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
@@ -662,29 +720,66 @@ ${data.claimant.name}`);
         </div>
       </div>
 
-      {/* Signature Modal */}
-      <Modal
-        isOpen={isSigning}
-        onClose={() => setIsSigning(false)}
-        title="Add Signature"
-        description="Sign once and we’ll apply it to the document."
-        maxWidthClassName="max-w-lg"
-      >
-        <SignaturePad
-          onSave={(sig) => {
-            onUpdateSignature(sig);
-            setIsSigning(false);
-          }}
-        />
-      </Modal>
+      {/* Split-Pane Layout: Warnings (left) | Preview (right) on desktop */}
+      <div className="lg:grid lg:grid-cols-12 lg:gap-6 px-4 md:px-0">
 
-      {/* Document Container - Mobile Responsive */}
-      <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 mx-2 md:mx-0">
-        <div className="w-full md:min-w-[210mm] mx-auto bg-white shadow-xl md:shadow-2xl">
-          {isLetter ? (
-            <>
-               {viewMode === 'letter' && (
-                  <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0" id="letter-preview-container">
+        {/* Left Column: Warning Panels (mobile: full width stacked, desktop: 4 cols) */}
+        <div className="lg:col-span-4 lg:sticky lg:top-4 lg:self-start">
+          {renderWarningPanels()}
+        </div>
+
+        {/* Right Column: Document Preview (mobile: full width, desktop: 8 cols) */}
+        <div className="lg:col-span-8">
+          {/* Zoom Controls */}
+          <div className="flex items-center justify-center gap-2 mb-4 print:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleZoomOut}
+              disabled={zoom <= 50}
+              icon={<ZoomOut className="w-4 h-4" />}
+              iconOnly
+              aria-label="Zoom out"
+            />
+            <select
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+            >
+              {zoomLevels.map(level => (
+                <option key={level} value={level}>{level}%</option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleZoomIn}
+              disabled={zoom >= 150}
+              icon={<ZoomIn className="w-4 h-4" />}
+              iconOnly
+              aria-label="Zoom in"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleZoomReset}
+              icon={<Maximize2 className="w-4 h-4" />}
+              iconOnly
+              aria-label="Reset zoom"
+              className="ml-1"
+            />
+          </div>
+
+          {/* Document Container */}
+          <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 overflow-auto">
+            <div
+              className="w-full md:min-w-[210mm] mx-auto bg-white shadow-xl md:shadow-2xl transition-transform origin-top"
+              style={{ transform: `scale(${zoom / 100})` }}
+            >
+              {isLetter ? (
+                <>
+                   {viewMode === 'letter' && (
+                      <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0" id="letter-preview-container">
                     {/* Saved/Unsaved indicator */}
                     {!isFinalized && (
                       <div className="absolute top-2 right-2 no-print z-10">
@@ -717,7 +812,7 @@ ${data.claimant.name}`);
 
                       <div className="mb-8">
                         <p className="font-bold uppercase underline tracking-wide">LETTER BEFORE ACTION</p>
-                        <p className="font-bold mt-2">Re: Outstanding Balance of £{(data.invoice.totalAmount + data.interest.totalInterest + data.compensation).toFixed(2)}</p>
+                        <p className="font-bold mt-2">Re: Outstanding Balance of {getCurrencySymbol(data.invoice.currency)}{(data.invoice.totalAmount + data.interest.totalInterest + data.compensation).toFixed(2)}</p>
                       </div>
 
                       <div
@@ -761,7 +856,7 @@ ${data.claimant.name}`);
                           )}
                         </div>
                         <p className="font-bold border-t border-black inline-block min-w-[200px] pt-2">{data.claimant.name}</p>
-                        <p className="text-xs mt-1">{data.claimant.type === 'Business' ? 'Authorised Signatory' : ''}</p>
+                        <p className="text-xs mt-1">{data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER ? 'Authorised Signatory' : ''}</p>
                       </div>
                       
                       <div className="mt-20 pt-8 border-t border-slate-300 text-xs text-slate-500">
@@ -989,8 +1084,26 @@ ${data.claimant.name}`);
                )}
             </>
           )}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Signature Modal */}
+      <Modal
+        isOpen={isSigning}
+        onClose={() => setIsSigning(false)}
+        title="Add Signature"
+        description="Sign once and we'll apply it to the document."
+        maxWidthClassName="max-w-lg"
+      >
+        <SignaturePad
+          onSave={(sig) => {
+            onUpdateSignature(sig);
+            setIsSigning(false);
+          }}
+        />
+      </Modal>
 
       {/* Final Review Modal for all court forms */}
       <FinalReviewModal

@@ -1,13 +1,22 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType, ClaimStrength, ExtractedClaimData, TimelineEvent, ChatResponse } from "../types";
+import { ClaimState, GeneratedContent, Party, InvoiceData, DocumentType, EvidenceFile, ChatMessage, PartyType, ClaimStrength, ExtractedClaimData, TimelineEvent, ChatResponse, ClaimIntakeResult } from "../types";
 import { formatCurrency, formatTotalDebt, formatGrandTotal } from "../utils/calculations";
+import { postcodeToCounty } from "../utils/postcodeToCounty";
+import { cleanPartyAddress } from "../utils/addressParser";
+import { generateContent, Type, createMultimodalContent } from "./geminiApiClient";
 
-const getClient = () => {
-  const apiKey = import.meta.env.VITE_API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY (Gemini) is not defined. Please set VITE_API_KEY in your .env file.");
-  }
-  return new GoogleGenAI({ apiKey });
+// Helper to get today's date in UK format
+const getTodayUK = (): string => {
+  const today = new Date();
+  return today.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+};
+
+// Helper to get ISO date for calculations
+const getTodayISO = (): string => {
+  return new Date().toISOString().split('T')[0];
 };
 
 // Helper to convert numeric score to strength tier
@@ -37,23 +46,28 @@ const cleanJson = (text: string): string => {
 };
 
 // Helper to process multiple evidence files (PDFs/Images)
-export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{ 
-  claimant: Party, 
-  defendant: Party, 
-  invoice: InvoiceData, 
+export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
+  claimant: Party,
+  defendant: Party,
+  invoice: InvoiceData,
   timelineEvents: any[],
-  classifications: { fileName: string, type: string }[] 
+  classifications: { fileName: string, type: string }[]
 }> => {
-  const ai = getClient();
-  
   const prompt = `
     Analyze the provided evidence documents (Invoices, Contracts, Emails).
     Extract the following details for a UK Debt Claim.
 
+    **TODAY'S DATE: ${getTodayUK()} (${getTodayISO()})**
+    Use this date to determine if dates in documents are in the past or future.
+
     1. Identify the Creditor (Claimant) with full address including UK county.
+    3. Extract Contact Person names from signatures, letterheads, "Attn:", "FAO:", or titles like "Managing Director"
     2. Identify the Debtor (Defendant) with full address including UK county.
-    3. Extract the MAIN Invoice details (Number, Date, Due Date, Amount, Description of goods/services).
-    4. Look for any other dates in the documents (emails, contracts) to build a mini-timeline of events.
+    4. Extract the MAIN Invoice details (Number, Date, Due Date, Amount, Description of goods/services).
+           - Invoice Number: Look for patterns like "Invoice #123", "Inv No: 456", or reference numbers
+       - Due Date: Calculate from payment terms if mentioned (e.g., "30 days" = Invoice Date + 30 days)
+       - Payment Terms: Extract any mention of payment periods
+    5. Look for any other dates in the documents (emails, contracts) to build a mini-timeline of events.
     5. CLASSIFY each document:
        - Is it a "Signed Contract"?
        - Is it an "Unpaid Invoice"?
@@ -62,23 +76,21 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
        - Is it a "Bank Statement"?
 
     IMPORTANT: Extract the UK county for both claimant and defendant addresses (e.g., "Greater London", "West Midlands", "Surrey").
-    If county is not explicitly stated, infer it from the postcode or city.
+    If county is not explicitly stated, infer it from the postcode (e.g., SW1A = Greater London, M1 = Greater Manchester).
 
     Return valid JSON matching the schema.
     Use 'Individual' or 'Business' based on entities (Ltd/Plc = Business).
   `;
 
-  const parts: any[] = files.map(f => ({
-    inlineData: {
-      data: f.data,
-      mimeType: f.type
-    }
-  }));
-  parts.push({ text: prompt });
+  // Create multimodal content with files
+  const contents = createMultimodalContent(
+    files.map(f => ({ data: f.data, type: f.type })),
+    prompt
+  );
 
-  const response = await ai.models.generateContent({
+  const response = await generateContent({
     model: 'gemini-2.5-flash',
-    contents: { parts },
+    contents,
     config: {
       responseMimeType: 'application/json',
       responseSchema: {
@@ -90,7 +102,8 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
               city: { type: Type.STRING },
               county: { type: Type.STRING, description: "UK county (e.g. Greater London, West Yorkshire)" },
               postcode: { type: Type.STRING },
-              type: { type: Type.STRING, enum: ['Individual', 'Business'] }
+              type: { type: Type.STRING, enum: ['Individual', 'Business'] },
+              contactName: { type: Type.STRING, description: "Contact person name if mentioned (e.g., 'John Smith, Managing Director')" }
           } },
           defendant: { type: Type.OBJECT, properties: {
               name: { type: Type.STRING },
@@ -98,12 +111,14 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
               city: { type: Type.STRING },
               county: { type: Type.STRING, description: "UK county (e.g. Greater London, West Yorkshire)" },
               postcode: { type: Type.STRING },
-              type: { type: Type.STRING, enum: ['Individual', 'Business'] }
+              type: { type: Type.STRING, enum: ['Individual', 'Business'] },
+              contactName: { type: Type.STRING, description: "Contact person name if mentioned (e.g., 'John Smith, Managing Director')" }
           } },
           invoice: { type: Type.OBJECT, properties: {
-              invoiceNumber: { type: Type.STRING },
+              invoiceNumber: { type: Type.STRING, description: "Extract invoice/reference number from patterns like 'Invoice #123', 'Inv-456', standalone numbers" },
               dateIssued: { type: Type.STRING },
-              dueDate: { type: Type.STRING },
+              dueDate: { type: Type.STRING, description: "Payment due date - calculate from payment terms if mentioned (e.g. '30 days' means dateIssued + 30 days)" },
+              paymentTerms: { type: Type.STRING, description: "Extract payment terms mentioned (e.g., 'Net 30', '30 days', 'Due on receipt', '14 days')" },
               totalAmount: { type: Type.NUMBER },
               currency: { type: Type.STRING },
               description: { type: Type.STRING, description: "Brief description of goods/services provided" }
@@ -123,7 +138,41 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
   });
 
   try {
-    return JSON.parse(cleanJson(response.text || '{}'));
+    const result = JSON.parse(cleanJson(response.text || '{}'));
+
+    // Post-process: Infer county from postcode if missing
+    if (result.defendant?.postcode && !result.defendant?.county) {
+      const inferredCounty = postcodeToCounty(result.defendant.postcode);
+      if (inferredCounty) {
+        result.defendant.county = inferredCounty;
+        console.log(`[analyzeEvidence] Inferred defendant county: ${inferredCounty}`);
+      }
+    }
+
+    if (result.claimant?.postcode && !result.claimant?.county) {
+      const inferredCounty = postcodeToCounty(result.claimant.postcode);
+      if (inferredCounty) {
+        result.claimant.county = inferredCounty;
+        console.log(`[analyzeEvidence] Inferred claimant county: ${inferredCounty}
+
+    // Post-process: Clean addresses if they contain full address strings
+    if (result.claimant) {
+      const cleanedClaimant = cleanPartyAddress(result.claimant);
+      result.claimant.address = cleanedClaimant.address;
+      result.claimant.city = cleanedClaimant.city || result.claimant.city;
+      result.claimant.postcode = cleanedClaimant.postcode || result.claimant.postcode;
+    }
+
+    if (result.defendant) {
+      const cleanedDefendant = cleanPartyAddress(result.defendant);
+      result.defendant.address = cleanedDefendant.address;
+      result.defendant.city = cleanedDefendant.city || result.defendant.city;
+      result.defendant.postcode = cleanedDefendant.postcode || result.defendant.postcode;
+    }`);
+      }
+    }
+
+    return result;
   } catch (e) {
     console.error("JSON Parse Error", e);
     throw new Error("Failed to parse AI response");
@@ -131,8 +180,6 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
 };
 
 export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ score: number, strength: ClaimStrength, analysis: string, weaknesses: string[] }> => {
-  const ai = getClient();
-
   const prompt = `
     Act as an Expert Legal Assistant for UK Small Claims.
     Assess the "Winnability" (Probability of Success) of this claim based on the available evidence, timeline, and clarifications.
@@ -163,7 +210,7 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
     - weaknesses: string[] (List specific gaps, e.g., "Missing signed contract", "No proof of delivery", "Debt relies on verbal agreement")
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: {
@@ -206,8 +253,6 @@ export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ sc
 };
 
 export const startClarificationChat = async (data: ClaimState): Promise<string> => {
-  const ai = getClient();
-
   // Safe Financials
   const principal = data.invoice.totalAmount || 0;
   const interest = data.interest.totalInterest || 0;
@@ -215,23 +260,21 @@ export const startClarificationChat = async (data: ClaimState): Promise<string> 
   const totalDebt = formatTotalDebt(principal, interest, comp);
 
   // Identify critical missing data
+  // NOTE: Claimant data comes from user profile, not chat
   const missingAddressFields: string[] = [];
-  if (!data.claimant.county?.trim()) missingAddressFields.push("your county (e.g., Greater London, Surrey)");
-  if (!data.claimant.address?.trim()) missingAddressFields.push("your street address");
   if (!data.defendant.county?.trim()) missingAddressFields.push("the defendant's county");
   if (!data.defendant.address?.trim()) missingAddressFields.push("the defendant's street address");
 
   const hasMissingAddress = missingAddressFields.length > 0;
   const missingAddressContext = hasMissingAddress
-    ? `\n\nIMPORTANT: The following required fields are MISSING:\n${missingAddressFields.map(f => `- ${f}`).join('\n')}\n\nYou MUST ask for this information first. Court forms require complete addresses including UK county.`
+    ? `\n\nIMPORTANT: The following required fields are MISSING:\n${missingAddressFields.map(f => `- ${f}`).join('\n')}\n\nYou MUST ask for this information first. Court forms require complete addresses including UK county for the defendant.`
     : '';
 
   const prompt = `
     You are an AI Legal Assistant for UK Small Claims.
 
     Review the claim data:
-    - Claimant: ${data.claimant.name || 'Not provided'}
-    - Claimant Address: ${data.claimant.address || 'MISSING'}, ${data.claimant.city || 'MISSING'}, ${data.claimant.county || 'MISSING'}, ${data.claimant.postcode || 'MISSING'}
+    - Claimant: ${data.claimant.name || 'Not provided'} (from user profile)
     - Defendant: ${data.defendant.name || 'Not provided'}
     - Defendant Address: ${data.defendant.address || 'MISSING'}, ${data.defendant.city || 'MISSING'}, ${data.defendant.county || 'MISSING'}, ${data.defendant.postcode || 'MISSING'}
     - Total Value: £${totalDebt}
@@ -248,7 +291,7 @@ export const startClarificationChat = async (data: ClaimState): Promise<string> 
     Keep it conversational and helpful, not robotic or interrogating.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt
   });
@@ -257,8 +300,6 @@ export const startClarificationChat = async (data: ClaimState): Promise<string> 
 };
 
 export const sendChatMessage = async (history: ChatMessage[], userMessage: string, data: ClaimState): Promise<ChatResponse> => {
-  const ai = getClient();
-
   // Inject calculated financials so the AI understands the full claim value
   const principal = data.invoice.totalAmount || 0;
   const interest = data.interest.totalInterest || 0;
@@ -269,11 +310,8 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
   const grandTotal = formatGrandTotal(principal, interest, comp, fee);
 
   // Identify missing required fields
+  // NOTE: Claimant data comes from user profile, not chat extraction
   const missingFields: string[] = [];
-  if (!data.claimant.county?.trim()) missingFields.push("Claimant's county");
-  if (!data.claimant.address?.trim()) missingFields.push("Claimant's street address");
-  if (!data.claimant.city?.trim()) missingFields.push("Claimant's city/town");
-  if (!data.claimant.postcode?.trim()) missingFields.push("Claimant's postcode");
   if (!data.defendant.county?.trim()) missingFields.push("Defendant's county");
   if (!data.defendant.address?.trim()) missingFields.push("Defendant's street address");
   if (!data.defendant.city?.trim()) missingFields.push("Defendant's city/town");
@@ -282,8 +320,8 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
   if (!data.invoice.dateIssued) missingFields.push("Invoice date");
 
   const missingFieldsNote = missingFields.length > 0
-    ? `\n\nCRITICAL MISSING DATA (MUST collect before proceeding):\n${missingFields.map(f => `- ${f}`).join('\n')}\n\nYou MUST ask for these specific fields. The court requires complete addresses including county.`
-    : '\n\nAll required address and invoice fields are complete.';
+    ? `\n\nCRITICAL MISSING DATA (MUST collect before proceeding):\n${missingFields.map(f => `- ${f}`).join('\n')}\n\nYou MUST ask for these specific fields. The court requires complete addresses including county for the defendant.`
+    : '\n\nAll required defendant address and invoice fields are complete.';
 
   // Count questions already asked to prevent going in circles
   const aiMessages = history.filter(m => m.role === 'ai').length;
@@ -301,90 +339,87 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
     ))
   );
 
-  // Check if we have minimum required info for readiness
-  const hasClaimantName = !!data.claimant.name?.trim();
-  const hasDefendantName = !!data.defendant.name?.trim();
-  const hasInvoiceAmount = data.invoice.totalAmount > 0;
-  const hasMinExchanges = history.filter(m => m.role === 'user').length >= 2;
+  // Build conversation history for context
+  const conversationContext = history.slice(0, -1)
+    .map(msg => `${msg.role === 'ai' ? 'ASSISTANT' : 'USER'}: ${msg.content}`)
+    .join('\n\n');
 
-  const systemInstruction = `
-    You are an AI Legal Assistant for UK Small Claims.
-    You are NOT a solicitor and cannot provide legal advice. You provide "Legal Information" and procedural guidance based on the Civil Procedure Rules (CPR).
+  const prompt = `
+You are an AI Legal Assistant for UK Small Claims.
+You are NOT a solicitor and cannot provide legal advice. You provide "Legal Information" and procedural guidance based on the Civil Procedure Rules (CPR).
 
-    CASE METRICS:
-    - Value: £${totalDebt} (Total with Fee: £${grandTotal})
-    - Claimant: ${data.claimant.name || 'Not provided'}
-    - Defendant: ${data.defendant.name || 'Not provided'}
+**TODAY'S DATE: ${getTodayUK()} (${getTodayISO()})**
+Use this date for ALL date calculations. Any date before today is in the PAST. Any date after today is in the FUTURE.
 
-    CLAIMANT ADDRESS STATUS:
-    - Street: ${data.claimant.address || 'MISSING'}
-    - City: ${data.claimant.city || 'MISSING'}
-    - County: ${data.claimant.county || 'MISSING'} (REQUIRED for court forms)
-    - Postcode: ${data.claimant.postcode || 'MISSING'}
+CASE METRICS:
+- Value: £${totalDebt} (Total with Fee: £${grandTotal})
+- Claimant: ${data.claimant.name || 'Not provided'} (from user profile)
+- Defendant: ${data.defendant.name || 'Not provided'}
 
-    DEFENDANT ADDRESS STATUS:
-    - Street: ${data.defendant.address || 'MISSING'}
-    - City: ${data.defendant.city || 'MISSING'}
-    - County: ${data.defendant.county || 'MISSING'} (REQUIRED for court forms)
-    - Postcode: ${data.defendant.postcode || 'MISSING'}
-    ${missingFieldsNote}
-    ${circleWarning}
+DEFENDANT ADDRESS STATUS (Required for court forms):
+- Street: ${data.defendant.address || 'MISSING'}
+- City: ${data.defendant.city || 'MISSING'}
+- County: ${data.defendant.county || 'MISSING'} (REQUIRED for court forms)
+- Postcode: ${data.defendant.postcode || 'MISSING'}
+${missingFieldsNote}
+${circleWarning}
 
-    TIMELINE:
-    ${JSON.stringify(data.timeline)}
-    LBA ALREADY SENT: ${hasLBAInTimeline ? 'YES' : 'NO'}
+TIMELINE:
+${JSON.stringify(data.timeline)}
+LBA ALREADY SENT: ${hasLBAInTimeline ? 'YES' : 'NO'}
 
-    YOUR GOAL: Gather enough information to recommend the RIGHT document for their situation.
+YOUR GOAL: Gather enough information to recommend the RIGHT document for their situation.
 
-    DOCUMENT DETERMINATION QUESTIONS (ask these to determine the right document):
-    1. "Have you already started a court claim (filed Form N1)?" → If YES, ask if they need to request judgment or respond to a defence.
-    2. "If you have a judgment, do you need to enforce it?" → Not yet supported, but good context.
-    3. "Have you sent any payment reminders or chaser emails to the debtor?" → If NO, suggest starting with a Polite Reminder
-    4. "Have you sent a formal Letter Before Action (LBA) giving them 30 days to pay?" → Critical for court claim eligibility
-    5. "If you sent an LBA, when was it sent? Has 30 days passed?" → If YES to both, they can file Form N1
-    6. "Has the debtor acknowledged the debt or responded to your communications?" → Affects case strength
-    7. "Would you prefer to negotiate a settlement or proceed to court?" → If settlement, suggest Part 36 Offer
+DOCUMENT DETERMINATION QUESTIONS (ask these to determine the right document):
+1. "Have you already started a court claim (filed Form N1)?" → If YES, ask if they need to request judgment or respond to a defence.
+2. "If you have a judgment, do you need to enforce it?" → Not yet supported, but good context.
+3. "Have you sent any payment reminders or chaser emails to the debtor?" → If NO, suggest starting with a Polite Reminder
+4. "Have you sent a formal Letter Before Action (LBA) giving them 30 days to pay?" → Critical for court claim eligibility
+5. "If you sent an LBA, when was it sent? Has 30 days passed?" → If YES to both, they can file Form N1
+6. "Has the debtor acknowledged the debt or responded to your communications?" → Affects case strength
+7. "Would you prefer to negotiate a settlement or proceed to court?" → If settlement, suggest Part 36 Offer
 
-    COMMUNICATION PROTOCOL:
-    1. **PRIORITY:** If addresses are MISSING, ask for them FIRST (including UK county).
-    2. **DOCUMENT FOCUS:** Ask about LBA status early - this determines the recommended document.
-    3. **BREVITY:** Keep responses to 2-4 sentences maximum.
-    4. **ACKNOWLEDGMENT:** Briefly acknowledge the user's answer before asking the next question.
-    5. **NO REPETITION:** Do NOT ask the same question twice. Track what you've learned.
-    6. **CLOSING:** When you have enough info, conclude with your recommendation:
-       - If NO LBA sent: "Based on our conversation, I recommend starting with a Letter Before Action. This is required before court proceedings. Click 'Continue' to review the details."
-       - If LBA sent 30+ days ago: "Since you've already sent an LBA and 30 days have passed, you're ready to file a court claim (Form N1). Click 'Continue' to review the details."
-       - If already filed claim (no response): "If the defendant hasn't responded within 14 days of service, you can request a Default Judgment (Form N225). Click 'Continue' to proceed."
-       - If already filed claim (admission): "If the defendant admitted the debt, you can request Judgment on Admission (Form N225A). Click 'Continue' to proceed."
-       - If user wants settlement: "Given your preference to settle, I recommend a Part 36 Settlement Offer. Click 'Continue' to review the details."
-    7. **DISCLAIMER:** If asked for legal advice, state: "I'm a legal assistant, not a solicitor. This is procedural guidance, not legal advice."
-    8. **TONE:** Professional but friendly. Be helpful, not interrogating.
+COMMUNICATION PROTOCOL:
+1. **ONE QUESTION AT A TIME:** Ask only ONE question per response. Never ask multiple questions in the same message - this feels overwhelming. Wait for the user's answer before asking the next question.
+2. **PRIORITY:** If addresses are MISSING, ask for them FIRST (including UK county).
+3. **DOCUMENT FOCUS:** Ask about LBA status early - this determines the recommended document.
+4. **BREVITY:** Keep responses to 2-3 sentences maximum. One brief acknowledgment + one question.
+5. **ACKNOWLEDGMENT:** Briefly acknowledge the user's answer before asking the next question.
+6. **NO REPETITION:** Do NOT ask the same question twice. Track what you've learned.
+7. **CLOSING:** When you have enough info, conclude with your recommendation:
+   - If NO LBA sent: "Based on our conversation, I recommend starting with a Letter Before Action. This is required before court proceedings. Click 'Continue' to review the details."
+   - If LBA sent 30+ days ago: "Since you've already sent an LBA and 30 days have passed, you're ready to file a court claim (Form N1). Click 'Continue' to review the details."
+   - If already filed claim (no response): "If the defendant hasn't responded within 14 days of service, you can request a Default Judgment (Form N225). Click 'Continue' to proceed."
+   - If already filed claim (admission): "If the defendant admitted the debt, you can request Judgment on Admission (Form N225A). Click 'Continue' to proceed."
+   - If user wants settlement: "Given your preference to settle, I recommend a Part 36 Settlement Offer. Click 'Continue' to review the details."
+8. **DISCLAIMER:** If asked for legal advice, state: "I'm a legal assistant, not a solicitor. This is procedural guidance, not legal advice."
+9. **TONE:** Professional but friendly. Be helpful, not interrogating.
 
-    RESPONSE FORMAT:
-    You MUST respond with a JSON object containing:
-    {
-      "message": "Your conversational response here",
-      "readyToProceed": true/false
-    }
+CONVERSATION HISTORY:
+${conversationContext}
 
-    Set readyToProceed to TRUE only when ALL of these conditions are met:
-    1. You have confirmed the key claim details (claimant, defendant, amount)
-    2. You have asked about LBA status and got a clear answer
-    3. You have enough information to recommend a specific document
-    4. You are concluding the consultation with a recommendation
+USER'S NEW MESSAGE:
+${userMessage}
 
-    Set readyToProceed to FALSE if you still need to gather more information.
-  `;
+Respond with a JSON object containing:
+{
+  "message": "Your conversational response here",
+  "readyToProceed": true/false
+}
 
-  const sdkHistory = history.slice(0, -1).map(msg => ({
-    role: msg.role === 'ai' ? 'model' : 'user',
-    parts: [{ text: msg.content }]
-  }));
+Set readyToProceed to TRUE only when ALL of these conditions are met:
+1. You have confirmed the key claim details (claimant, defendant, amount)
+2. You have asked about LBA status and got a clear answer
+3. You have enough information to recommend a specific document
+4. You are concluding the consultation with a recommendation
 
-  const chat = ai.chats.create({
+Set readyToProceed to FALSE if you still need to gather more information.
+`;
+
+  const response = await generateContent({
     model: 'gemini-2.5-flash',
+    contents: prompt,
     config: {
-      systemInstruction: systemInstruction,
       responseMimeType: 'application/json',
       responseSchema: {
         type: Type.OBJECT,
@@ -394,12 +429,10 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
         },
         required: ['message', 'readyToProceed']
       }
-    },
-    history: sdkHistory
+    }
   });
 
-  const result = await chat.sendMessage({ message: userMessage });
-  const responseText = result.text || '{"message": "Please clarify.", "readyToProceed": false}';
+  const responseText = response.text || '{"message": "Please clarify.", "readyToProceed": false}';
 
   try {
     const parsed = JSON.parse(cleanJson(responseText));
@@ -425,8 +458,6 @@ export const extractDataFromChat = async (
   chatHistory: ChatMessage[],
   currentData: ClaimState
 ): Promise<ExtractedClaimData> => {
-  const ai = getClient();
-
   // Format chat history as transcript
   const chatTranscript = chatHistory
     .map(m => `${m.role.toUpperCase()}: ${m.content}`)
@@ -442,6 +473,9 @@ export const extractDataFromChat = async (
 
   const prompt = `
     You are a legal data extraction assistant. Analyze the chat conversation below and extract any claim-related data mentioned.
+
+    **TODAY'S DATE: ${getTodayUK()} (${getTodayISO()})**
+    Use this date for ALL date calculations. Any date before today is in the PAST.
 
     ${currentContext}
 
@@ -474,7 +508,7 @@ export const extractDataFromChat = async (
     - extractedFields: Array of field names that were extracted
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: {
@@ -483,10 +517,10 @@ export const extractDataFromChat = async (
         type: Type.OBJECT,
         properties: {
           claimant: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              address: { type: Type.STRING },
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    address: { type: Type.STRING, description: "Street address only (e.g. '10 Downing Street'), no city or postcode" },
               city: { type: Type.STRING },
               county: { type: Type.STRING },
               postcode: { type: Type.STRING },
@@ -495,10 +529,10 @@ export const extractDataFromChat = async (
             }
           },
           defendant: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              address: { type: Type.STRING },
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    address: { type: Type.STRING, description: "Street address only (e.g. '10 Downing Street'), no city or postcode" },
               city: { type: Type.STRING },
               county: { type: Type.STRING },
               postcode: { type: Type.STRING },
@@ -542,6 +576,28 @@ export const extractDataFromChat = async (
   try {
     const result = JSON.parse(cleanJson(response.text || '{}'));
 
+    // Post-process: Infer county from postcode if missing
+    const claimantData = result.claimant || {};
+    const defendantData = result.defendant || {};
+
+    // Infer defendant county from postcode if missing
+    if (defendantData.postcode && !defendantData.county) {
+      const inferredCounty = postcodeToCounty(defendantData.postcode);
+      if (inferredCounty) {
+        defendantData.county = inferredCounty;
+        console.log(`[extractDataFromChat] Inferred defendant county: ${inferredCounty}`);
+      }
+    }
+
+    // Infer claimant county from postcode if missing
+    if (claimantData.postcode && !claimantData.county) {
+      const inferredCounty = postcodeToCounty(claimantData.postcode);
+      if (inferredCounty) {
+        claimantData.county = inferredCounty;
+        console.log(`[extractDataFromChat] Inferred claimant county: ${inferredCounty}`);
+      }
+    }
+
     // Map string document type to enum
     const docTypeMap: Record<string, DocumentType> = {
       'Polite Payment Reminder': DocumentType.POLITE_CHASER,
@@ -555,8 +611,8 @@ export const extractDataFromChat = async (
     const recommendedDoc = docTypeMap[result.recommendedDocument] || DocumentType.LBA;
 
     return {
-      claimant: result.claimant || {},
-      defendant: result.defendant || {},
+      claimant: claimantData,
+      defendant: defendantData,
       invoice: result.invoice || {},
       timeline: result.timeline || [],
       recommendedDocument: recommendedDoc,
@@ -577,7 +633,6 @@ export const extractDataFromChat = async (
 };
 
 export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> => {
-  const ai = getClient();
   const isN1 = data.selectedDocType === DocumentType.FORM_N1;
   const docTypeLabel = isN1 ? "Particulars of Claim for Form N1" : "Letter Before Action (Pre-Action Protocol)";
 
@@ -596,7 +651,7 @@ export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> 
   const interestClause = isB2B
       ? "the Late Payment of Commercial Debts (Interest) Act 1998"
       : "section 69 of the County Courts Act 1984";
-  
+
   const interestRate = isB2B ? "8% above Bank of England Base Rate" : "8% per annum";
 
   // Prepare Chat Context for Drafting
@@ -604,23 +659,23 @@ export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> 
 
   const prompt = `
     Draft the ${docTypeLabel} for a UK Small Claims Court case.
-    
+
     PARTIES:
     - Claimant: ${data.claimant.name} (${data.claimant.type})
     - Defendant: ${data.defendant.name} (${data.defendant.type})
-    
+
     FINANCIALS:
     - Principal: £${formatCurrency(principal)}
     - Interest: £${formatCurrency(interest)} (Calculated under ${interestClause} at ${interestRate})
     - Compensation: £${formatCurrency(comp)}
     - Total Claim Amount: £${totalDebt}
-    
+
     TIMELINE: ${JSON.stringify(data.timeline)}
     CONSULTATION NOTES: ${chatContext}
 
     REQUIREMENTS:
     1. **Legal Basis**: YOU MUST cite "${interestClause}" for the interest claim.
-    
+
     2. **IF DRAFTING FORM N1 (Particulars of Claim)**:
        - Structure strictly: "1. The Parties", "2. The Agreement", "3. The Breach", "4. The Claim".
        - Use formal "The Claimant claims interest under..." phrasing.
@@ -639,7 +694,7 @@ export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> 
     Return JSON.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: {
@@ -651,9 +706,9 @@ export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> 
           content: { type: Type.STRING },
           briefDetails: { type: Type.STRING },
           legalBasis: { type: Type.STRING },
-          nextSteps: { 
-            type: Type.ARRAY, 
-            items: { type: Type.STRING } 
+          nextSteps: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
           }
         }
       }
@@ -677,73 +732,69 @@ export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> 
 
 // New Function for "Director Mode" - Conversational Refinement
 export const refineDraft = async (currentContent: string, instruction: string): Promise<string> => {
-  const ai = getClient();
   const prompt = `
     Act as a Legal Document Specialist.
     Refine the text below based on the user's directive.
-    
+
     DIRECTIVE: "${instruction}"
-    
+
     ORIGINAL TEXT:
     "${currentContent}"
-    
+
     Constraints:
     - Maintain strict legal professionalism suitable for UK Courts.
     - **DO NOT** remove legal citations (e.g. County Courts Act 1984).
     - If the user asks for "more aggressive", use "immediate commencement of proceedings" but do not threaten illegal action.
     - Output ONLY the refined text.
   `;
-  
-  const response = await ai.models.generateContent({
+
+  const response = await generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt
   });
-  
+
   return response.text || currentContent;
 };
 
 export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; critique: string; improvements: string[]; correctedContent?: string }> => {
-  const ai = getClient();
-  
   // Safe Financials for "The Truth"
   const principal = data.invoice.totalAmount || 0;
   const interest = data.interest.totalInterest || 0;
   const comp = data.compensation || 0;
-  const fee = data.courtFee || 0;
 
   const totalClaimValue = (principal + interest + comp).toFixed(2);
-  
+
   // Format Chat History as Transcript
   const chatTranscript = data.chatHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
 
   const prompt = `
     Act as a Senior Legal Assistant auditing a draft.
-    
+
     --- SOURCE OF TRUTH ---
     Claimant: ${data.claimant.name}
     Defendant: ${data.defendant.name}
     Invoice: ${data.invoice.invoiceNumber} (£${formatCurrency(principal)})
     Total Claim (ex fee): £${totalClaimValue}
-    
+
     TIMELINE:
     ${JSON.stringify(data.timeline)}
 
     TRANSCRIPT:
     ${chatTranscript}
-    
+
     --- DRAFT ---
     "${data.generated?.content}"
-    
+
     Check for:
     1. Factual Hallucinations (Dates/Events not in source).
     2. Financial Errors.
     3. Role Swaps (Claimant vs Defendant).
     4. Missing Act Reference (e.g. 1984 Act or 1998 Act).
-    
+
     Output JSON.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: {
@@ -773,6 +824,277 @@ export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; 
       critique: 'Unable to parse review response from AI. Please try again.',
       improvements: ['AI response was malformed - manual review recommended'],
       correctedContent: data.generated?.content || ''
+    };
+  }
+};
+
+/**
+ * Analyze claim input from conversation entry - combines user text and files
+ */
+export const analyzeClaimInput = async (
+  userInput: string,
+  files: EvidenceFile[],
+  previousMessages: { role: string; content: string }[]
+): Promise<ClaimIntakeResult> => {
+  // Build context from previous messages
+  const conversationContext = previousMessages
+    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+    .join('\n');
+
+  // If we have files, analyze them first
+  let fileAnalysis = '';
+  if (files.length > 0) {
+    try {
+      const evidenceResult = await analyzeEvidence(files);
+      // analyzeEvidence returns {claimant, defendant, invoice, timelineEvents, classifications}
+      fileAnalysis = `\nExtracted from uploaded files:\n${JSON.stringify(evidenceResult, null, 2)}`;
+    } catch (e) {
+      console.error('[analyzeClaimInput] File analysis error:', e);
+    }
+  }
+
+  // Determine if this is the first file upload (no prior conversation about these files)
+  const isFirstFileAnalysis = files.length > 0 && previousMessages.length === 0;
+
+  const prompt = `
+    You are a UK debt recovery assistant helping a user describe their claim.
+
+    **TODAY'S DATE: ${getTodayUK()} (${getTodayISO()})**
+    Use this date for ALL date calculations. Any date before today is in the PAST. Any date after today is in the FUTURE.
+
+    **CRITICAL: DO NOT EXTRACT CLAIMANT DATA**
+    The CLAIMANT is the logged-in user (the person filing the claim). Their details come from their user profile.
+    You should ONLY extract DEFENDANT (debtor) information from the documents/conversation.
+    If you see two companies in a document, the one OWED money is the claimant (ignore it), the one OWING money is the defendant (extract it).
+
+    Previous conversation:
+    ${conversationContext || 'None'}
+
+    User's latest message: "${userInput}"
+    ${fileAnalysis}
+
+    ${isFirstFileAnalysis ? `
+    *** IMPORTANT - TWO-PHASE EXTRACTION ***
+    This is the FIRST time analyzing uploaded documents. You MUST follow this two-phase process:
+
+    PHASE 1 - REVIEW FIRST (current phase):
+    Before extracting data, scan the document(s) and identify ANY ambiguities:
+    1. Is the currency clearly GBP (£)? If you see $, USD, EUR, or other currencies, you MUST ask to confirm.
+    2. Are there multiple invoices? Ask which one the claim is about.
+    3. Is the defendant clearly identifiable? If unclear, ask.
+    4. Are dates ambiguous or potentially in different formats (US vs UK)?
+    5. Is the invoice amount clearly readable?
+
+    IF there are ANY ambiguities:
+    - Set readyToExtract: false
+    - Set extractedData to empty objects (do NOT extract yet)
+    - Include ONLY ONE clarifying question in followUpQuestions - ask the MOST important question first
+    - The user MUST answer this question before we proceed with extraction
+    - After they answer, you can ask the next question in the following turn
+
+    ONLY if the document is completely clear (GBP currency, single invoice, clear parties):
+    - Set readyToExtract: true
+    - Proceed with full extraction
+    ` : `
+    The user has already been asked clarifying questions or this is a follow-up message.
+    Now you may proceed with extraction if you have enough information.
+    `}
+
+    
+    === CRITICAL ADDRESS PARSING ===
+    When extracting addresses from full address strings:
+    - SPLIT addresses into separate fields: address (street only), city, postcode
+    - Example: "10 Downing Street, London, SW1A 1AA" should become:
+      address: "10 Downing Street"
+      city: "London"
+      postcode: "SW1A 1AA"
+    - Do NOT put the entire address in the address field
+    - Infer county from postcode if not stated explicitly
+
+    === CRITICAL VALIDATIONS ===
+
+    1. CURRENCY RULE:
+    - This is a UK debt recovery system - claims MUST be in GBP
+    - If you see $, USD, EUR, or any non-GBP currency, set currencyWarning: true and ask to confirm
+    - Example question: "I noticed the amount appears to be in USD. UK courts require claims in GBP. Is this already in GBP, or do you need to convert it?"
+
+    2. INVOICE & CONTACT EXTRACTION:
+    - Invoice numbers: Look for patterns like "Invoice #123", "Inv No: 456", "INV-2024-001", or standalone numbers preceded by "Invoice"
+    - Contact person: Extract names with titles like "John Smith, Managing Director" or from signatures, "Attn:", "FAO:" lines
+
+    3. UK COUNTY REQUIREMENT:
+    - All UK court forms require the county (e.g., "Greater London", "West Midlands", "Kent")
+    - If county is NOT clearly stated for claimant OR defendant:
+      - Try to infer from the postcode (e.g., SW1A = Greater London, M1 = Greater Manchester)
+      - If cannot infer, set countyMissing: true and ask: "What county is [party name] located in?"
+    - NEVER set readyToProceed: true without county for both parties
+
+    3. STATUTE OF LIMITATIONS (6-YEAR RULE):
+    - UK contract debts have a 6-year limitation period from the due date
+    - Calculate how old the debt is from the due date (or invoice date + 30 days if no due date)
+    - If debt is over 5 years old, set limitationWarning: true
+    - If debt is over 6 years old, the claim may be statute-barred - warn strongly
+    - Ask: "This debt appears to be [X] years old. Are you aware of the 6-year limitation period for debt claims?"
+
+    4. SMALL CLAIMS TRACK LIMIT:
+    - UK Small Claims Track limit is £10,000
+    - If total claim amount exceeds £10,000, set exceedsSmallClaims: true
+    - Warn: "Your claim may exceed the Small Claims Track limit (£10,000). Consider seeking legal advice."
+
+    5. DATE VALIDATION:
+    - Invoice date must be in the past
+    - Due date must be after invoice date
+    - If dates are illogical or ambiguous, set dateError: true and ask for clarification
+    - Use UK date format (DD/MM/YYYY or "1 January 2024")
+
+    6. LBA STATUS (for document recommendation):
+    - Ask if user has already sent a Letter Before Action (LBA)
+    - If LBA sent, ask when and if 30+ days have passed
+    - This determines whether to recommend LBA or Form N1
+
+    Return JSON with:
+    - extractedData: Claim details (defendant, invoice, timeline ONLY - DO NOT include claimant) - leave empty if readyToExtract is false
+    - followUpQuestions: Array with ONE clarifying question (the most important one) - ask questions one at a time
+    - acknowledgment: Brief acknowledgment of what you understood/found
+    - readyToProceed: true if we have enough info to continue (defendant name + invoice amount in GBP + defendant county)
+    - readyToExtract: false if this is first file analysis AND there are ambiguities to clarify; true otherwise
+    - confidence: 0-100 confidence in the data
+    - currencyWarning: true if non-GBP currency detected
+    - countyMissing: true if county is missing for defendant (ignore claimant county - comes from profile)
+    - limitationWarning: true if debt is over 5 years old
+    - debtAgeYears: number of years since due date (if calculable)
+    - exceedsSmallClaims: true if claim amount > £10,000
+    - dateError: true if dates are illogical or ambiguous
+    - lbaSent: true if user mentioned sending LBA, false if not sent, null if unknown
+    - lbaDaysAgo: number of days since LBA was sent (if known)
+  `;
+
+  try {
+    const response = await generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            extractedData: {
+              type: Type.OBJECT,
+              properties: {
+                defendant: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    address: { type: Type.STRING, description: "Street address only (e.g. '10 Downing Street'), no city or postcode" },
+                    city: { type: Type.STRING },
+                    county: { type: Type.STRING },
+                    postcode: { type: Type.STRING },
+                    email: { type: Type.STRING },
+                    phone: { type: Type.STRING },
+                    companyNumber: { type: Type.STRING }
+                  }
+                },
+                invoice: {
+                  type: Type.OBJECT,
+                  properties: {
+                    invoiceNumber: { type: Type.STRING, description: "Extract from patterns like 'Invoice #123', 'Inv-456'" },
+                    totalAmount: { type: Type.NUMBER },
+                    dateIssued: { type: Type.STRING },
+                    dateDue: { type: Type.STRING, description: "Calculate from payment terms if mentioned (e.g., '30 days' = dateIssued + 30 days)" },
+                    paymentTerms: { type: Type.STRING, description: "Extract payment terms (e.g., 'Net 30', '30 days')" },
+                    description: { type: Type.STRING },
+                    currency: { type: Type.STRING }
+                  }
+                },
+                timeline: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      date: { type: Type.STRING },
+                      description: { type: Type.STRING },
+                      type: { type: Type.STRING }
+                    }
+                  }
+                }
+              }
+            },
+            followUpQuestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            acknowledgment: { type: Type.STRING },
+            readyToProceed: { type: Type.BOOLEAN },
+            readyToExtract: { type: Type.BOOLEAN },
+            confidence: { type: Type.NUMBER },
+            currencyWarning: { type: Type.BOOLEAN },
+            countyMissing: { type: Type.BOOLEAN },
+            limitationWarning: { type: Type.BOOLEAN },
+            debtAgeYears: { type: Type.NUMBER },
+            exceedsSmallClaims: { type: Type.BOOLEAN },
+            dateError: { type: Type.BOOLEAN },
+            lbaSent: { type: Type.BOOLEAN },
+            lbaDaysAgo: { type: Type.NUMBER }
+          }
+        }
+      }
+    });
+
+    const result = JSON.parse(cleanJson(response.text || '{}'));
+
+    // Post-process: Infer county from postcode if missing
+    const extractedData = result.extractedData || {};
+
+    // Clean addresses if they contain full address strings
+    if (extractedData.defendant) {
+      const cleanedDefendant = cleanPartyAddress(extractedData.defendant);
+      extractedData.defendant.address = cleanedDefendant.address;
+      extractedData.defendant.city = cleanedDefendant.city || extractedData.defendant.city;
+      extractedData.defendant.postcode = cleanedDefendant.postcode || extractedData.defendant.postcode;
+    }
+
+    if (extractedData.claimant) {
+      const cleanedClaimant = cleanPartyAddress(extractedData.claimant);
+      extractedData.claimant.address = cleanedClaimant.address;
+      extractedData.claimant.city = cleanedClaimant.city || extractedData.claimant.city;
+      extractedData.claimant.postcode = cleanedClaimant.postcode || extractedData.claimant.postcode;
+    }
+
+    // Infer defendant county from postcode if missing
+    if (extractedData.defendant?.postcode && !extractedData.defendant?.county) {
+      const inferredCounty = postcodeToCounty(extractedData.defendant.postcode);
+      if (inferredCounty) {
+        extractedData.defendant.county = inferredCounty;
+        console.log(`[analyzeClaimInput] Inferred defendant county: ${inferredCounty} from postcode ${extractedData.defendant.postcode}`);
+      }
+    }
+
+    // Recalculate countyMissing after inference
+    // Note: Claimant county comes from user profile, not extraction
+    const defendantCountyMissing = !extractedData.defendant?.county;
+    const countyStillMissing = defendantCountyMissing;
+
+    return {
+      extractedData,
+      followUpQuestions: result.followUpQuestions || [],
+      acknowledgment: result.acknowledgment || 'I received your input.',
+      readyToProceed: result.readyToProceed || false,
+      readyToExtract: result.readyToExtract !== false, // Default to true unless explicitly false
+      confidence: result.confidence || 50,
+      currencyWarning: result.currencyWarning || false,
+      countyMissing: countyStillMissing, // Use recalculated value
+      limitationWarning: result.limitationWarning || false,
+      debtAgeYears: result.debtAgeYears,
+      exceedsSmallClaims: result.exceedsSmallClaims || false,
+      dateError: result.dateError || false,
+      lbaSent: result.lbaSent,
+      lbaDaysAgo: result.lbaDaysAgo
+    };
+  } catch (error) {
+    console.error('[analyzeClaimInput] Error:', error);
+    return {
+      extractedData: {},
+      followUpQuestions: ['Could you tell me more about your claim?'],
+      acknowledgment: 'I had trouble processing that. Let me ask some questions.',
+      readyToProceed: false,
+      confidence: 0
     };
   }
 };

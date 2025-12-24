@@ -9,13 +9,13 @@ import {
   FileSignature,
   CheckCircle2,
   ShieldCheck,
-  FolderOpen,
   X,
   ChevronRight,
   FileText,
   Calendar,
   Settings
 } from 'lucide-react';
+import { Button } from './ui/Button';
 import { UserProfile } from '../types';
 
 interface SidebarProps {
@@ -58,13 +58,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
             </div>
           </div>
           {onCloseMobile && (
-            <button
+            <Button
+              variant="ghost"
               onClick={onCloseMobile}
-              className="md:hidden text-slate-400 hover:text-slate-900 transition-colors duration-200 p-2 hover:bg-slate-100 rounded-lg"
+              className="md:hidden"
               aria-label="Close navigation menu"
-            >
-              <X className="w-5 h-5" />
-            </button>
+              icon={<X className="w-5 h-5" />}
+            />
           )}
         </div>
       </div>
@@ -76,21 +76,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
            className="w-full text-left flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
            onClick={() => { onSettingsClick?.(); onCloseMobile?.(); }}
            aria-label={userProfile ? 'Open profile settings' : 'Open settings'}
+           title={userProfile?.businessName || 'Guest User'}
          >
-            <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">
+            <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                {userProfile?.businessName?.charAt(0).toUpperCase() || 'G'}
             </div>
-            <div className="overflow-hidden flex-1">
-               <p className="text-sm font-medium text-slate-900 truncate">{userProfile?.businessName || 'Guest User'}</p>
-               <p className="text-xs text-slate-400">{userProfile ? 'Click to edit profile' : 'Local Session'}</p>
+            <div className="overflow-hidden flex-1 min-w-0">
+               <p className="text-sm font-medium text-slate-900 truncate" title={userProfile?.businessName || 'Guest User'}>
+                  {userProfile?.businessName || 'Guest User'}
+               </p>
+               <p className="text-xs text-slate-400 truncate">{userProfile ? 'Click to edit profile' : 'Local Session'}</p>
             </div>
-            {userProfile && <Settings className="w-4 h-4 text-slate-400" />}
+            {userProfile && <Settings className="w-4 h-4 text-slate-400 flex-shrink-0" />}
          </button>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 min-h-0 px-4 overflow-y-auto">
-         {view === 'dashboard' || view === 'calendar' ? (
+         {view === 'dashboard' || view === 'calendar' || view === 'settings' ? (
              <>
                 <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-3 tracking-wider">Main Menu</p>
                 <button
@@ -98,43 +101,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
                   className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
                     view === 'dashboard'
-                      ? 'bg-teal-50 text-teal-700 border-l-4 border-teal-500'
+                      ? 'bg-teal-100 text-teal-800 border-l-4 border-teal-500 shadow-sm'
                       : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
                   }`}
                   aria-current={view === 'dashboard' ? 'page' : undefined}
                 >
-                    <LayoutDashboard className={`w-4 h-4 ${view === 'dashboard' ? 'text-teal-500' : ''}`} />
-                    <span className={`text-sm ${view === 'dashboard' ? 'font-semibold' : 'font-medium'}`}>Dashboard</span>
+                    <LayoutDashboard className={`w-5 h-5 ${view === 'dashboard' ? 'text-teal-600' : ''}`} />
+                    <span className={`text-sm ${view === 'dashboard' ? 'font-bold' : 'font-medium'}`}>Dashboard</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => { onCalendarClick?.(); onCloseMobile?.(); }}
                   className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 mt-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
                     view === 'calendar'
-                      ? 'bg-teal-50 text-teal-700 border-l-4 border-teal-500'
+                      ? 'bg-teal-100 text-teal-800 border-l-4 border-teal-500 shadow-sm'
                       : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
                   }`}
                   aria-current={view === 'calendar' ? 'page' : undefined}
                 >
-                    <Calendar className={`w-4 h-4 ${view === 'calendar' ? 'text-teal-500' : ''}`} />
-                    <span className={`text-sm ${view === 'calendar' ? 'font-semibold' : 'font-medium'}`}>Calendar</span>
-                    {upcomingDeadlinesCount && upcomingDeadlinesCount > 0 && view !== 'calendar' && (
-                      <span className="ml-auto bg-teal-500 text-white text-xs px-2 py-0.5 rounded-full">
-                        {upcomingDeadlinesCount}
-                      </span>
+                    <Calendar className={`w-5 h-5 ${view === 'calendar' ? 'text-teal-600' : ''}`} />
+                    <span className={`text-sm ${view === 'calendar' ? 'font-bold' : 'font-medium'}`}>Calendar</span>
+                    {view !== 'calendar' && (
+                      upcomingDeadlinesCount && upcomingDeadlinesCount > 0 ? (
+                        <span className="ml-auto bg-teal-500 text-white text-xs px-2 py-0.5 rounded-full" title={`${upcomingDeadlinesCount} upcoming deadline${upcomingDeadlinesCount !== 1 ? 's' : ''}`}>
+                          {upcomingDeadlinesCount}
+                        </span>
+                      ) : (
+                        <span className="ml-auto text-xs text-slate-400">No deadlines</span>
+                      )
                     )}
                 </button>
-                <div
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 cursor-not-allowed transition-all duration-200 mt-1"
-                  title="Coming soon"
-                  aria-disabled="true"
-                >
-                  <FolderOpen className="w-4 h-4" />
-                  <span className="text-sm font-medium">Archived Claims</span>
-                  <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                    Coming soon
-                  </span>
-                </div>
              </>
          ) : view === 'conversation' ? (
              <>
@@ -182,7 +178,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                  {steps.map((step) => {
                     const isActive = currentStep === step.id;
                     const effectiveMax = maxStepReached ?? currentStep;
-                    const isCompleted = step.id < effectiveMax;
+                    const isCompleted = step.id < currentStep;
                     const canClick = step.id <= effectiveMax;
 
                     return (
@@ -197,6 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                          }}
                          disabled={!canClick}
                          aria-current={isActive ? 'step' : undefined}
+                         title={!canClick ? 'Complete previous steps first' : isCompleted ? `Go back to ${step.label}` : step.label}
                          className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-r-xl transition-all duration-200 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
                             isActive
                               ? 'bg-teal-50 border-l-4 border-teal-500'
@@ -219,7 +216,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                           {/* Label */}
                           <div className="flex-1 min-w-0">
                             <span className={`text-sm block ${
-                              isActive ? 'font-semibold text-teal-700' : 'font-medium text-slate-700'
+                              isActive ? 'font-semibold text-teal-700' : canClick ? 'font-medium text-slate-700' : 'font-medium text-slate-400'
                             }`}>
                               {step.label}
                             </span>
@@ -228,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                             )}
                           </div>
 
-                          {/* Arrow for active */}
+                          {/* Arrow for active or hover for clickable */}
                           {isActive && (
                             <ChevronRight className="w-4 h-4 text-teal-500 flex-shrink-0" />
                           )}
@@ -242,17 +239,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
 
       {/* Legal Disclaimer */}
       <div className="p-4 flex-shrink-0">
-         <button
+         <Button
+           variant="ghost"
            onClick={() => {
              onLegalClick?.();
              onCloseMobile?.();
            }}
-           className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+           className="w-full justify-start text-slate-500 hover:text-slate-700"
+           icon={<ShieldCheck className="w-4 h-4" />}
            title="View legal information"
          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Legal Disclaimer</span>
-         </button>
+            Legal Disclaimer
+         </Button>
       </div>
     </aside>
   );

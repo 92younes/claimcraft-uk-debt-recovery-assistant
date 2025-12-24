@@ -33,7 +33,7 @@ export const AddressStep: React.FC<AddressStepProps> = ({
     <div className="space-y-8 animate-fade-in">
       <div>
         <h2 className="text-2xl font-bold text-slate-900 font-display">Address</h2>
-        <p className="text-slate-500 mt-1">Where is your office located</p>
+        <p className="text-slate-500 mt-1">Enter your business address</p>
       </div>
 
       <div className="space-y-4">
@@ -97,7 +97,7 @@ export const AddressStep: React.FC<AddressStepProps> = ({
           {/* Postal Code and Country */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Postal Code"
+              label="Postcode"
               value={address.postcode || ''}
               onChange={(e) => onAddressChange({ postcode: e.target.value.toUpperCase() })}
               onBlur={handlePostcodeBlur}

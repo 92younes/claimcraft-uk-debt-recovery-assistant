@@ -104,6 +104,37 @@ export const Tooltip: React.FC<TooltipProps> = ({
     };
   }, [isVisible]);
 
+  // Hide on click outside and when focus moves away
+  useEffect(() => {
+    if (!isVisible) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      // Hide tooltip when clicking anywhere outside the trigger element
+      if (triggerRef.current && !triggerRef.current.contains(event.target as Node)) {
+        hideTooltip();
+      }
+    };
+
+    const handleFocusChange = (event: FocusEvent) => {
+      // Hide tooltip when focus moves to a different element
+      if (triggerRef.current && !triggerRef.current.contains(event.target as Node)) {
+        hideTooltip();
+      }
+    };
+
+    // Add listeners with slight delay to avoid conflicts with trigger events
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
+      document.addEventListener('focusin', handleFocusChange, true);
+    }, 50);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+      document.removeEventListener('focusin', handleFocusChange, true);
+    };
+  }, [isVisible]);
+
   // For disabled elements, wrap in a span so mouse events still fire
   const triggerElement = wrapDisabled ? (
     <span

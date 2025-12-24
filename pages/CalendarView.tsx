@@ -15,12 +15,14 @@ import {
   Bell,
   AlertTriangle,
   Eye,
-  MoreHorizontal
+  MoreHorizontal,
+  Trash2
 } from 'lucide-react';
 import { Deadline, DeadlineStatus, DeadlinePriority, DeadlineType, ClaimState } from '../types';
 import { DEADLINE_COLORS, DEADLINE_TYPE_LABELS } from '../constants';
 import { getDaysUntilDeadline } from '../services/deadlineService';
 import { downloadICalFile, downloadSingleDeadlineIcal } from '../services/icalService';
+import { formatDateISO } from '../utils/formatters';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -30,6 +32,7 @@ interface CalendarViewProps {
   onBack: () => void;
   onDeadlineClick: (deadline: Deadline) => void;
   onCompleteDeadline: (deadline: Deadline) => void;
+  onDeleteDeadline?: (deadlineId: string) => void;
   onAddDeadline?: () => void;
 }
 
@@ -63,9 +66,9 @@ const getWeekDays = (startDate: Date): Date[] => {
   return days;
 };
 
-// Format date as YYYY-MM-DD for comparison
+// Format date as YYYY-MM-DD for comparison (using local timezone)
 const formatDateKey = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  return formatDateISO(date);
 };
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
@@ -74,6 +77,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onBack,
   onDeadlineClick,
   onCompleteDeadline,
+  onDeleteDeadline,
   onAddDeadline,
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
@@ -591,6 +595,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <Eye className="w-4 h-4" />
               View
             </button>
+            {onDeleteDeadline && (
+              <button
+                onClick={() => {
+                  onDeleteDeadline(selectedDeadline.id);
+                  setSelectedDeadline(null);
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 font-medium rounded-lg hover:bg-red-100 transition-colors"
+                title="Delete deadline"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -793,23 +809,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
         {/* Empty state */}
         {filteredDeadlines.length === 0 && (
-          <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-            <CalendarIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">No Deadlines Yet</h3>
-            <p className="text-slate-500 mb-6">
-              {selectedClaimId === 'all'
-                ? 'Start a claim to automatically track important deadlines.'
-                : 'This claim has no associated deadlines.'}
-            </p>
-            {onAddDeadline && (
-              <button
-                onClick={onAddDeadline}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-teal-500 text-white font-medium rounded-lg hover:bg-teal-600 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Deadline
-              </button>
-            )}
+          <div className="text-center py-20 bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 relative overflow-hidden">
+            {/* Decorative background elements */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-teal-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-teal-50 rounded-full -ml-12 -mb-12 opacity-50"></div>
+
+            {/* Content */}
+            <div className="relative z-10">
+              <div className="w-16 h-16 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <CalendarIcon className="w-8 h-8 text-teal-500" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">No Deadlines Yet</h3>
+              <p className="text-slate-500 mb-3 max-w-md mx-auto">
+                {selectedClaimId === 'all'
+                  ? 'Start a claim to automatically track important deadlines like response dates and court hearing dates.'
+                  : 'This claim has no associated deadlines yet. Add deadlines to track important dates and stay on top of your case.'}
+              </p>
+              <p className="text-sm text-slate-600 mb-6 max-w-md mx-auto">
+                Track deadlines for responses, court hearings, compliance dates, and other time-sensitive tasks.
+              </p>
+              {onAddDeadline && (
+                <button
+                  onClick={onAddDeadline}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-teal-500 text-white font-semibold rounded-lg hover:bg-teal-600 transition-all duration-200 shadow-md hover:shadow-lg"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Your First Deadline
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

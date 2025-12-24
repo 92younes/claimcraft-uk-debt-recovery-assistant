@@ -9,6 +9,7 @@ export enum PartyType {
 export interface Party {
   type: PartyType;
   name: string; // Trading name or Full Name
+  contactName?: string; // Contact person for correspondence
   address: string;
   city: string;
   county: string;
@@ -23,6 +24,8 @@ export interface InvoiceData {
   invoiceNumber: string;
   dateIssued: string;
   dueDate: string;
+  paymentTerms?: 'net_7' | 'net_14' | 'net_30' | 'net_60' | 'net_90' | 'custom';
+  agreementType?: 'goods' | 'services' | 'ongoing_contract' | 'one_time_purchase';
   totalAmount: number;
   currency: string;
   description: string;
@@ -89,7 +92,7 @@ export interface GeneratedContent {
 export interface TimelineEvent {
   date: string;
   description: string;
-  type: 'contract' | 'service_delivered' | 'invoice' | 'payment_due' | 'part_payment' | 'chaser' | 'lba_sent' | 'acknowledgment' | 'communication';
+  type: 'contract' | 'service_delivered' | 'invoice' | 'payment_due' | 'part_payment' | 'chaser' | 'lba_sent' | 'acknowledgment' | 'communication' | 'payment_reminder' | 'promise_to_pay';
 }
 
 // ==========================================
@@ -104,6 +107,7 @@ export enum DeadlineType {
   DEFENCE_DEADLINE = 'defence_deadline',
   JUDGMENT_DEADLINE = 'judgment_deadline',
   ENFORCEMENT = 'enforcement',
+  PAYMENT_FOLLOW_UP = 'payment_follow_up',
   CUSTOM = 'custom'
 }
 
@@ -163,12 +167,12 @@ export interface EvidenceFile {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'ai';
+  role: 'user' | 'ai' | 'assistant';
   content: string;
-  timestamp: number;
+  timestamp: number | string;
 }
 
-export type ClaimStatus = 'draft' | 'overdue' | 'review' | 'sent' | 'paid';
+export type ClaimStatus = 'draft' | 'overdue' | 'review' | 'sent' | 'paid' | 'court' | 'judgment';
 
 export enum ClaimStage {
   DRAFT = 'Draft',
@@ -207,6 +211,19 @@ export interface ClaimState {
     invoiceId: string;
     importedAt: string;
   };
+  // LBA tracking
+  lbaAlreadySent?: boolean;
+  lbaSentDate?: string;
+  // User document selection flag
+  userSelectedDocType?: boolean;
+  // Interest verification
+  hasVerifiedInterest?: boolean;
+  // Payment tracking
+  hasPaid?: boolean;
+  paymentId?: string;
+  paidAt?: string;
+  // Court form data for N1/N225 etc.
+  courtFormData?: CourtFormData;
 }
 
 // Accounting Integration Types
@@ -307,3 +324,192 @@ export const INITIAL_STATE: ClaimState = {
   generated: null,
   signature: null
 };
+
+// ==========================================
+// Wizard Step Enum (5-step simplified flow)
+// ==========================================
+export enum Step {
+  EVIDENCE = 1,
+  VERIFY = 2,
+  STRATEGY = 3,
+  DRAFT = 4,
+  REVIEW = 5
+}
+
+// ==========================================
+// Conversation Types
+// ==========================================
+export interface ConversationMessage {
+  role: 'user' | 'assistant' | 'ai';
+  content: string;
+  timestamp: string | number;
+  attachments?: EvidenceFile[];
+}
+
+export interface ClaimIntakeResult {
+  extractedData?: Partial<ClaimState>;
+  followUpQuestions?: string[];
+  confidence?: number;
+  acknowledgment?: string;
+  readyToProceed?: boolean;
+  readyToExtract?: boolean;
+  // Validation flags
+  currencyWarning?: boolean;
+  countyMissing?: boolean;
+  limitationWarning?: boolean;
+  debtAgeYears?: number;
+  exceedsSmallClaims?: boolean;
+  dateError?: boolean;
+  // LBA status for document recommendation
+  lbaSent?: boolean | null;
+  lbaDaysAgo?: number;
+}
+
+// ==========================================
+// Business & User Profile Types
+// ==========================================
+export enum BusinessType {
+  SOLE_TRADER = 'sole_trader',
+  LIMITED_COMPANY = 'limited_company',
+  LLP = 'llp',
+  PARTNERSHIP = 'partnership',
+  OTHER = 'other'
+}
+
+export interface UserAddress {
+  line1: string;
+  line2?: string;
+  city: string;
+  county: string;
+  postcode: string;
+  country?: string;
+}
+
+export interface PaymentDetails {
+  bankAccountHolder: string;
+  bankName: string;
+  sortCode: string;      // UK format: XX-XX-XX
+  accountNumber: string; // 8 digits
+  paymentReference?: string;
+}
+
+export const INITIAL_PAYMENT_DETAILS: PaymentDetails = {
+  bankAccountHolder: '',
+  bankName: '',
+  sortCode: '',
+  accountNumber: '',
+  paymentReference: ''
+};
+
+export interface UserProfile {
+  id: string;
+  businessType: BusinessType;
+  businessName: string;
+  companyNumber?: string;
+  businessAddress: UserAddress;
+  email?: string;
+  phone?: string;
+  // Onboarding flags
+  hasAuthority?: boolean;
+  referralSource?: string;
+  tosAcceptedAt?: string;
+  disclaimerAcceptedAt?: string;
+  jurisdictionConfirmed?: boolean;
+  isPEP?: boolean; // Politically Exposed Person flag
+  // Payment details for document generation
+  paymentDetails?: PaymentDetails;
+  // Metadata
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const INITIAL_USER_ADDRESS: UserAddress = {
+  line1: '',
+  line2: '',
+  city: '',
+  county: '',
+  postcode: '',
+  country: 'United Kingdom'
+};
+
+export const INITIAL_USER_PROFILE: Omit<UserProfile, 'id'> = {
+  businessType: BusinessType.SOLE_TRADER,
+  businessName: '',
+  companyNumber: '',
+  businessAddress: { ...INITIAL_USER_ADDRESS },
+  email: '',
+  phone: '',
+  hasAuthority: false,
+  referralSource: '',
+  tosAcceptedAt: undefined,
+  disclaimerAcceptedAt: undefined,
+  jurisdictionConfirmed: false,
+  paymentDetails: { ...INITIAL_PAYMENT_DETAILS }
+};
+
+// ==========================================
+// AI Extraction Types
+// ==========================================
+export interface ExtractedClaimData {
+  claimant?: Partial<Party>;
+  defendant?: Partial<Party>;
+  invoice?: Partial<InvoiceData>;
+  timeline?: TimelineEvent[];
+  evidence?: EvidenceFile[];
+  confidence?: number;
+  confidenceScore?: number;
+  recommendedDocument?: DocumentType;
+  documentReason?: string;
+  extractedFields?: string[];
+}
+
+// ==========================================
+// Notification & Reminder Types
+// ==========================================
+export interface DeadlineReminder {
+  id: string;
+  deadlineId: string;
+  claimId?: string;
+  reminderDate: string;
+  sent: boolean;
+  sentAt?: string;
+  emailAddress?: string;
+  channel?: 'email' | 'sms' | 'push';
+}
+
+export interface UserNotificationPreferences {
+  emailReminders: boolean;
+  reminderDaysBefore: number[];
+  digestFrequency: 'daily' | 'weekly' | 'none';
+}
+
+// ==========================================
+// Court Form Types
+// ==========================================
+export interface CourtFormData {
+  claimNumber?: string;
+  admissionDate?: string;
+  defendantProposal?: string;
+  claimantPaymentTerms?: string;
+  installmentAmount?: number;
+  witnessCount?: number;
+  witnessNames?: string[];
+  estimatedHearingDuration?: number;
+  unavailableDates?: string;
+  wantsSettlementStay?: boolean;
+  wantsMediation?: boolean;
+  needsExpert?: boolean;
+  hasDisability?: boolean;
+  claimLossOfEarnings?: boolean;
+}
+
+// ==========================================
+// AI Chat Types
+// ==========================================
+export interface ChatResponse {
+  message: string;
+  extractedData?: Partial<ClaimState>;
+  followUpQuestions?: string[];
+  readyToProceed?: boolean;
+  acknowledgment?: string;
+}

@@ -6,57 +6,71 @@
  */
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { ArrowLeft, Settings, User, Database } from 'lucide-react';
+import { Settings, User, Database } from 'lucide-react';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { ProfileSettingsForm } from '../components/settings/ProfileSettingsForm';
 import { DataSettings } from '../components/settings/DataSettings';
+import { useClaimStore } from '../store/claimStore';
+import { exportAllUserData, deleteAllUserData } from '../services/storageService';
+import { getTodayISO } from '../utils/formatters';
 
-interface SettingsPageProps {
-  profile: UserProfile;
-  onSave: (profile: UserProfile) => Promise<void>;
-  onBack: () => void;
-  onExportAllData: () => void | Promise<void>;
-  onDeleteAllData: () => void | Promise<void>;
-}
-
-export const SettingsPage: React.FC<SettingsPageProps> = ({
-  profile,
-  onSave,
-  onBack,
-  onExportAllData,
-  onDeleteAllData,
-}) => {
+export const SettingsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { userProfile, saveUserProfile, setDashboardClaims } = useClaimStore();
   const [tab, setTab] = React.useState<'profile' | 'data'>('profile');
 
+  // Redirect if no profile (guard handled by DashboardLayout, but defensive)
+  if (!userProfile) {
+    return null;
+  }
+
+  const profile = userProfile;
+
+  const onSave = async (updatedProfile: UserProfile) => {
+    await saveUserProfile(updatedProfile);
+  };
+
+  const onExportAllData = async () => {
+    try {
+      const blob = await exportAllUserData();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `claimcraft-backup-${getTodayISO()}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export data:', error);
+      alert('Failed to export data.');
+    }
+  };
+
+  const onDeleteAllData = async () => {
+    if (window.confirm('Are you sure you want to delete ALL data? This cannot be undone.')) {
+      await deleteAllUserData();
+      setDashboardClaims([]);
+      navigate('/');
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={onBack}
-                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="text-sm font-medium">Back to Dashboard</span>
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <Settings className="w-5 h-5 text-teal-600" />
-              <h1 className="text-lg font-bold text-slate-900">Account Settings</h1>
-            </div>
-          </div>
+    <div className="max-w-7xl mx-auto animate-fade-in">
+      {/* Page Header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3">
+          <Settings className="w-6 h-6 text-teal-600" />
+          <h1 className="text-2xl font-bold text-slate-900">Account Settings</h1>
         </div>
+        <p className="text-slate-500 mt-1">Manage your profile and data preferences</p>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div>
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Left navigation */}
-          <aside className="lg:w-80 flex-shrink-0">
+          <aside className="lg:w-64 flex-shrink-0">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">

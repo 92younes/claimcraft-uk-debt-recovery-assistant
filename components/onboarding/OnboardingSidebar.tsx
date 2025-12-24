@@ -6,6 +6,7 @@ interface OnboardingSidebarProps {
   currentStep: number;
   completedSteps: number[];
   onCancel: () => void;
+  onStepClick?: (stepId: number) => void;
 }
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -19,7 +20,8 @@ const iconMap: Record<string, React.ReactNode> = {
 export const OnboardingSidebar: React.FC<OnboardingSidebarProps> = ({
   currentStep,
   completedSteps,
-  onCancel
+  onCancel,
+  onStepClick
 }) => {
   return (
     <div className="w-full sm:w-72 lg:w-80 bg-slate-50 border-r border-slate-200 flex flex-col h-full">
@@ -43,15 +45,32 @@ export const OnboardingSidebar: React.FC<OnboardingSidebarProps> = ({
             const isCompleted = completedSteps.includes(step.id);
             const isActive = currentStep === step.id;
             const isPending = !isCompleted && !isActive;
+            const isClickable = isCompleted || isActive;
+
+            const StepWrapper = isClickable ? 'button' : 'div';
+            const wrapperProps = isClickable
+              ? {
+                  type: 'button' as const,
+                  onClick: () => onStepClick?.(step.id),
+                  className: `
+                    relative flex items-start gap-3 p-3 rounded-xl transition-all duration-200 w-full text-left
+                    ${isActive ? 'bg-teal-50 border border-teal-200' : ''}
+                    ${isCompleted ? 'opacity-70 hover:opacity-100 hover:bg-slate-50 cursor-pointer' : ''}
+                  `,
+                  title: isCompleted ? `Go back to ${step.title}` : step.title
+                }
+              : {
+                  className: `
+                    relative flex items-start gap-3 p-3 rounded-xl transition-all duration-200
+                    ${isActive ? 'bg-teal-50 border border-teal-200' : ''}
+                    ${isCompleted ? 'opacity-70' : ''}
+                  `
+                };
 
             return (
-              <div
+              <StepWrapper
                 key={step.id}
-                className={`
-                  relative flex items-start gap-3 p-3 rounded-xl transition-all duration-200
-                  ${isActive ? 'bg-teal-50 border border-teal-200' : ''}
-                  ${isCompleted ? 'opacity-70' : ''}
-                `}
+                {...wrapperProps}
               >
                 {/* Step indicator line */}
                 {index < ONBOARDING_STEPS.length - 1 && (
@@ -103,7 +122,7 @@ export const OnboardingSidebar: React.FC<OnboardingSidebarProps> = ({
                     {step.estimatedTime}
                   </p>
                 </div>
-              </div>
+              </StepWrapper>
             );
           })}
         </nav>
