@@ -106,6 +106,36 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
   const [profilePartyData, setProfilePartyData] = useState<Party | null>(null);
   const [chatPartyData, setChatPartyData] = useState<Partial<Party> | null>(null);
 
+  // Helpers
+  const buildChatHistory = (msgs: ConversationMessage[]): ChatMessage[] => {
+    return msgs.map((msg, idx) => ({
+      id: `msg-${idx}-${msg.timestamp}`,
+      // Keep roles consistent with the rest of the app: assistant messages are 'ai'
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp
+    }));
+  };
+
+  const mergeExtractedData = (
+    prev: Partial<ClaimState> | null,
+    incoming?: Partial<ClaimState> | null
+  ): Partial<ClaimState> | null => {
+    if (!incoming) return prev;
+    if (!prev) return incoming;
+    return {
+      ...prev,
+      ...incoming,
+      // Deep merge for nested objects
+      defendant: { ...prev.defendant, ...incoming.defendant },
+      // CRITICAL: Never merge AI-extracted claimant data - it may be hallucinated
+      // Claimant should always come from user profile, not from document extraction
+      claimant: prev.claimant,
+      invoice: { ...prev.invoice, ...incoming.invoice },
+      timeline: [...(prev.timeline || []), ...(incoming.timeline || [])]
+    };
+  };
+
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -170,8 +200,12 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
   };
 
   // Handle send message
-  const handleSend = async () => {
-    if (!inputText.trim() && files.length === 0) return;
+  const handleSend = async (override?: { text?: string; files?: EvidenceFile[] }) => {
+    if (isAnalyzing) return;
+
+    const textToSend = override?.text ?? inputText;
+    const filesToSend = override?.files ?? files;
+    if (!textToSend.trim() && filesToSend.length === 0) return;
 
     setIsAnalyzing(true);
     setLoadingStage('Processing...');
@@ -181,15 +215,15 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
     // Add user message to conversation
     const userMessage: ConversationMessage = {
       role: 'user',
-      content: inputText || (files.length > 0 ? `[Uploaded ${files.length} file(s)]` : ''),
+      content: textToSend || (filesToSend.length > 0 ? `[Uploaded ${filesToSend.length} file(s)]` : ''),
       timestamp: Date.now(),
-      attachments: files.length > 0 ? [...files] : undefined
+      attachments: filesToSend.length > 0 ? [...filesToSend] : undefined
     };
     setMessages(prev => [...prev, userMessage]);
 
     // Clear input and accumulate files
-    const currentInput = inputText;
-    const currentFiles = [...files];
+    const currentInput = textToSend;
+    const currentFiles = [...filesToSend];
     setInputText('');
     setFiles([]);
     // Track all uploaded files for evidence attachment
@@ -238,6 +272,7 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
 
       // Only merge extracted data if AI is ready to extract (two-phase flow)
       // If readyToExtract is false, AI needs clarification before extracting
+      let nextExtractedData: Partial<ClaimState> | null = extractedData;
       if (result.readyToExtract !== false) {
         // Track newly extracted fields for preview panel highlighting
         const newFields: string[] = [];
@@ -266,18 +301,8 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
           setPreviewPanelCollapsed(false);
         }
 
-        setExtractedData(prev => {
-          if (!prev) return result.extractedData;
-          return {
-            ...prev,
-            ...result.extractedData,
-            // Deep merge for nested objects
-            defendant: { ...prev.defendant, ...result.extractedData?.defendant },
-            claimant: { ...prev.claimant, ...result.extractedData?.claimant },
-            invoice: { ...prev.invoice, ...result.extractedData?.invoice },
-            timeline: [...(prev.timeline || []), ...(result.extractedData?.timeline || [])]
-          };
-        });
+        nextExtractedData = mergeExtractedData(extractedData, result.extractedData);
+        setExtractedData(nextExtractedData);
       }
       // If readyToExtract is false, don't update extractedData - wait for user to answer clarifying questions
 
@@ -315,8 +340,12 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
       });
 
       // If ready to proceed, get document recommendation
-      if (result.readyToProceed && extractedData) {
-        getDocumentRecommendation();
+      if (result.readyToProceed && nextExtractedData) {
+        const messagesForRecommendation = [...messages, userMessage, aiMessage];
+        const evidenceForRecommendation = currentFiles.length > 0
+          ? [...allUploadedFiles, ...currentFiles]
+          : allUploadedFiles;
+        getDocumentRecommendation(messagesForRecommendation, nextExtractedData, evidenceForRecommendation);
       }
 
     } catch (err: any) {
@@ -363,40 +392,35 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
   const handleRetry = () => {
     if (!lastFailedInput) return;
     setError(null);
-    setInputText(lastFailedInput.text);
-    setFiles(lastFailedInput.files);
+    const retryPayload = { ...lastFailedInput };
     setLastFailedInput(null);
-    // Trigger send after state update
-    setTimeout(() => {
-      handleSend();
-    }, 0);
+    handleSend({ text: retryPayload.text, files: retryPayload.files });
   };
 
   // Get document recommendation based on chat history
-  const getDocumentRecommendation = async () => {
-    if (!extractedData) return;
+  const getDocumentRecommendation = async (
+    msgs: ConversationMessage[],
+    data: Partial<ClaimState>,
+    evidenceFiles: EvidenceFile[]
+  ) => {
+    if (!data) return;
 
     setIsGettingRecommendation(true);
     try {
       // Convert ConversationMessage[] to ChatMessage[] for extractDataFromChat
-      const chatHistory: ChatMessage[] = messages.map((msg, idx) => ({
-        id: `msg-${idx}`,
-        role: msg.role === 'ai' ? 'assistant' : 'user',
-        content: msg.content,
-        timestamp: msg.timestamp
-      }));
+      const chatHistory: ChatMessage[] = buildChatHistory(msgs);
 
       // Build a minimal ClaimState for extractDataFromChat
       const currentData: ClaimState = {
         id: '',
-        claimant: extractedData.claimant || { name: '', address: '', city: '', county: '', postcode: '' },
-        defendant: extractedData.defendant || { name: '', address: '', city: '', county: '', postcode: '' },
-        invoice: extractedData.invoice || { invoiceNumber: '', totalAmount: 0, dateIssued: '', currency: 'GBP' },
-        timeline: extractedData.timeline || [],
+        claimant: data.claimant || { name: '', address: '', city: '', county: '', postcode: '' },
+        defendant: data.defendant || { name: '', address: '', city: '', county: '', postcode: '' },
+        invoice: data.invoice || { invoiceNumber: '', totalAmount: 0, dateIssued: '', currency: 'GBP' },
+        timeline: data.timeline || [],
         interest: { totalInterest: 0, dailyRate: 0, daysOverdue: 0 },
         compensation: 0,
         courtFee: 0,
-        evidence: allUploadedFiles,
+        evidence: evidenceFiles,
         chatHistory: chatHistory,
         source: 'upload'
       } as ClaimState;
@@ -551,33 +575,23 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
       <div className="flex-1 flex flex-col min-w-0">
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
-          {/* Header - compact */}
-          <div className="py-3 px-4 text-center flex-shrink-0">
-          <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 mb-2 shadow-lg shadow-teal-500/25">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <h1 className="text-lg font-display font-bold text-slate-900 mb-1">
-            {getGreeting()}{userName ? `, ${userName}` : ''}
-          </h1>
-          <p className="text-slate-500 text-xs">
-            Let's recover what you're owed
-          </p>
-        </div>
+          {/* Header - compact, only show when no messages */}
+          {messages.length === 0 && (
+            <div className="py-4 px-4 text-center flex-shrink-0">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 mb-3 shadow-lg shadow-teal-500/25">
+                <Sparkles className="w-6 h-6 text-white" />
+              </div>
+              <h1 className="text-xl font-display font-bold text-slate-900 mb-1">
+                {getGreeting()}{userName ? `, ${userName}` : ''}
+              </h1>
+              <p className="text-slate-500 text-sm">
+                Let's recover what you're owed
+              </p>
+            </div>
+          )}
 
-        {/* Data Preview Panel - shows captured data during conversation */}
-        {extractedData && messages.length > 0 && !readyToProceed && (
-          <div className="max-w-3xl mx-auto w-full px-4 mb-3 flex-shrink-0">
-            <DataPreviewPanel
-              data={extractedData}
-              newlyExtractedFields={newlyExtractedFields}
-              collapsed={previewPanelCollapsed}
-              onCollapseChange={setPreviewPanelCollapsed}
-            />
-          </div>
-        )}
-
-        {/* Main Content - centered when empty, scrollable when populated */}
-        <div className={`max-w-3xl mx-auto w-full px-4 ${messages.length === 0 ? 'flex-1 flex items-center justify-center' : 'pb-2 flex-shrink-0'}`}>
+        {/* Main Content - positioned at top, not centered */}
+        <div className={`flex-1 flex flex-col max-w-3xl mx-auto w-full px-4 ${messages.length === 0 ? 'pt-2' : 'pb-2'}`}>
           {/* Initial Options (shown when no messages yet) */}
           {messages.length === 0 && (
             <div className="flex flex-col items-center space-y-4 py-4 w-full">
@@ -596,43 +610,28 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-lg">
-                <Tooltip content="Upload invoices, contracts, or emails. AI will extract debtor details, amounts, and dates automatically." position="top">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-xl transition-all group"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors">
-                      <Upload className="w-5 h-5 text-teal-500" />
+              {/* Single Upload Button - typing is done in the chat input below */}
+              <Tooltip content="Upload invoices, contracts, or emails. AI will extract debtor details, amounts, and dates automatically." position="top">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-xl transition-all group w-full max-w-sm"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors">
+                    <Upload className="w-5 h-5 text-teal-500" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <div className="flex items-center gap-1">
+                      <p className="font-semibold text-slate-900 text-sm">Upload Documents</p>
+                      <HelpCircle className="w-3 h-3 text-slate-400" />
                     </div>
-                    <div className="text-left flex-1">
-                      <div className="flex items-center gap-1">
-                        <p className="font-semibold text-slate-900 text-sm">Upload Evidence</p>
-                        <HelpCircle className="w-3 h-3 text-slate-400" />
-                      </div>
-                      <p className="text-xs text-slate-500">AI extracts claim details</p>
-                    </div>
-                  </button>
-                </Tooltip>
+                    <p className="text-xs text-slate-500">AI extracts claim details automatically</p>
+                  </div>
+                </button>
+              </Tooltip>
 
-                <Tooltip content="Describe who owes you money, how much, and what for. I'll ask clarifying questions and extract the details." position="top">
-                  <button
-                    onClick={() => textareaRef.current?.focus()}
-                    className="flex-1 flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-xl transition-all group"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors">
-                      <MessageSquare className="w-5 h-5 text-teal-500" />
-                    </div>
-                    <div className="text-left flex-1">
-                      <div className="flex items-center gap-1">
-                        <p className="font-semibold text-slate-900 text-sm">Describe Claim</p>
-                        <HelpCircle className="w-3 h-3 text-slate-400" />
-                      </div>
-                      <p className="text-xs text-slate-500">Natural conversation</p>
-                    </div>
-                  </button>
-                </Tooltip>
-              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                Or describe your claim in the chat below ↓
+              </p>
 
               {onSkipToWizard && (
                 <Tooltip content="Use a traditional step-by-step form instead of conversational AI intake" position="bottom">
@@ -820,45 +819,45 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
         </div>
       </div>
 
-      {/* Fixed Input Area at Bottom */}
-      <div className="flex-shrink-0 border-t border-slate-200 bg-white p-3">
+      {/* Fixed Input Area at Bottom - Made more prominent */}
+      <div className="flex-shrink-0 border-t border-slate-200 bg-white p-4">
         <div className="max-w-3xl mx-auto">
           {files.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
+            <div className="flex flex-wrap gap-2 mb-3">
               {files.map((file, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-2 px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm"
                 >
-                  <FileText className="w-3 h-3 text-teal-500" />
-                  <span className="text-slate-700 truncate max-w-[120px]">{file.name}</span>
+                  <FileText className="w-4 h-4 text-teal-500" />
+                  <span className="text-slate-700 truncate max-w-[150px]">{file.name}</span>
                   <button
                     onClick={() => handleRemoveFile(idx)}
                     className="text-slate-400 hover:text-red-500 transition-colors"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-3">
             <textarea
               ref={textareaRef}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder="Describe your claim or upload evidence..."
-              className="flex-1 bg-slate-50 text-gray-900 placeholder-slate-400 resize-none outline-none text-sm min-h-[40px] max-h-[100px] px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-              rows={1}
+              className="flex-1 bg-slate-50 text-gray-900 placeholder-slate-400 resize-none outline-none text-base min-h-[48px] max-h-[120px] px-4 py-3 rounded-xl border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+              rows={2}
               disabled={isAnalyzing}
             />
 
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isAnalyzing}
-              className="p-2 text-slate-400 hover:text-teal-500 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+              className="p-3 text-slate-400 hover:text-teal-500 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
               title="Attach file"
             >
               <Upload className="w-5 h-5" />
@@ -867,7 +866,7 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
             <button
               onClick={handleSend}
               disabled={isAnalyzing || (!inputText.trim() && files.length === 0)}
-              className="p-2 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg transition-colors"
+              className="p-3 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl transition-colors"
             >
               {isAnalyzing ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -878,10 +877,10 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
           </div>
 
           {messages.length > 0 && !readyToProceed && onSkipToWizard && (
-            <div className="text-center mt-2">
+            <div className="text-center mt-3">
               <button
                 onClick={onSkipToWizard}
-                className="text-slate-500 hover:text-slate-700 text-xs transition-colors"
+                className="text-slate-500 hover:text-slate-700 text-sm transition-colors"
               >
                 Continue with manual entry →
               </button>
@@ -900,8 +899,68 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
       </div>
       </div>
 
-      {/* Extraction Progress Side Panel */}
-      <ExtractionProgressPanel />
+      {/* Right Sidebar - Extracted Data & Progress */}
+      <div className="w-72 flex-shrink-0 border-l border-slate-200 bg-slate-50/50 flex flex-col hidden lg:flex">
+        {/* Extraction Progress - shows during analysis */}
+        {isAnalyzing && (
+          <div className="p-4 border-b border-slate-200">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="w-4 h-4 text-teal-500" />
+              <span className="text-sm font-semibold text-slate-700">Extracting</span>
+            </div>
+            <div className="space-y-3">
+              {[
+                { key: 'documents', label: 'Scanning Documents', icon: FileText, show: files.length > 0 || allUploadedFiles.length > 0 },
+                { key: 'debtor', label: 'Debtor Details', icon: User, show: true },
+                { key: 'invoice', label: 'Invoice & Amounts', icon: FileText, show: true },
+                { key: 'timeline', label: 'Key Dates', icon: Calendar, show: true },
+              ].filter(s => s.show).map((stage) => {
+                const status = extractionStages[stage.key as keyof typeof extractionStages];
+                const StageIcon = stage.icon;
+                const getStatusIcon = (status: 'pending' | 'active' | 'done') => {
+                  if (status === 'done') return <CheckCircle2 className="w-4 h-4 text-teal-500" />;
+                  if (status === 'active') return <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />;
+                  return <div className="w-4 h-4 rounded-full border-2 border-slate-200" />;
+                };
+                return (
+                  <div key={stage.key} className="flex items-center gap-3">
+                    {getStatusIcon(status)}
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <StageIcon className={`w-3.5 h-3.5 ${status === 'done' ? 'text-teal-500' : status === 'active' ? 'text-teal-500' : 'text-slate-400'}`} />
+                      <span className={`text-xs truncate ${status === 'done' ? 'text-slate-700' : status === 'active' ? 'text-slate-700 font-medium' : 'text-slate-400'}`}>
+                        {stage.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Extracted Data Panel - always visible when data exists */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText className="w-4 h-4 text-slate-600" />
+            <span className="text-sm font-semibold text-slate-700">Extracted Data</span>
+          </div>
+
+          {!extractedData && messages.length === 0 && (
+            <p className="text-xs text-slate-400 text-center py-8">
+              Upload documents or describe your claim to see extracted data here
+            </p>
+          )}
+
+          {extractedData && (
+            <DataPreviewPanel
+              data={extractedData}
+              newlyExtractedFields={newlyExtractedFields}
+              collapsed={false}
+              onCollapseChange={() => {}}
+            />
+          )}
+        </div>
+      </div>
 
       {/* Data Conflict Modal */}
       {profilePartyData && chatPartyData && (

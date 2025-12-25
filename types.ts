@@ -86,6 +86,9 @@ export interface GeneratedContent {
     critique: string;
     improvements: string[];
     correctedContent?: string; // AI Auto-fix
+    wasAutoCorrected?: boolean; // True if corrections were auto-applied
+    originalCritique?: string; // Preserved critique before auto-correction
+    originalImprovements?: string[]; // Preserved improvements before auto-correction
   };
 }
 

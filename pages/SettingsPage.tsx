@@ -5,13 +5,15 @@
  * This is a real settings hub. The OnboardingFlow is reserved for pre-acceptance onboarding.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { Settings, User, Database } from 'lucide-react';
+import { Settings, User, Database, AlertTriangle } from 'lucide-react';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { ProfileSettingsForm } from '../components/settings/ProfileSettingsForm';
 import { DataSettings } from '../components/settings/DataSettings';
+import { Modal } from '../components/ui/Modal';
+import { Button } from '../components/ui/Button';
 import { useClaimStore } from '../store/claimStore';
 import { exportAllUserData, deleteAllUserData } from '../services/storageService';
 import { getTodayISO } from '../utils/formatters';
@@ -19,7 +21,8 @@ import { getTodayISO } from '../utils/formatters';
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { userProfile, saveUserProfile, setDashboardClaims } = useClaimStore();
-  const [tab, setTab] = React.useState<'profile' | 'data'>('profile');
+  const [tab, setTab] = useState<'profile' | 'data'>('profile');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Redirect if no profile (guard handled by DashboardLayout, but defensive)
   if (!userProfile) {
@@ -47,12 +50,15 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const onDeleteAllData = async () => {
-    if (window.confirm('Are you sure you want to delete ALL data? This cannot be undone.')) {
-      await deleteAllUserData();
-      setDashboardClaims([]);
-      navigate('/');
-    }
+  const onDeleteAllData = () => {
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    await deleteAllUserData();
+    setDashboardClaims([]);
+    setShowDeleteModal(false);
+    navigate('/');
   };
 
   return (
@@ -117,6 +123,27 @@ export const SettingsPage: React.FC = () => {
           </section>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={showDeleteModal} onClose={() => setShowDeleteModal(false)}>
+        <div className="text-center p-2">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-6 h-6 text-red-600" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 mb-2">Delete All Data?</h3>
+          <p className="text-slate-600 mb-6">
+            This will permanently remove all claims, settings, and deadlines from this browser. This action cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleConfirmDelete}>
+              Delete All
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

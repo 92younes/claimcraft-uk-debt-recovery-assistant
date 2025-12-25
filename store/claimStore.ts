@@ -30,6 +30,8 @@ import {
 } from '../services/storageService';
 import { profileToClaimantParty } from '../services/userProfileService';
 import { calculateInterest, calculateCompensation } from '../services/legalRules';
+import { analyzeEvidence } from '../services/geminiService';
+import { processEvidenceExtraction, toClaimStateUpdate } from '../services/extractionProcessor';
 
 // Re-export Step for backwards compatibility
 export { Step } from '../types';
@@ -394,12 +396,105 @@ export const useClaimStore = create<ClaimStore>()(
         set({ isProcessing: true, processingText: 'Analyzing evidence files...' });
 
         try {
-          // TODO: Integrate with AI service for evidence analysis
-          // For now, this is a placeholder that could be connected to geminiService
-          console.log('Evidence analysis would process:', claimData.evidence.length, 'files');
+          const evidenceResult = await analyzeEvidence(claimData.evidence);
 
-          // Simulate some processing time
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Best-effort: map AI classifications back onto the uploaded evidence list
+          const byName = new Map<string, string>();
+          const byIndex = new Map<number, string>();
+          for (const c of evidenceResult.classifications || []) {
+            const key = (c.fileName || '').trim().toLowerCase();
+            if (key) byName.set(key, c.type);
+            if (/^\d+$/.test(key)) {
+              const idx = Number(key);
+              if (Number.isFinite(idx)) byIndex.set(idx, c.type);
+            }
+          }
+
+          const evidenceWithClassifications = claimData.evidence.map((f, idx) => {
+            const match =
+              byName.get((f.name || '').trim().toLowerCase()) ??
+              byIndex.get(idx) ??
+              f.classification;
+            return match ? { ...f, classification: match } : f;
+          });
+
+          // Normalize + validate + infer (county/type) via extractionProcessor
+          const extraction = processEvidenceExtraction(
+            {
+              defendant: evidenceResult.defendant,
+              invoice: evidenceResult.invoice,
+              timeline: evidenceResult.timelineEvents,
+              confidence: 85
+            },
+            claimData.evidence.map(f => f.name).join(', ') || 'evidence upload'
+          );
+
+          const update = toClaimStateUpdate(extraction);
+
+          const mergeDefined = <T extends Record<string, any>>(base: T, incoming: Partial<T> | undefined): T => {
+            if (!incoming) return base;
+            const out = { ...base };
+            for (const [k, v] of Object.entries(incoming)) {
+              if (v === undefined || v === null) continue;
+              if (typeof v === 'string' && v.trim() === '') continue;
+              if (typeof v === 'number') {
+                if (!Number.isFinite(v)) continue;
+                // Avoid overwriting totals with 0
+                if (k === 'totalAmount' && v <= 0) continue;
+              }
+              (out as any)[k] = v;
+            }
+            return out;
+          };
+
+          const dedupeTimeline = (events: any[]) => {
+            const seen = new Set<string>();
+            const out: any[] = [];
+            for (const e of events) {
+              const key = `${e.type}|${e.date}|${(e.description || '').trim().toLowerCase()}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              out.push(e);
+            }
+            return out;
+          };
+
+          const mergedDefendant = mergeDefined(claimData.defendant, update.defendant as any);
+          const mergedInvoice = mergeDefined(claimData.invoice, update.invoice as any);
+
+          const mergedTimeline =
+            Array.isArray(update.timeline) && update.timeline.length > 0
+              ? dedupeTimeline([...(claimData.timeline || []), ...(update.timeline || [])])
+              : claimData.timeline;
+
+          // Recalculate interest/compensation after merging
+          const interest = calculateInterest(
+            mergedInvoice.totalAmount,
+            mergedInvoice.dateIssued,
+            mergedInvoice.dueDate,
+            claimData.claimant.type,
+            mergedDefendant.type
+          );
+
+          const compensation = calculateCompensation(
+            mergedInvoice.totalAmount,
+            claimData.claimant.type,
+            mergedDefendant.type
+          );
+
+          setClaimData(prev => ({
+            ...prev,
+            source: 'upload',
+            evidence: evidenceWithClassifications,
+            defendant: mergedDefendant,
+            invoice: mergedInvoice,
+            timeline: mergedTimeline,
+            // Only allow AI recommendation to update doc type if the user hasn't explicitly chosen one
+            selectedDocType: prev.userSelectedDocType ? prev.selectedDocType : (update.selectedDocType || prev.selectedDocType),
+            interest,
+            compensation,
+            assessment: null
+          }));
 
           set({ isProcessing: false, processingText: '' });
         } catch (error) {

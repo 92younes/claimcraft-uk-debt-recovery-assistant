@@ -283,7 +283,7 @@ TONE AND STYLE:
 TEMPLATE TO COMPLETE:
 ${filledTemplate}
 
-OUTPUT: Return ONLY the completed template with all brackets filled. No commentary, explanations, markdown, or code blocks.`
+OUTPUT: Return ONLY the completed template with all brackets filled. No commentary, explanations, markdown, or code blocks. DO NOT use any markdown formatting such as **bold**, *italic*, # headers, or bullet points with dashes. Output plain text only.`
       : `You are a legal document preparation assistant for UK Small Claims Court proceedings.
 
 TASK: Complete the template below by filling in ONLY the bracketed sections. These sections require professional legal writing based on the context provided.
@@ -323,7 +323,7 @@ STRICT RULES:
 TEMPLATE TO COMPLETE:
 ${filledTemplate}
 
-OUTPUT: Return ONLY the completed template with all brackets filled. No commentary, explanations, markdown, or code blocks.`;
+OUTPUT: Return ONLY the completed template with all brackets filled. No commentary, explanations, markdown, or code blocks. DO NOT use any markdown formatting such as **bold**, *italic*, # headers, or bullet points with dashes. Output plain text only.`;
 
     try {
       // Use backend proxy to call Anthropic API (keeps API key secure)
@@ -476,13 +476,27 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       }
     }
 
-    // 5. Check party names are present
-    if (!document.includes(data.claimant.name)) {
+    // 5. Check party names are present (with safety checks for empty/null names)
+    const claimantName = data.claimant?.name?.trim() || '';
+    const defendantName = data.defendant?.name?.trim() || '';
+
+    // Only check if we have valid non-empty names
+    if (claimantName && !document.toLowerCase().includes(claimantName.toLowerCase())) {
+      console.warn(`[validate] Claimant name "${claimantName}" not found in document`);
       errors.push('Claimant name missing from document');
     }
 
-    if (!document.includes(data.defendant.name)) {
+    if (defendantName && !document.toLowerCase().includes(defendantName.toLowerCase())) {
+      console.warn(`[validate] Defendant name "${defendantName}" not found in document`);
       errors.push('Defendant name missing from document');
+    }
+
+    // Also check if names themselves are missing (sanity check)
+    if (!claimantName) {
+      errors.push('Claimant name is empty or missing in claim data');
+    }
+    if (!defendantName) {
+      errors.push('Defendant name is empty or missing in claim data');
     }
 
     // 6. Check for AI-generated case law (PROHIBITED - SRA requirement)
@@ -504,19 +518,27 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
     });
 
     // Filter out false positives: exclude party names from "X v Y" pattern matches
-    const claimantFirstName = data.claimant.name.split(' ')[0];
-    const claimantLastName = data.claimant.name.split(' ').pop() || '';
-    const defendantFirstName = data.defendant.name.split(' ')[0];
-    const defendantLastName = data.defendant.name.split(' ').pop() || '';
+    const claimantFirstName = claimantName.split(' ')[0] || '';
+    const claimantLastName = claimantName.split(' ').pop() || '';
+    const defendantFirstName = defendantName.split(' ')[0] || '';
+    const defendantLastName = defendantName.split(' ').pop() || '';
 
     const filteredCases = detectedCases.filter(match => {
       // If match contains actual party names, it's likely a reference to the parties, not a case citation
-      return !match.includes(claimantFirstName) &&
-             !match.includes(claimantLastName) &&
-             !match.includes(defendantFirstName) &&
-             !match.includes(defendantLastName) &&
-             !match.includes(data.claimant.name) &&
-             !match.includes(data.defendant.name);
+      // Skip empty names in the filter
+      const excludeClaimantFirst = claimantFirstName && match.includes(claimantFirstName);
+      const excludeClaimantLast = claimantLastName && match.includes(claimantLastName);
+      const excludeDefendantFirst = defendantFirstName && match.includes(defendantFirstName);
+      const excludeDefendantLast = defendantLastName && match.includes(defendantLastName);
+      const excludeClaimantFull = claimantName && match.includes(claimantName);
+      const excludeDefendantFull = defendantName && match.includes(defendantName);
+
+      return !excludeClaimantFirst &&
+             !excludeClaimantLast &&
+             !excludeDefendantFirst &&
+             !excludeDefendantLast &&
+             !excludeClaimantFull &&
+             !excludeDefendantFull;
     });
 
     if (filteredCases.length > 0) {
@@ -815,10 +837,32 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       // Step 7: Generate review/compliance check
       const review = await this.generateReview(refinedDocument, data);
 
-      // Step 8: Return completed document (NO disclaimer in actual content - shown separately in UI)
+      // Step 8: Auto-apply corrections if available
+      let finalContent = refinedDocument;
+      if (!review.isPass && review.correctedContent) {
+        // Validate the corrected content before using it
+        const correctedValidation = this.validate(review.correctedContent, data);
+        if (correctedValidation.isValid) {
+          // Auto-correction successful - use corrected content
+          finalContent = review.correctedContent;
+          // Preserve original review data for UI display
+          review.wasAutoCorrected = true;
+          review.originalCritique = review.critique;
+          review.originalImprovements = [...review.improvements];
+          // Update review to reflect successful auto-correction
+          review.isPass = true;
+          review.critique = 'Document verified. Minor issues were automatically corrected.';
+          // Keep improvements for display in collapsible section
+        } else {
+          // Corrected content also has issues - keep original and require manual review
+          console.warn('Auto-correction produced invalid document, keeping original:', correctedValidation.errors);
+        }
+      }
+
+      // Step 9: Return completed document (NO disclaimer in actual content - shown separately in UI)
       return {
         documentType: data.selectedDocType,
-        content: refinedDocument,
+        content: finalContent,
         briefDetails,
         legalBasis: this.getLegalBasis(data),
         nextSteps: this.getNextSteps(data.selectedDocType, data.courtFee),
@@ -843,7 +887,15 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
   private static async generateReview(
     document: string,
     data: ClaimState
-  ): Promise<{ isPass: boolean; critique: string; improvements: string[]; correctedContent?: string }> {
+  ): Promise<{
+    isPass: boolean;
+    critique: string;
+    improvements: string[];
+    correctedContent?: string;
+    wasAutoCorrected?: boolean;
+    originalCritique?: string;
+    originalImprovements?: string[];
+  }> {
     const totalClaimValue = (
       data.invoice.totalAmount +
       data.interest.totalInterest +
@@ -854,13 +906,22 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
       .map(m => `${m.role.toUpperCase()}: ${m.content}`)
       .join('\n');
 
+    // Determine the legally correct interest statute to expect in the draft
+    // B2B includes Sole Traders per Late Payment of Commercial Debts (Interest) Act 1998
+    const isClaimantBusiness = data.claimant.type === PartyType.BUSINESS || data.claimant.type === PartyType.SOLE_TRADER;
+    const isDefendantBusiness = data.defendant.type === PartyType.BUSINESS || data.defendant.type === PartyType.SOLE_TRADER;
+    const isB2B = isClaimantBusiness && isDefendantBusiness;
+    const expectedInterestStatute = isB2B
+      ? 'the Late Payment of Commercial Debts (Interest) Act 1998'
+      : 'section 69 of the County Courts Act 1984';
+
     const prompt = `You are a Senior Legal Assistant auditing a UK Small Claims Court document.
 
 --- SOURCE OF TRUTH ---
-Claimant: ${data.claimant.name}
-Claimant Address: ${data.claimant.address || ''}, ${data.claimant.city || ''}, ${data.claimant.postcode || ''}
-Defendant: ${data.defendant.name}
-Defendant Address: ${data.defendant.address || ''}, ${data.defendant.city || ''}, ${data.defendant.postcode || ''}
+Claimant: ${data.claimant.name} (${data.claimant.type})
+Claimant Address: ${data.claimant.address || ''}, ${data.claimant.city || ''}, ${data.claimant.county || ''}, ${data.claimant.postcode || ''}
+Defendant: ${data.defendant.name} (${data.defendant.type})
+Defendant Address: ${data.defendant.address || ''}, ${data.defendant.city || ''}, ${data.defendant.county || ''}, ${data.defendant.postcode || ''}
 
 INVOICE DETAILS:
 - Invoice Number: ${data.invoice.invoiceNumber}
@@ -874,6 +935,9 @@ CLAIM TOTALS:
 - Interest: £${data.interest?.totalInterest?.toFixed(2) || '0.00'}
 - Compensation: £${data.compensation?.toFixed(2) || '0.00'}
 - Total Claim (ex court fee): £${totalClaimValue}
+
+EXPECTED STATUTORY INTEREST BASIS:
+- The document MUST cite: ${expectedInterestStatute}
 
 TIMELINE (Events entered by user):
 ${data.timeline.map(t => `- ${t.date}: ${t.description} [${t.type}]`).join('\n') || 'No timeline events'}
@@ -890,7 +954,7 @@ Check for:
 1. Factual Hallucinations - ONLY flag facts that are NOT in the SOURCE OF TRUTH above. Dates and events from the user's timeline are NOT hallucinations.
 2. Financial Errors - amounts must match the CLAIM TOTALS above
 3. Role Swaps - Claimant vs Defendant names/roles mixed up
-4. Missing Act Reference - must cite Late Payment of Commercial Debts Act 1998 (B2B) or County Courts Act 1984 (B2C)
+4. Missing Interest Statute - must cite EXACTLY: ${expectedInterestStatute}
 5. Party names and addresses must match SOURCE OF TRUTH
 
 IMPORTANT: The invoice date, due date, timeline events, and LBA status shown above were entered by the user. These are NOT hallucinations - they are verified source data.
@@ -899,8 +963,11 @@ Output JSON with this EXACT structure (no markdown):
 {
   "isPass": true or false,
   "critique": "Brief summary of document quality",
-  "improvements": ["List of specific issues if any"]
+  "improvements": ["List of specific issues if any"],
+  "correctedContent": "If isPass is false, provide the COMPLETE corrected document text here with all issues fixed. If isPass is true, omit this field or set to null."
 }
+
+IMPORTANT: If there are issues (isPass is false), you MUST provide the correctedContent field with the full corrected document. Do not just describe the issues - fix them in the correctedContent.
 
 If the document is accurate and matches the SOURCE OF TRUTH, set isPass to true with an empty improvements array.`;
 
@@ -921,23 +988,24 @@ If the document is accurate and matches the SOURCE OF TRUTH, set isPass to true 
         return {
           isPass: Boolean(parsed.isPass),
           critique: parsed.critique || 'Document reviewed.',
-          improvements: Array.isArray(parsed.improvements) ? parsed.improvements : []
+          improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
+          correctedContent: parsed.correctedContent || undefined
         };
       }
 
       // Fallback if parsing fails
       return {
-        isPass: true,
-        critique: 'Document has been reviewed and appears accurate.',
-        improvements: []
+        isPass: false,
+        critique: 'Automated review failed (unparseable response). Please verify the document manually before approving.',
+        improvements: ['Automated compliance review could not be parsed; manual review required before sending.']
       };
     } catch (error) {
       console.error('Review generation failed:', error);
-      // On error, pass the document through with a warning
+      // Fail closed: if review is unavailable, require user override to proceed
       return {
-        isPass: true,
-        critique: 'Automated review unavailable. Please verify document manually before sending.',
-        improvements: []
+        isPass: false,
+        critique: 'Automated review unavailable. Please verify the document manually before approving.',
+        improvements: ['Automated compliance review did not run; manual review required before sending.']
       };
     }
   }

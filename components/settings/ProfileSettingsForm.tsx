@@ -218,7 +218,7 @@ export const ProfileSettingsForm: React.FC<ProfileSettingsFormProps> = ({ profil
               <h3 className="text-sm font-semibold text-slate-900 mb-4">Contact Information</h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <Input
-                  label="Email"
+                  label={<>Email <span className="text-slate-400 font-normal">(Optional)</span></>}
                   value={draft.email || ''}
                   onChange={(e) => setDraft((p) => ({ ...p, email: e.target.value }))}
                   error={errors.email}
@@ -226,7 +226,7 @@ export const ProfileSettingsForm: React.FC<ProfileSettingsFormProps> = ({ profil
                   type="email"
                 />
                 <Input
-                  label="Phone"
+                  label={<>Phone <span className="text-slate-400 font-normal">(Optional)</span></>}
                   value={draft.phone || ''}
                   onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))}
                   error={errors.phone}
@@ -256,7 +256,7 @@ export const ProfileSettingsForm: React.FC<ProfileSettingsFormProps> = ({ profil
               />
 
               <Input
-                label="Address line 2"
+                label={<>Address line 2 <span className="text-slate-400 font-normal">(Optional)</span></>}
                 value={draft.businessAddress.line2 || ''}
                 onChange={(e) =>
                   setDraft((p) => ({

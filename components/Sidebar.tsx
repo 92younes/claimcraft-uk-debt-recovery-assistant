@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                           {upcomingDeadlinesCount}
                         </span>
                       ) : (
-                        <span className="ml-auto text-xs text-slate-400">No deadlines</span>
+                        <span className="ml-auto text-xs text-slate-400">No deadlines this week</span>
                       )
                     )}
                 </button>

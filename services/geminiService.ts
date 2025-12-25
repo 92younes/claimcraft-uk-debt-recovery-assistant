@@ -45,6 +45,78 @@ const cleanJson = (text: string): string => {
   return text.trim();
 };
 
+/**
+ * Sanitize extracted data to prevent null/undefined/"null" strings from polluting fields.
+ * Only converts when the ENTIRE value is exactly a null placeholder - preserves names like "NA Solutions Ltd".
+ */
+const sanitizeValue = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    // Only sanitize if the ENTIRE value (case-insensitive) is a null placeholder
+    // This preserves legitimate names like "NA Solutions Ltd" or "None Such Company"
+    const lowerTrimmed = trimmed.toLowerCase();
+    if (lowerTrimmed === 'null' || lowerTrimmed === 'undefined' || lowerTrimmed === 'n/a') {
+      return '';
+    }
+    return trimmed;
+  }
+  return String(value);
+};
+
+/**
+ * Sanitize all string fields in a party object
+ */
+const sanitizeParty = (party: any): any => {
+  if (!party || typeof party !== 'object') return party;
+
+  return {
+    ...party,
+    name: sanitizeValue(party.name),
+    address: sanitizeValue(party.address),
+    city: sanitizeValue(party.city),
+    county: sanitizeValue(party.county),
+    postcode: sanitizeValue(party.postcode),
+    phone: sanitizeValue(party.phone),
+    email: sanitizeValue(party.email),
+    contactName: sanitizeValue(party.contactName),
+    companyNumber: sanitizeValue(party.companyNumber),
+    // Preserve type as-is (it's an enum)
+    type: party.type
+  };
+};
+
+/**
+ * Sanitize all string fields in an invoice object
+ */
+const sanitizeInvoice = (invoice: any): any => {
+  if (!invoice || typeof invoice !== 'object') return invoice;
+
+  // Parse and validate amount - preserve 0 as valid, but warn on invalid values
+  let totalAmount = 0;
+  if (typeof invoice.totalAmount === 'number') {
+    totalAmount = Number.isFinite(invoice.totalAmount) ? invoice.totalAmount : 0;
+  } else if (typeof invoice.totalAmount === 'string') {
+    const parsed = parseFloat(invoice.totalAmount.replace(/[£$,\s]/g, '')); // Strip currency symbols
+    if (Number.isFinite(parsed)) {
+      totalAmount = parsed;
+    } else {
+      console.warn(`[sanitizeInvoice] Invalid amount value: "${invoice.totalAmount}", defaulting to 0`);
+    }
+  }
+
+  return {
+    ...invoice,
+    invoiceNumber: sanitizeValue(invoice.invoiceNumber),
+    dateIssued: sanitizeValue(invoice.dateIssued),
+    dueDate: sanitizeValue(invoice.dueDate),
+    description: sanitizeValue(invoice.description),
+    currency: sanitizeValue(invoice.currency) || 'GBP',
+    paymentTerms: sanitizeValue(invoice.paymentTerms),
+    totalAmount
+  };
+};
+
 // Helper to process multiple evidence files (PDFs/Images)
 export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
   claimant: Party,
@@ -140,6 +212,17 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
   try {
     const result = JSON.parse(cleanJson(response.text || '{}'));
 
+    // Sanitize party and invoice data to remove null/"null" values
+    if (result.claimant) {
+      result.claimant = sanitizeParty(result.claimant);
+    }
+    if (result.defendant) {
+      result.defendant = sanitizeParty(result.defendant);
+    }
+    if (result.invoice) {
+      result.invoice = sanitizeInvoice(result.invoice);
+    }
+
     // Post-process: Infer county from postcode if missing
     if (result.defendant?.postcode && !result.defendant?.county) {
       const inferredCounty = postcodeToCounty(result.defendant.postcode);
@@ -153,7 +236,9 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
       const inferredCounty = postcodeToCounty(result.claimant.postcode);
       if (inferredCounty) {
         result.claimant.county = inferredCounty;
-        console.log(`[analyzeEvidence] Inferred claimant county: ${inferredCounty}
+        console.log(`[analyzeEvidence] Inferred claimant county: ${inferredCounty}`);
+      }
+    }
 
     // Post-process: Clean addresses if they contain full address strings
     if (result.claimant) {
@@ -168,8 +253,6 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
       result.defendant.address = cleanedDefendant.address;
       result.defendant.city = cleanedDefendant.city || result.defendant.city;
       result.defendant.postcode = cleanedDefendant.postcode || result.defendant.postcode;
-    }`);
-      }
     }
 
     return result;
@@ -316,8 +399,8 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
   if (!data.defendant.address?.trim()) missingFields.push("Defendant's street address");
   if (!data.defendant.city?.trim()) missingFields.push("Defendant's city/town");
   if (!data.defendant.postcode?.trim()) missingFields.push("Defendant's postcode");
-  if (!data.invoice.invoiceNumber?.trim()) missingFields.push("Invoice number/reference");
-  if (!data.invoice.dateIssued) missingFields.push("Invoice date");
+  // Invoice number is optional - not all debts have formal invoice numbers
+  if (!data.invoice.dateIssued) missingFields.push("Invoice/service date");
 
   const missingFieldsNote = missingFields.length > 0
     ? `\n\nCRITICAL MISSING DATA (MUST collect before proceeding):\n${missingFields.map(f => `- ${f}`).join('\n')}\n\nYou MUST ask for these specific fields. The court requires complete addresses including county for the defendant.`
@@ -576,9 +659,12 @@ export const extractDataFromChat = async (
   try {
     const result = JSON.parse(cleanJson(response.text || '{}'));
 
-    // Post-process: Infer county from postcode if missing
-    const claimantData = result.claimant || {};
-    const defendantData = result.defendant || {};
+    // Sanitize party and invoice data to remove null/"null" values
+    const claimantData = sanitizeParty(result.claimant || {});
+    const defendantData = sanitizeParty(result.defendant || {});
+    if (result.invoice) {
+      result.invoice = sanitizeInvoice(result.invoice);
+    }
 
     // Infer defendant county from postcode if missing
     if (defendantData.postcode && !defendantData.county) {
@@ -596,6 +682,21 @@ export const extractDataFromChat = async (
         claimantData.county = inferredCounty;
         console.log(`[extractDataFromChat] Inferred claimant county: ${inferredCounty}`);
       }
+    }
+
+    // Clean addresses if they contain full address strings
+    if (claimantData.address) {
+      const cleanedClaimant = cleanPartyAddress(claimantData);
+      claimantData.address = cleanedClaimant.address;
+      claimantData.city = cleanedClaimant.city || claimantData.city;
+      claimantData.postcode = cleanedClaimant.postcode || claimantData.postcode;
+    }
+
+    if (defendantData.address) {
+      const cleanedDefendant = cleanPartyAddress(defendantData);
+      defendantData.address = cleanedDefendant.address;
+      defendantData.city = cleanedDefendant.city || defendantData.city;
+      defendantData.postcode = cleanedDefendant.postcode || defendantData.postcode;
     }
 
     // Map string document type to enum
@@ -756,78 +857,6 @@ export const refineDraft = async (currentContent: string, instruction: string): 
   return response.text || currentContent;
 };
 
-export const reviewDraft = async (data: ClaimState): Promise<{ isPass: boolean; critique: string; improvements: string[]; correctedContent?: string }> => {
-  // Safe Financials for "The Truth"
-  const principal = data.invoice.totalAmount || 0;
-  const interest = data.interest.totalInterest || 0;
-  const comp = data.compensation || 0;
-
-  const totalClaimValue = (principal + interest + comp).toFixed(2);
-
-  // Format Chat History as Transcript
-  const chatTranscript = data.chatHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
-
-  const prompt = `
-    Act as a Senior Legal Assistant auditing a draft.
-
-    --- SOURCE OF TRUTH ---
-    Claimant: ${data.claimant.name}
-    Defendant: ${data.defendant.name}
-    Invoice: ${data.invoice.invoiceNumber} (£${formatCurrency(principal)})
-    Total Claim (ex fee): £${totalClaimValue}
-
-    TIMELINE:
-    ${JSON.stringify(data.timeline)}
-
-    TRANSCRIPT:
-    ${chatTranscript}
-
-    --- DRAFT ---
-    "${data.generated?.content}"
-
-    Check for:
-    1. Factual Hallucinations (Dates/Events not in source).
-    2. Financial Errors.
-    3. Role Swaps (Claimant vs Defendant).
-    4. Missing Act Reference (e.g. 1984 Act or 1998 Act).
-
-    Output JSON.
-  `;
-
-  const response = await generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          isPass: { type: Type.BOOLEAN },
-          critique: { type: Type.STRING },
-          improvements: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          },
-          correctedContent: { type: Type.STRING }
-        }
-      }
-    }
-  });
-
-  try {
-    return JSON.parse(cleanJson(response.text || '{"isPass": false, "critique": "Error analyzing", "improvements": []}'));
-  } catch (error) {
-    console.error('[reviewDraft] JSON parse error:', error);
-    // Return safe default on parse failure
-    return {
-      isPass: false,
-      critique: 'Unable to parse review response from AI. Please try again.',
-      improvements: ['AI response was malformed - manual review recommended'],
-      correctedContent: data.generated?.content || ''
-    };
-  }
-};
-
 /**
  * Analyze claim input from conversation entry - combines user text and files
  */
@@ -873,34 +902,68 @@ export const analyzeClaimInput = async (
     User's latest message: "${userInput}"
     ${fileAnalysis}
 
+    **SMART EXTRACTION RULES - AVOID REDUNDANT QUESTIONS**
+    Before asking ANY question, check if you already have the data from the document extraction above.
+
+    DO NOT ASK about:
+    - Defendant name/address if already extracted from documents
+    - Invoice amount/number if already extracted from documents
+    - Invoice date if already extracted from documents
+    - Any field that is clearly visible in the extracted data above
+
+    ONLY ASK when:
+    - Data is genuinely MISSING and cannot be inferred
+    - There is a genuine AMBIGUITY (e.g., multiple invoices, unclear currency)
+    - Critical legal info is needed (e.g., has LBA been sent?)
+
     ${isFirstFileAnalysis ? `
-    *** IMPORTANT - TWO-PHASE EXTRACTION ***
-    This is the FIRST time analyzing uploaded documents. You MUST follow this two-phase process:
+    *** DOCUMENT ANALYSIS ***
+    Analyzing uploaded documents. Check if ALL required fields are present:
+    1. Defendant name and address - Is it clearly extracted?
+    2. Invoice amount in GBP - Is it clear? (If non-GBP, ask to confirm)
+    3. Invoice number and date - Are they present?
 
-    PHASE 1 - REVIEW FIRST (current phase):
-    Before extracting data, scan the document(s) and identify ANY ambiguities:
-    1. Is the currency clearly GBP (£)? If you see $, USD, EUR, or other currencies, you MUST ask to confirm.
-    2. Are there multiple invoices? Ask which one the claim is about.
-    3. Is the defendant clearly identifiable? If unclear, ask.
-    4. Are dates ambiguous or potentially in different formats (US vs UK)?
-    5. Is the invoice amount clearly readable?
-
-    IF there are ANY ambiguities:
-    - Set readyToExtract: false
-    - Set extractedData to empty objects (do NOT extract yet)
-    - Include ONLY ONE clarifying question in followUpQuestions - ask the MOST important question first
-    - The user MUST answer this question before we proceed with extraction
-    - After they answer, you can ask the next question in the following turn
-
-    ONLY if the document is completely clear (GBP currency, single invoice, clear parties):
+    IF the document has ALL required fields clearly extracted (defendant, amount in GBP, invoice details):
     - Set readyToExtract: true
-    - Proceed with full extraction
+    - Set readyToProceed: true
+    - Only mention what was extracted, do NOT ask redundant questions
+    - Example: "I've extracted the details from your invoice: [defendant name], £[amount], Invoice #[number]. Click Continue to verify the details."
+
+    ONLY ask questions if:
+    - Currency is NOT GBP (ask to confirm conversion)
+    - There are multiple invoices/defendants (ask which one)
+    - Critical data is genuinely missing or unreadable
     ` : `
     The user has already been asked clarifying questions or this is a follow-up message.
-    Now you may proceed with extraction if you have enough information.
+    Proceed with extraction if you have enough information.
     `}
 
     
+    === CRITICAL DATE EXTRACTION ===
+    Extract ALL dates mentioned, especially:
+    - Invoice date: When the invoice was issued
+    - DUE DATE: When payment was due (look for "due on", "due by", "payment due", "due date", "payable by")
+      Example: "invoice was due on 15th November 2024" → dueDate: "2024-11-15"
+    - Payment terms: "30 days", "net 30", "upon receipt" etc.
+
+    IMPORTANT: If user mentions a due date in ANY format, extract it:
+    - "due on 15th November 2024" → "2024-11-15"
+    - "payment was due November 15, 2024" → "2024-11-15"
+    - "due 15/11/2024" → "2024-11-15"
+    - Always output dates in ISO format: YYYY-MM-DD
+
+    === CRITICAL ROLE IDENTIFICATION ===
+    CAREFULLY identify who is the CLAIMANT vs DEFENDANT:
+    - CLAIMANT = The creditor = The person/company OWED money = The one who provided goods/services
+    - DEFENDANT = The debtor = The person/company who OWES money = The one who received goods/services
+
+    Example: "I did plumbing work for Johnson Plumbing Services Ltd and they haven't paid"
+    - Claimant = The user (who did the work) - NOT extracted from documents
+    - Defendant = Johnson Plumbing Services Ltd (who owes money for the work received)
+
+    NEVER say "Work completed by [Defendant]" - the defendant RECEIVED the work, they didn't do it.
+    Use phrases like: "Services provided TO [Defendant]" or "[Defendant] received services from Claimant"
+
     === CRITICAL ADDRESS PARSING ===
     When extracting addresses from full address strings:
     - SPLIT addresses into separate fields: address (street only), city, postcode
@@ -1000,7 +1063,7 @@ export const analyzeClaimInput = async (
                     invoiceNumber: { type: Type.STRING, description: "Extract from patterns like 'Invoice #123', 'Inv-456'" },
                     totalAmount: { type: Type.NUMBER },
                     dateIssued: { type: Type.STRING },
-                    dateDue: { type: Type.STRING, description: "Calculate from payment terms if mentioned (e.g., '30 days' = dateIssued + 30 days)" },
+                    dueDate: { type: Type.STRING, description: "Calculate from payment terms if mentioned (e.g., '30 days' = dateIssued + 30 days)" },
                     paymentTerms: { type: Type.STRING, description: "Extract payment terms (e.g., 'Net 30', '30 days')" },
                     description: { type: Type.STRING },
                     currency: { type: Type.STRING }
@@ -1042,6 +1105,17 @@ export const analyzeClaimInput = async (
     // Post-process: Infer county from postcode if missing
     const extractedData = result.extractedData || {};
 
+    // Sanitize party and invoice data to remove null/"null" values
+    if (extractedData.defendant) {
+      extractedData.defendant = sanitizeParty(extractedData.defendant);
+    }
+    if (extractedData.claimant) {
+      extractedData.claimant = sanitizeParty(extractedData.claimant);
+    }
+    if (extractedData.invoice) {
+      extractedData.invoice = sanitizeInvoice(extractedData.invoice);
+    }
+
     // Clean addresses if they contain full address strings
     if (extractedData.defendant) {
       const cleanedDefendant = cleanPartyAddress(extractedData.defendant);
@@ -1071,12 +1145,30 @@ export const analyzeClaimInput = async (
     const defendantCountyMissing = !extractedData.defendant?.county;
     const countyStillMissing = defendantCountyMissing;
 
+    // Validate minimum required fields for extraction to be considered ready
+    // Must have: defendant name, some address info, and invoice amount
+    const hasDefendantName = !!extractedData.defendant?.name?.trim();
+    const hasDefendantAddress = !!(extractedData.defendant?.address?.trim() || extractedData.defendant?.postcode?.trim());
+    const hasInvoiceAmount = typeof extractedData.invoice?.totalAmount === 'number' && extractedData.invoice.totalAmount > 0;
+
+    // Only mark as ready to extract if we have minimum viable data
+    const hasMinimumData = hasDefendantName && hasDefendantAddress && hasInvoiceAmount;
+    const readyToExtract = result.readyToExtract !== false && hasMinimumData;
+
+    if (!hasMinimumData) {
+      console.log(`[analyzeClaimInput] Extraction not ready - missing: ${[
+        !hasDefendantName && 'defendant name',
+        !hasDefendantAddress && 'defendant address',
+        !hasInvoiceAmount && 'invoice amount'
+      ].filter(Boolean).join(', ')}`);
+    }
+
     return {
       extractedData,
       followUpQuestions: result.followUpQuestions || [],
       acknowledgment: result.acknowledgment || 'I received your input.',
       readyToProceed: result.readyToProceed || false,
-      readyToExtract: result.readyToExtract !== false, // Default to true unless explicitly false
+      readyToExtract,
       confidence: result.confidence || 50,
       currencyWarning: result.currencyWarning || false,
       countyMissing: countyStillMissing, // Use recalculated value

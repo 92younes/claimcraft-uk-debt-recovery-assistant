@@ -25,6 +25,14 @@ import { Button } from '../components/ui/Button';
 import { getTodayISO, safeFormatDate } from '../utils/formatters';
 import { getDaysUntilDeadline } from '../services/deadlineService';
 
+/** Sanitize null-like strings for display */
+const sanitizeDisplayValue = (value: string | undefined | null): string => {
+  if (!value) return '';
+  const lower = value.trim().toLowerCase();
+  if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'none') return '';
+  return value.trim();
+};
+
 /**
  * ClaimOverviewPage - Shows a comprehensive summary of a claim
  * Displays claim status, key details, documents generated, timeline, and next actions
@@ -202,7 +210,14 @@ export const ClaimOverviewPage = () => {
                 {claimData.claimant.address && (
                   <div className="text-sm text-slate-600 space-y-0.5 ml-12">
                     <p>{claimData.claimant.address}</p>
-                    <p>{claimData.claimant.city}, {claimData.claimant.postcode}</p>
+                    {(claimData.claimant.city || claimData.claimant.postcode) &&
+                     !claimData.claimant.address.includes(claimData.claimant.postcode || '') && (
+                      <p>
+                        {claimData.claimant.city}
+                        {claimData.claimant.city && claimData.claimant.postcode && ', '}
+                        {claimData.claimant.postcode}
+                      </p>
+                    )}
                     {claimData.claimant.email && <p className="text-slate-500">{claimData.claimant.email}</p>}
                   </div>
                 )}
@@ -222,7 +237,14 @@ export const ClaimOverviewPage = () => {
                 {claimData.defendant.address && (
                   <div className="text-sm text-slate-600 space-y-0.5 ml-12">
                     <p>{claimData.defendant.address}</p>
-                    <p>{claimData.defendant.city}, {claimData.defendant.postcode}</p>
+                    {(claimData.defendant.city || claimData.defendant.postcode) &&
+                     !claimData.defendant.address.includes(claimData.defendant.postcode || '') && (
+                      <p>
+                        {claimData.defendant.city}
+                        {claimData.defendant.city && claimData.defendant.postcode && ', '}
+                        {claimData.defendant.postcode}
+                      </p>
+                    )}
                     {claimData.defendant.email && <p className="text-slate-500">{claimData.defendant.email}</p>}
                   </div>
                 )}
@@ -248,18 +270,22 @@ export const ClaimOverviewPage = () => {
                     £{claimData.invoice.totalAmount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Interest</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    £{claimData.interest.totalInterest.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Compensation</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    £{claimData.compensation.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
+                {claimData.interest.totalInterest > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Interest</p>
+                    <p className="text-xl font-bold text-slate-900">
+                      £{claimData.interest.totalInterest.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
+                {claimData.compensation > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Compensation</p>
+                    <p className="text-xl font-bold text-slate-900">
+                      £{claimData.compensation.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Total</p>
                   <p className="text-2xl font-bold text-teal-600">
@@ -270,7 +296,11 @@ export const ClaimOverviewPage = () => {
 
               <div className="mt-4 pt-4 border-t border-teal-100/50">
                 <p className="text-sm text-slate-600">
-                  <span className="font-medium">Invoice #{claimData.invoice.invoiceNumber}</span>
+                  {sanitizeDisplayValue(claimData.invoice.invoiceNumber) ? (
+                    <span className="font-medium">Invoice #{sanitizeDisplayValue(claimData.invoice.invoiceNumber)}</span>
+                  ) : (
+                    <span className="font-medium text-slate-400">No invoice number</span>
+                  )}
                   {claimData.invoice.dateIssued && (
                     <span className="text-slate-500"> • Issued {safeFormatDate(claimData.invoice.dateIssued, { fallback: '' })}</span>
                   )}
@@ -371,7 +401,12 @@ export const ClaimOverviewPage = () => {
           {/* Timeline Card */}
           <div className="bg-white rounded-xl border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-slate-900">Timeline of Events</h2>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-teal-50 rounded-lg flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-teal-600" />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">Timeline of Events</h2>
+              </div>
               <Button
                 variant="outline"
                 size="sm"

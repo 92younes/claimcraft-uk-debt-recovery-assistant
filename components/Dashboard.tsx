@@ -10,6 +10,19 @@ import { getDaysUntilDeadline } from '../services/deadlineService';
 import { DashboardEmptyState } from './Dashboard_empty_state';
 import { safeFormatDate } from '../utils/formatters';
 
+/**
+ * Sanitize null-like strings that may have been stored in claim data.
+ * Returns empty string for values that should be treated as missing.
+ */
+const sanitizeDisplayValue = (value: string | undefined | null): string => {
+  if (!value) return '';
+  const lower = value.trim().toLowerCase();
+  if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'none') {
+    return '';
+  }
+  return value.trim();
+};
+
 interface DashboardProps {
   claims: ClaimState[];
   onCreateNew: () => void;
@@ -304,13 +317,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     let currentStep = 1;
     const missingFields: string[] = [];
 
-    // Check for missing required fields
+    // Check for missing required fields (invoice number is optional)
     if (!claim.defendant.name) missingFields.push('Defendant name');
     if (!claim.defendant.address) missingFields.push('Defendant address');
     if (!claim.claimant.name) missingFields.push('Claimant name');
     if (!claim.claimant.address) missingFields.push('Claimant address');
     if (!claim.invoice.totalAmount || claim.invoice.totalAmount === 0) missingFields.push('Invoice amount');
-    if (!claim.invoice.invoiceNumber) missingFields.push('Invoice number');
     if (!claim.invoice.dateIssued) missingFields.push('Invoice date');
 
     // Determine step based on claim state
@@ -384,14 +396,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   ];
 
   return (
-    <div className="md:p-0 p-4 max-w-7xl mx-auto animate-fade-in min-h-full">
+    <div className="md:p-0 p-2 max-w-7xl mx-auto animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-3">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-2">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 font-display tracking-tight">Claims Dashboard</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage and track your debt recovery cases</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 font-display tracking-tight">Claims Dashboard</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Manage and track your debt recovery cases</p>
         </div>
-        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
             {onConnectAccounting && (
               <Button
                 variant="outline"
@@ -424,46 +436,46 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Stats Row - Clean card design matching mockup */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-        {/* Total Recoverable - with gradient background - Clickable to filter claims with value */}
+      {/* Stats Row - Compact cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
+        {/* Total Recoverable */}
         <button
           onClick={() => {
             setStatusFilter('all');
             setSearchQuery('');
           }}
-          className="bg-gradient-to-br from-teal-50 to-white p-4 rounded-lg border border-teal-100 flex items-center gap-3 relative overflow-hidden hover:border-teal-300 hover:shadow-md transition-all cursor-pointer text-left w-full"
+          className="bg-gradient-to-br from-teal-50 to-white p-3 rounded-lg border border-teal-100 flex items-center gap-2.5 relative overflow-hidden hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer text-left w-full"
           aria-label="Show all claims with recoverable amounts"
         >
-           <div className="absolute top-0 right-0 w-20 h-20 bg-teal-100/50 rounded-full -mr-6 -mt-6"></div>
-           <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
-              <PoundSterling className="w-5 h-5" />
+           <div className="absolute top-0 right-0 w-16 h-16 bg-teal-100/50 rounded-full -mr-4 -mt-4"></div>
+           <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
+              <PoundSterling className="w-4 h-4" />
            </div>
            <div className="relative z-10">
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-0.5">Total Recoverable</p>
-              <p className="text-xl md:text-2xl font-bold text-slate-900">£{totalRecoverable.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p>
+              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Total Recoverable</p>
+              <p className="text-lg font-bold text-slate-900">£{totalRecoverable.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p>
            </div>
         </button>
 
-        {/* Active Claims - Clickable to show all */}
+        {/* Active Claims */}
         <button
           onClick={() => {
             setStatusFilter('all');
             setSearchQuery('');
           }}
-          className="bg-white p-4 rounded-lg border border-slate-200 flex items-center gap-3 hover:border-teal-300 hover:shadow-md transition-all cursor-pointer text-left w-full"
+          className="bg-white p-3 rounded-lg border border-slate-200 flex items-center gap-2.5 hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer text-left w-full"
           aria-label="Show all active claims"
         >
-           <div className="w-10 h-10 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
-              <Briefcase className="w-5 h-5" />
+           <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
+              <Briefcase className="w-4 h-4" />
            </div>
            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-0.5">Active Claims</p>
-              <p className="text-xl md:text-2xl font-bold text-slate-900">{activeClaims}</p>
+              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Active Claims</p>
+              <p className="text-lg font-bold text-slate-900">{activeClaims}</p>
            </div>
         </button>
 
-        {/* Status - All Good or needs attention - Clickable to filter overdue */}
+        {/* Status */}
         <button
           onClick={() => {
             if (urgentActions > 0) {
@@ -471,20 +483,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
               setSearchQuery('');
             }
           }}
-          className={`bg-white p-4 rounded-lg border flex items-center gap-3 transition-all text-left w-full ${
+          className={`bg-white p-3 rounded-lg border flex items-center gap-2.5 transition-all text-left w-full ${
             urgentActions > 0
-              ? 'border-amber-200 bg-amber-50 hover:border-amber-400 hover:shadow-md cursor-pointer'
+              ? 'border-amber-200 bg-amber-50 hover:border-amber-400 hover:shadow-sm cursor-pointer'
               : 'border-slate-200 cursor-default'
           }`}
           disabled={urgentActions === 0}
           aria-label={urgentActions > 0 ? 'Show overdue claims' : 'No claims need action'}
         >
-           <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${urgentActions > 0 ? 'bg-amber-100 text-amber-600' : 'bg-teal-50 text-teal-500'}`}>
-              {urgentActions > 0 ? <AlertTriangle className="w-5 h-5" /> : <CircleCheck className="w-5 h-5" />}
+           <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${urgentActions > 0 ? 'bg-amber-100 text-amber-600' : 'bg-teal-50 text-teal-500'}`}>
+              {urgentActions > 0 ? <AlertTriangle className="w-4 h-4" /> : <CircleCheck className="w-4 h-4" />}
            </div>
            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-0.5">Status</p>
-              <p className={`text-lg md:text-xl font-bold ${urgentActions > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Status</p>
+              <p className={`text-base font-bold ${urgentActions > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
                 {urgentActions > 0 ? `${urgentActions} Need Action` : 'All Good'}
               </p>
            </div>
@@ -493,7 +505,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Status Color Legend */}
       {claims.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 text-xs">
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-500 font-medium">Status:</span>
           {statusLegend.map(({ status, label, color }) => {
             const count = claims.filter(c => c.status === status).length;
@@ -513,130 +525,44 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </button>
             );
           })}
+          {/* Amount Legend */}
+          <span className="ml-auto text-slate-400">
+            <span className="text-teal-600">*</span> = includes statutory interest + compensation
+          </span>
         </div>
       )}
 
-      {/* Upcoming Deadlines */}
-      {deadlines && deadlines.length > 0 && (
-        <div className="mb-5">
-           <div className="flex items-center justify-between mb-3">
-             <h2 className="text-base font-bold text-slate-900">Upcoming Deadlines</h2>
-             {onViewAllDeadlines && (
-               <Button
-                 variant="link"
-                 onClick={onViewAllDeadlines}
-                 rightIcon={<ChevronRight className="w-4 h-4" />}
-                 className="p-0 h-auto"
-               >
-                 View Calendar
-               </Button>
-             )}
-           </div>
-           
-           {/* Deadlines Widget Logic */}
-           {(() => {
-             const upcoming = deadlines
-                .filter(d => d.status === DeadlineStatus.PENDING)
-                .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-                .slice(0, 3);
-
-             if (upcoming.length === 0) {
-               return (
-                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center text-slate-500">
-                   <Calendar className="w-6 h-6 mx-auto mb-1.5 text-slate-300" />
-                   <p className="font-medium text-slate-600 text-sm">You're all caught up!</p>
-                   <p className="text-xs mt-0.5">No pending deadlines at the moment.</p>
-                 </div>
-               );
-             }
-
-             return (
-               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                 {upcoming.map(deadline => {
-                   const days = getDaysUntilDeadline(deadline.dueDate);
-                   const isOverdue = days < 0;
-                   const isToday = days === 0;
-                   
-                   return (
-                     <div
-                       key={deadline.id}
-                       onClick={() => onDeadlineClick?.(deadline)}
-                       className={`bg-white p-3 rounded-lg border border-slate-200 transition-all cursor-pointer hover:shadow-md ${
-                         isOverdue ? 'border-l-4 border-l-red-500 bg-red-50/30' :
-                         isToday ? 'border-l-4 border-l-amber-500 bg-amber-50/30' :
-                         'border-l-4 border-l-teal-500 bg-teal-50/20 hover:bg-teal-50/30'
-                       }`}
-                     >
-                       <div className="flex items-start justify-between mb-1.5">
-                         <span className={`text-xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
-                           isOverdue ? 'bg-red-100 text-red-700' :
-                           isToday ? 'bg-amber-100 text-amber-700' :
-                           'bg-slate-100 text-slate-600'
-                         }`}>
-                           {isOverdue ? 'Overdue' : isToday ? 'Due Today' : `${days} Days Left`}
-                         </span>
-                         {deadline.priority === DeadlinePriority.CRITICAL && (
-                           <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-                         )}
-                       </div>
-                       <h3 className="font-semibold text-slate-900 text-sm mb-1 truncate" title={deadline.title}>
-                         {deadline.title}
-                       </h3>
-                       <p className="text-xs text-slate-500 mb-2 truncate" title={claims.find(c => c.id === deadline.claimId)?.defendant.name || 'Unknown Claim'}>
-                         {claims.find(c => c.id === deadline.claimId)?.defendant.name || 'Unknown Claim'}
-                       </p>
-
-                       <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100/50">
-                          <div className="flex items-center text-xs text-slate-400">
-                            <Calendar className="w-3 h-3 mr-1" />
-                            {safeFormatDate(deadline.dueDate, { fallback: 'No date' })}
-                          </div>
-                          
-                          {onCompleteDeadline && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              iconOnly
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onCompleteDeadline(deadline);
-                              }}
-                              icon={<CheckCircle2 className="w-4 h-4" />}
-                              aria-label="Mark as complete"
-                            />
-                          )}
-                       </div>
-                     </div>
-                   );
-                 })}
-               </div>
-             );
-           })()}
-        </div>
-      )}
-
-      {/* Search and Filter Bar */}
+      {/* Search and Filter Bar with Claim Count */}
       {claims.length > 0 && (
-        <div className="mb-4 flex flex-col md:flex-row gap-3">
+        <div className="mb-2 flex flex-col md:flex-row gap-2 items-stretch md:items-center">
+          {/* Claim Count - Left side */}
+          <div className="text-sm text-slate-500 whitespace-nowrap flex-shrink-0">
+            {filteredClaims.length !== claims.length ? (
+              <>{filteredClaims.length} of {claims.length}</>
+            ) : (
+              <>{((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredClaims.length)} of {filteredClaims.length}</>
+            )}
+          </div>
+
           {/* Search */}
           <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
               placeholder="Search claims..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all duration-200"
+              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all duration-200 text-sm"
             />
           </div>
 
           {/* Status Filter */}
-          <div className="relative">
-            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <div className="relative flex-shrink-0">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 appearance-none cursor-pointer min-w-[140px] transition-all duration-200"
+              className="pl-9 pr-6 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 appearance-none cursor-pointer min-w-[130px] transition-all duration-200 text-sm"
             >
               <option value="all">All Status</option>
               <option value="draft">Draft</option>
@@ -653,7 +579,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Bulk Actions Bar */}
       {selectedClaims.size > 0 && (
-        <div className="mb-4 bg-teal-50/30 border border-slate-200 border-l-4 border-l-teal-500 rounded-lg px-4 py-3 flex items-center justify-between animate-fade-in">
+        <div className="mb-2 bg-teal-50/30 border border-slate-200 border-l-4 border-l-teal-500 rounded-lg px-3 py-2 flex items-center justify-between animate-fade-in">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-sm font-medium text-teal-900">
               <CheckCircle2 className="w-4 h-4 text-teal-600" />
@@ -719,26 +645,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       )}
 
-      {/* Results Count & Pagination Info */}
-      {claims.length > 0 && (
-        <div className="mb-4 flex items-center justify-between text-sm text-slate-500">
-          <div>
-            {filteredClaims.length !== claims.length ? (
-              <>Showing {filteredClaims.length} of {claims.length} claims</>
-            ) : (
-              <>Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredClaims.length)} of {filteredClaims.length} claims</>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Claims Table - Clean table design matching mockup */}
       {claims.length === 0 ? (
         <DashboardEmptyState onCreateNew={onCreateNew} />
       ) : (
         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
           {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 px-4 md:px-6 py-2.5 border-b border-slate-100 text-xs font-medium text-slate-500 uppercase tracking-wider bg-slate-50/50">
+          <div className="grid grid-cols-12 gap-3 px-3 md:px-4 py-2 border-b border-slate-100 text-xs font-medium text-slate-500 uppercase tracking-wider bg-slate-50/50">
              {/* Checkbox column */}
              <div className="col-span-1 flex items-center">
                <input
@@ -812,20 +725,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           ) : paginatedClaims.map((claim, idx) => {
             const stageBadgeColor = getStatusBadgeColor(claim.status);
+            // Sanitize invoice number to avoid displaying literal "null" strings
+            const sanitizedInvoiceNumber = sanitizeDisplayValue(claim.invoice.invoiceNumber);
             // Provide more meaningful display for claims without defendant names
-            const defendantName = claim.defendant.name?.trim()
+            const defendantName = sanitizeDisplayValue(claim.defendant.name)
               ? claim.defendant.name
-              : claim.invoice.invoiceNumber
-                ? `Invoice #${claim.invoice.invoiceNumber.slice(0, 12)}${claim.invoice.invoiceNumber.length > 12 ? '...' : ''}`
+              : sanitizedInvoiceNumber
+                ? `Invoice #${sanitizedInvoiceNumber.slice(0, 12)}${sanitizedInvoiceNumber.length > 12 ? '...' : ''}`
                 : `Draft Claim`;
-            const isUnknownDefendant = !claim.defendant.name?.trim();
+            const isUnknownDefendant = !sanitizeDisplayValue(claim.defendant.name);
             const isSelected = selectedClaims.has(claim.id);
 
             return (
             <div
               key={claim.id}
               onClick={() => onResume(claim)}
-              className={`group grid grid-cols-12 gap-4 px-4 md:px-6 py-3 items-center transition-all duration-200 cursor-pointer ${
+              className={`group grid grid-cols-12 gap-3 px-3 md:px-4 py-2 items-center transition-all duration-200 cursor-pointer ${
                 isSelected
                   ? 'bg-teal-50/50 hover:bg-teal-100/50'
                   : idx % 2 === 1
@@ -854,17 +769,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                {/* Debtor */}
                <div className="col-span-3 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-600 transition-colors flex-shrink-0">
-                     <FileText className="w-3.5 h-3.5" />
+                  <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-600 transition-colors flex-shrink-0">
+                     <FileText className="w-3 h-3" />
                   </div>
                   <div className="min-w-0 flex-1">
                      <Tooltip content={isUnknownDefendant ? 'Add defendant details to complete this claim' : defendantName}>
-                       <p className={`font-medium truncate max-w-[180px] ${isUnknownDefendant ? 'text-slate-500 italic' : 'text-slate-900'}`}>
+                       <p className={`text-sm font-medium truncate max-w-[180px] ${isUnknownDefendant ? 'text-slate-500 italic' : 'text-slate-900'}`}>
                          {defendantName}
                        </p>
                      </Tooltip>
-                     <div className="flex items-center gap-2 mt-0.5">
-                       <p className="text-xs text-slate-400 font-mono">{claim.id.toUpperCase().slice(0,8)}</p>
+                     <div className="flex items-center gap-1.5">
+                       <p className="text-[10px] text-slate-400 font-mono">{claim.id.toUpperCase().slice(0,8)}</p>
                        <ProgressIndicator claim={claim} />
                      </div>
                   </div>
@@ -877,9 +792,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     const hasInterestOrComp = claim.interest.totalInterest > 0 || claim.compensation > 0;
                     return (
                       <Tooltip content={hasInterestOrComp ? `Principal: £${claim.invoice.totalAmount.toLocaleString('en-GB', { minimumFractionDigits: 2 })} + Interest: £${claim.interest.totalInterest.toLocaleString('en-GB', { minimumFractionDigits: 2 })} + Compensation: £${claim.compensation.toLocaleString('en-GB', { minimumFractionDigits: 2 })}` : 'Principal amount only'}>
-                        <p className="font-medium text-slate-700">
+                        <p className="text-sm font-medium text-slate-700">
                           £{totalValue.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                          {hasInterestOrComp && <span className="text-teal-600 text-xs ml-1">*</span>}
+                          {hasInterestOrComp && <span className="text-teal-600 text-[10px] ml-0.5">*</span>}
                         </p>
                       </Tooltip>
                     );
@@ -889,27 +804,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
                {/* Document */}
                <div className="col-span-2 hidden md:block">
                   {claim.selectedDocType ? (
-                    <p className="text-sm text-slate-600">
+                    <p className="text-xs text-slate-600">
                       {claim.selectedDocType === DocumentType.LBA ? 'LBA' :
                        claim.selectedDocType === DocumentType.FORM_N1 ? 'N1 Form' :
                        claim.selectedDocType === DocumentType.POLITE_CHASER ? 'Reminder' :
                        claim.selectedDocType}
                     </p>
                   ) : (
-                    <p className="text-sm text-slate-400 italic">Not selected</p>
+                    <p className="text-xs text-slate-400 italic">Not selected</p>
                   )}
                </div>
 
                {/* Status Badge */}
                <div className="col-span-2">
-                   <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wide border ${stageBadgeColor}`}>
+                   <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wide border ${stageBadgeColor}`}>
                        {claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
                    </span>
                </div>
 
                {/* Last Updated + Actions */}
-               <div className="col-span-2 hidden md:flex items-center justify-end gap-2">
-                   <span className="text-sm text-slate-500">
+               <div className="col-span-2 hidden md:flex items-center justify-end gap-1.5">
+                   <span className="text-xs text-slate-500">
                      {new Date(claim.lastModified).toLocaleDateString('en-GB')}
                    </span>
 
@@ -920,9 +835,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         size="sm"
                         iconOnly
                         onClick={(e) => handleQuickEditClick(e, claim)}
-                        icon={<Edit3 className="w-4 h-4" />}
+                        icon={<Edit3 className="w-3.5 h-3.5" />}
                         aria-label={`Quick edit claim for ${defendantName}`}
-                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition-opacity p-1"
                      />
                    )}
 
@@ -935,13 +850,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         e.stopPropagation();
                         handleDeleteClick(claim.id, defendantName);
                       }}
-                      icon={<Trash2 className="w-4 h-4" />}
+                      icon={<Trash2 className="w-3.5 h-3.5" />}
                       aria-label={`Delete claim for ${defendantName}`}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-opacity p-1"
                    />
 
                    {/* Visual indicator that row is clickable */}
-                   <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-0.5 transition-all" />
+                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-0.5 transition-all" />
                </div>
             </div>
             );
@@ -951,7 +866,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Pagination Controls */}
       {claims.length > 0 && filteredClaims.length > itemsPerPage && (
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between">
           <div className="text-sm text-slate-500">
             Page {currentPage} of {totalPages}
           </div>
@@ -1008,45 +923,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             >
               Next
             </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Data Management Section (GDPR Compliance) */}
-      {(onExportAllData || onDeleteAllData) && claims.length > 0 && (
-        <div className="mt-6 pt-5 border-t border-slate-200">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-3">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900 mb-0.5">Data Management</h2>
-              <p className="text-sm text-slate-500">Export or delete your claim data (GDPR rights)</p>
-            </div>
-            <div className="flex flex-wrap gap-3 w-full md:w-auto">
-              {onExportAllData && (
-                <Button
-                  variant="primary"
-                  onClick={onExportAllData}
-                  icon={<Download className="w-4 h-4" />}
-                  className="flex-1 md:flex-none"
-                >
-                  Export All
-                </Button>
-              )}
-              {onDeleteAllData && (
-                <Button
-                  variant="danger"
-                  onClick={onDeleteAllData}
-                  icon={<XCircle className="w-4 h-4" />}
-                  className="flex-1 md:flex-none"
-                >
-                  Delete All
-                </Button>
-              )}
-            </div>
-          </div>
-          <div className="bg-teal-50/30 border border-slate-200 border-l-4 border-l-teal-500 rounded-lg p-3">
-            <p className="text-xs text-slate-600">
-              <strong className="text-slate-800">Your GDPR Rights:</strong> Export data as JSON (Article 20) or permanently delete all data (Article 17).
-            </p>
           </div>
         </div>
       )}

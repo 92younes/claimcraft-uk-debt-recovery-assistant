@@ -581,13 +581,44 @@ export class NangoClient {
     try {
       switch (provider) {
         case 'xero': {
+          // Check if we have tenant ID - required for Xero API calls
+          const { tenantId: tenantIdKey } = getStorageKeys(provider);
+          const tenantId = localStorage.getItem(tenantIdKey);
+
+          if (!tenantId) {
+            console.warn('⚠️ No tenant ID available for Xero Organization API call');
+            // Try to fetch tenant ID first
+            const details = await this.fetchConnectionDetails(provider, connectionId);
+            if (details.tenantId) {
+              localStorage.setItem(tenantIdKey, details.tenantId);
+              console.log(`✅ Retrieved tenant ID for Organization call: ${details.tenantId}`);
+            } else {
+              console.error('❌ Could not retrieve Xero tenant ID');
+              return { name: 'Unknown Xero Organization' };
+            }
+          }
+
           const response = await this.callApi<{ Organisations: any[] }>(
             provider,
             '/api.xro/2.0/Organisation',
             connectionId
           );
+
+          console.log('📋 Xero Organisation API response:', JSON.stringify(response, null, 2));
+
           if (response.Organisations && response.Organisations.length > 0) {
-            return { name: response.Organisations[0].Name || 'Unknown Organization' };
+            const org = response.Organisations[0];
+            // Try multiple fields for organization name - Xero uses different fields
+            const orgName = org.Name || org.LegalName || org.ShortCode || org.OrganisationEntityType;
+
+            if (orgName) {
+              console.log(`✅ Found Xero organization name: ${orgName}`);
+              return { name: orgName };
+            }
+
+            console.warn('⚠️ Xero organisation found but no name field:', org);
+          } else {
+            console.warn('⚠️ Xero returned empty Organisations array:', response);
           }
           break;
         }
@@ -617,7 +648,7 @@ export class NangoClient {
         }
       }
     } catch (error) {
-      console.warn(`⚠️ Failed to fetch ${provider} organization details:`, error);
+      console.error(`❌ Failed to fetch ${provider} organization details:`, error);
     }
 
     return { name: `Unknown ${provider} Organization` };

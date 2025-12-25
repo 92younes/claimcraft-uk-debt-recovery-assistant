@@ -4,6 +4,7 @@ import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { LegalDisclaimerModal } from '../components/LegalDisclaimerModal';
 import { useClaimStore } from '../store/claimStore';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 export const DashboardLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -11,6 +12,7 @@ export const DashboardLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { userProfile, isLoading, isInitialized, deadlines } = useClaimStore();
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   // Determine current view based on route
   const currentView = useMemo(() => {
@@ -41,7 +43,7 @@ export const DashboardLayout = () => {
   // Show loading state while store is initializing to prevent content flash
   if (!isInitialized || isLoading) {
     return (
-      <div className="flex min-h-screen bg-slate-50 items-center justify-center">
+      <div className="flex h-screen h-[100dvh] bg-slate-50 items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin mx-auto mb-3"></div>
           <p className="text-slate-500 text-sm">Loading...</p>
@@ -51,10 +53,10 @@ export const DashboardLayout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">
+    <div className="flex h-screen h-[100dvh] bg-slate-50 font-sans text-slate-900 overflow-hidden">
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
-        aria-hidden={!isMobileMenuOpen && window.innerWidth < 1024}
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:flex-shrink-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        aria-hidden={!isDesktop && !isMobileMenuOpen}
       >
         <Sidebar
           view={currentView}
@@ -80,7 +82,7 @@ export const DashboardLayout = () => {
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth">
+        <main className="flex-1 overflow-y-auto p-3 md:p-4 scroll-smooth">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>

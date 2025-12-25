@@ -206,7 +206,7 @@ export const Select: React.FC<SelectProps> = ({
         aria-describedby={`${helpText ? helpTextId : ''} ${error ? errorId : ''}`.trim()}
         {...props}
       >
-        <option value="">-- Select {label || 'an option'} --</option>
+        <option value="">Select...</option>
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}

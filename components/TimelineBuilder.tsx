@@ -471,9 +471,15 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({
           <div className="pl-8 py-6 border border-dashed border-slate-300 rounded-xl bg-gradient-to-br from-slate-50 to-white m-3 text-center">
             <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-semibold text-slate-900 mb-1">No events added yet</p>
-            <p className="text-xs text-slate-600 mb-3 max-w-xs mx-auto">
-              Build your timeline by adding key dates like invoice issuance, payment requests, and correspondence.
+            <p className="text-xs text-slate-600 mb-2 max-w-xs mx-auto">
+              Build your timeline by adding key dates and correspondence.
             </p>
+            <div className="flex flex-wrap justify-center gap-2 mb-3">
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">Invoice Sent</span>
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">Payment Chaser</span>
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">LBA Sent</span>
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">Phone Call</span>
+            </div>
             <p className="text-xs text-teal-600 font-medium">
               Use the Quick Add buttons or enter manually above
             </p>

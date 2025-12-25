@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useClaimStore } from '../store/claimStore';
 import { EvidenceUpload } from '../components/EvidenceUpload';
@@ -10,12 +10,12 @@ import { TimelineBuilder } from '../components/TimelineBuilder';
 import { DocumentPreview } from '../components/DocumentPreview';
 import { Button } from '../components/ui/Button';
 import { ProgressStepsCompact } from '../components/ui/ProgressSteps';
-import { Breadcrumb, BreadcrumbItem } from '../components/ui/Breadcrumb';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { HorizontalTabs, Tab } from '../components/ui/HorizontalTabs';
 import { InterestPreview } from '../components/InterestPreview';
-import { Step, DocumentType } from '../types';
-import { ArrowRight, ArrowLeft, FileText, Keyboard, Save, Calendar, Mail, MessageSquareText, Scale, X, CheckCircle, Clock, User, Building2, Receipt, ClipboardList, Sparkles, AlertCircle } from 'lucide-react';
+import { Header, BreadcrumbItem } from '../components/Header';
+import { Step, DocumentType, EvidenceFile } from '../types';
+import { ArrowRight, ArrowLeft, FileText, Save, Calendar, Mail, MessageSquareText, Scale, X, CheckCircle, Check, Clock, User, Building2, Receipt, Sparkles, AlertCircle } from 'lucide-react';
 import { DocumentBuilder } from '../services/documentBuilder';
 import { generateDeadlinesForDocument } from '../services/deadlineService';
 import { getTodayISO } from '../utils/formatters';
@@ -34,6 +34,9 @@ const WIZARD_STEPS = [
 
 export const WizardPage = () => {
   const navigate = useNavigate();
+  const { setHeaderConfig } = useOutletContext<{
+    setHeaderConfig?: (config: { breadcrumbs?: BreadcrumbItem[]; rightContent?: React.ReactNode }) => void;
+  }>();
   const {
     claimData, setClaimData, step, setStep, createNewClaim,
     isProcessing, processingText, showSaveIndicator,
@@ -45,10 +48,22 @@ export const WizardPage = () => {
   const [isGeneratingDocument, setIsGeneratingDocument] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [initialClaimSnapshot] = useState(() => JSON.stringify(claimData));
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState(() => JSON.stringify(claimData));
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
   const [activeVerifyTab, setActiveVerifyTab] = useState<string>('claimant');
+  const [newFilesCount, setNewFilesCount] = useState(0);
   const isGeneratingRef = useRef(false);
+
+  // Handler for adding evidence files (tracks new file count for analysis prompt)
+  const handleAddEvidenceFiles = (newFiles: EvidenceFile[]) => {
+    setClaimData(prev => ({...prev, evidence: [...prev.evidence, ...newFiles]}));
+    setNewFilesCount(prev => prev + newFiles.length);
+  };
+
+  const handleAnalyzeNewFiles = async () => {
+    await analyzeEvidenceFiles();
+    setNewFilesCount(0); // Reset after analysis
+  };
 
   // Debug logging to trace data received from conversation
   useEffect(() => {
@@ -68,9 +83,12 @@ export const WizardPage = () => {
 
   // Check if form has been modified (dirty state)
   const hasUnsavedChanges = useMemo(() => {
-    const currentSnapshot = JSON.stringify(claimData);
-    return currentSnapshot !== initialClaimSnapshot;
-  }, [claimData, initialClaimSnapshot]);
+    // Compare against last saved snapshot (excludes lastModified to avoid false positives)
+    const compareData = { ...claimData, lastModified: undefined };
+    const compareSaved = JSON.parse(lastSavedSnapshot);
+    compareSaved.lastModified = undefined;
+    return JSON.stringify(compareData) !== JSON.stringify(compareSaved);
+  }, [claimData, lastSavedSnapshot]);
 
   // Set up unsaved changes protection
   useUnsavedChanges({
@@ -116,6 +134,22 @@ export const WizardPage = () => {
     return recommendFromClaimState(claimData);
   }, [claimData]);
 
+  // Auto-select recommended document when entering Strategy step (if user hasn't manually selected)
+  useEffect(() => {
+    if (step === Step.STRATEGY && recommendation?.primaryDocument && !claimData.userSelectedDocType) {
+      // Only auto-select if current selection differs from recommendation
+      if (claimData.selectedDocType !== recommendation.primaryDocument) {
+        setClaimData(prev => ({
+          ...prev,
+          selectedDocType: recommendation.primaryDocument,
+          // Don't set userSelectedDocType - this is an auto-selection
+          // Clear any previously generated document for the old type
+          generated: undefined
+        }));
+      }
+    }
+  }, [step, recommendation?.primaryDocument, claimData.userSelectedDocType, claimData.selectedDocType, setClaimData]);
+
   // Guard: ensure wizard always has an active claim id (needed for save/payment flows)
   useEffect(() => {
     if (!claimData.id) {
@@ -130,6 +164,9 @@ export const WizardPage = () => {
     const saveTimer = setTimeout(async () => {
       try {
         await saveClaim();
+        // Update the saved snapshot to match current data (excluding lastModified)
+        const newSnapshot = { ...claimData, lastModified: undefined };
+        setLastSavedSnapshot(JSON.stringify(newSnapshot));
         setLastSaveTime(new Date());
       } catch (error) {
         console.error('Auto-save failed:', error);
@@ -313,71 +350,74 @@ export const WizardPage = () => {
   const renderEvidenceStep = () => (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 animate-fade-in py-4">
         <div className="mb-6">
-        <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">
-            {hasExistingData ? 'Evidence & Documents' : 'New Claim'}
-        </h2>
-        <p className="text-slate-500">
-            {hasExistingData
-            ? 'Upload supporting evidence for your claim.'
-            : 'Import your claim data or enter manually.'}
-        </p>
+          <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">
+            Evidence & Documents
+          </h2>
+          <p className="text-slate-500">
+            Upload supporting documents for your claim - invoices, contracts, emails, or any other evidence.
+          </p>
         </div>
-
-        {!hasExistingData && (
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
-            <button
-                onClick={() => navigate('/')}
-                className="p-6 rounded-xl bg-slate-50 border border-slate-200 hover:border-teal-300 flex flex-col items-center gap-3 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-            >
-                <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-slate-600"/>
-                </div>
-                <div className="text-center">
-                    <span className="block font-semibold text-slate-900">Connect Accounting</span>
-                    <span className="text-sm text-slate-500 mt-1 block">Go to Dashboard to connect</span>
-                </div>
-            </button>
-
-            <button
-            onClick={handleManualEntry}
-            className="p-6 bg-white border border-slate-200 hover:border-teal-300 rounded-xl transition-all flex flex-col items-center gap-3 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-            >
-                <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <Keyboard className="w-5 h-5 text-slate-600"/>
-                </div>
-                <div className="text-center">
-                    <span className="block font-semibold text-slate-900">Manual Entry</span>
-                    <span className="text-sm text-slate-500 mt-1 block">Type in claim details</span>
-                </div>
-            </button>
-        </div>
-        )}
 
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-xl font-semibold text-slate-900 text-center mb-2">Evidence Locker</h3>
-        <p className="text-slate-500 text-center text-sm mb-6">
-            Upload invoices, contracts, and emails.
-        </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Evidence Locker</h3>
+              <p className="text-slate-500 text-sm">
+                Drag and drop or click to upload files
+              </p>
+            </div>
+            {claimData.evidence.length > 0 && (
+              <span className="text-sm text-teal-600 font-medium">
+                {claimData.evidence.length} file{claimData.evidence.length !== 1 ? 's' : ''} uploaded
+              </span>
+            )}
+          </div>
 
-        <EvidenceUpload
+          <EvidenceUpload
             files={claimData.evidence}
-            onAddFiles={(newFiles) => setClaimData(prev => ({...prev, evidence: [...prev.evidence, ...newFiles]}))}
-            onRemoveFile={(idx) => setClaimData(prev => ({...prev, evidence: prev.evidence.filter((_, i) => i !== idx)}))}
-            onAnalyze={hasExistingData ? undefined : analyzeEvidenceFiles}
+            onAddFiles={handleAddEvidenceFiles}
+            onRemoveFile={(idx) => {
+              setClaimData(prev => ({...prev, evidence: prev.evidence.filter((_, i) => i !== idx)}));
+              // Reduce new files count if removing a new file
+              if (newFilesCount > 0) setNewFilesCount(prev => Math.max(0, prev - 1));
+            }}
+            onAnalyze={claimData.evidence.length > 0 ? handleAnalyzeNewFiles : undefined}
             isProcessing={isProcessing}
-        />
+          />
+
+          {/* Show info about new files that can be analyzed */}
+          {hasExistingData && newFilesCount > 0 && !isProcessing && (
+            <div className="mt-4 bg-teal-50 border border-teal-200 rounded-lg p-3 flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-teal-600 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm text-teal-800">
+                  <strong>{newFilesCount} new file{newFilesCount !== 1 ? 's' : ''}</strong> ready to analyze.
+                  Click "Analyze Documents" to extract additional data.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Helpful tips */}
+          <div className="mt-6 bg-slate-50 rounded-lg p-4 border border-slate-200">
+            <h4 className="text-sm font-medium text-slate-700 mb-2">Tips for strong evidence:</h4>
+            <ul className="text-xs text-slate-600 space-y-1">
+              <li>• <strong>Invoices:</strong> Show amounts, dates, and terms clearly</li>
+              <li>• <strong>Contracts:</strong> Signed agreements proving the debt</li>
+              <li>• <strong>Emails/Letters:</strong> Communications about payment</li>
+              <li>• <strong>Proof of delivery:</strong> Shows goods/services were provided</li>
+            </ul>
+          </div>
         </div>
 
-        {hasExistingData && (
         <div className="mt-6 flex justify-end">
-            <Button
+          <Button
             onClick={() => handleNextStep(Step.VERIFY)}
             rightIcon={<ArrowRight className="w-5 h-5" />}
-            >
+          >
             Continue to Verify
-            </Button>
+          </Button>
         </div>
-        )}
     </div>
   );
 
@@ -405,7 +445,7 @@ export const WizardPage = () => {
 
     const validateInvoice = () => {
       const errors: string[] = [];
-      if (!claimData.invoice.invoiceNumber?.trim()) errors.push('invoice number');
+      // Invoice number is optional - not all debts have formal invoices
       if (!claimData.invoice.totalAmount || claimData.invoice.totalAmount <= 0) errors.push('amount');
       if (!claimData.invoice.dateIssued) errors.push('date');
       return errors;
@@ -446,9 +486,13 @@ export const WizardPage = () => {
         label: 'Claimant',
         icon: <User className="w-4 h-4" />,
         badge: getTabStatus('claimant') === 'complete' ?
-          <CheckCircle className="w-4 h-4 text-teal-500" /> :
+          <span className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+            <Check className="w-3 h-3 text-white" />
+          </span> :
           claimantErrors.length > 0 ?
-            <AlertCircle className="w-4 h-4 text-red-500" /> :
+            <span className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-3 h-3 text-white" />
+            </span> :
             undefined
       },
       {
@@ -456,9 +500,13 @@ export const WizardPage = () => {
         label: 'Debtor',
         icon: <Building2 className="w-4 h-4" />,
         badge: getTabStatus('debtor') === 'complete' ?
-          <CheckCircle className="w-4 h-4 text-teal-500" /> :
+          <span className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+            <Check className="w-3 h-3 text-white" />
+          </span> :
           defendantErrors.length > 0 ?
-            <AlertCircle className="w-4 h-4 text-red-500" /> :
+            <span className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-3 h-3 text-white" />
+            </span> :
             undefined
       },
       {
@@ -466,9 +514,13 @@ export const WizardPage = () => {
         label: 'Invoice',
         icon: <Receipt className="w-4 h-4" />,
         badge: getTabStatus('invoice') === 'complete' ?
-          <CheckCircle className="w-4 h-4 text-teal-500" /> :
+          <span className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+            <Check className="w-3 h-3 text-white" />
+          </span> :
           invoiceErrors.length > 0 ?
-            <AlertCircle className="w-4 h-4 text-red-500" /> :
+            <span className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-3 h-3 text-white" />
+            </span> :
             undefined
       },
       {
@@ -476,14 +528,20 @@ export const WizardPage = () => {
         label: 'Timeline',
         icon: <Calendar className="w-4 h-4" />,
         badge: timelineErrors.length === 0 ?
-          <CheckCircle className="w-4 h-4 text-teal-500" /> :
-          <Clock className="w-4 h-4 text-amber-500" />
+          <span className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+            <Check className="w-3 h-3 text-white" />
+          </span> :
+          <span className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
+            <Clock className="w-3 h-3 text-white" />
+          </span>
       },
       {
         id: 'preaction',
         label: 'Pre-Action',
         icon: <Mail className="w-4 h-4" />,
-        badge: <CheckCircle className="w-4 h-4 text-slate-300" />
+        badge: <span className="w-5 h-5 bg-slate-300 rounded-full flex items-center justify-center">
+          <Check className="w-3 h-3 text-white" />
+        </span>
       },
     ];
 
@@ -508,7 +566,7 @@ export const WizardPage = () => {
     };
 
     return (
-      <div className="space-y-6 animate-fade-in py-4 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+      <div className="space-y-6 animate-fade-in py-4 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
         <Button
           variant="ghost"
           icon={<ArrowLeft className="w-4 h-4" />}
@@ -522,6 +580,47 @@ export const WizardPage = () => {
           <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">Review Your Claim Details</h2>
           <p className="text-slate-500">Complete each section to proceed with your claim.</p>
         </div>
+
+        {/* Validation Summary - Show all missing fields at a glance */}
+        {!canProceed && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-semibold text-red-800 mb-2">Required fields missing</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                  {claimantErrors.length > 0 && (
+                    <button
+                      onClick={() => setActiveVerifyTab('claimant')}
+                      className="text-left px-3 py-2 bg-white rounded-lg border border-red-200 hover:border-red-400 transition-colors"
+                    >
+                      <span className="font-medium text-red-700">Claimant:</span>
+                      <span className="text-red-600 ml-1">{claimantErrors.join(', ')}</span>
+                    </button>
+                  )}
+                  {defendantErrors.length > 0 && (
+                    <button
+                      onClick={() => setActiveVerifyTab('debtor')}
+                      className="text-left px-3 py-2 bg-white rounded-lg border border-red-200 hover:border-red-400 transition-colors"
+                    >
+                      <span className="font-medium text-red-700">Debtor:</span>
+                      <span className="text-red-600 ml-1">{defendantErrors.join(', ')}</span>
+                    </button>
+                  )}
+                  {invoiceErrors.length > 0 && (
+                    <button
+                      onClick={() => setActiveVerifyTab('invoice')}
+                      className="text-left px-3 py-2 bg-white rounded-lg border border-red-200 hover:border-red-400 transition-colors"
+                    >
+                      <span className="font-medium text-red-700">Invoice:</span>
+                      <span className="text-red-600 ml-1">{invoiceErrors.join(', ')}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Horizontal Tabs */}
         <HorizontalTabs
@@ -565,11 +664,11 @@ export const WizardPage = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <Input
-                  label="Invoice Number"
+                  label="Invoice/Reference Number"
                   value={claimData.invoice.invoiceNumber}
                   onChange={(e) => updateInvoiceDetails('invoiceNumber', e.target.value)}
-                  required
-                  error={!claimData.invoice.invoiceNumber?.trim() ? 'Invoice number is required' : undefined}
+                  helperText="Optional - add if you have one"
+                  placeholder="e.g. INV-001 or reference"
                 />
                 <Input
                   label="Amount (£)"
@@ -785,7 +884,7 @@ export const WizardPage = () => {
     ];
 
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-12">
         <Button variant="ghost" icon={<ArrowLeft className="w-4 h-4"/>} onClick={() => handleNextStep(Step.VERIFY)} className="mb-4">
           Back to Verify
         </Button>
@@ -844,20 +943,34 @@ export const WizardPage = () => {
             return (
               <div
                 key={doc.type}
-                onClick={() => setClaimData(prev => ({ ...prev, selectedDocType: doc.type, userSelectedDocType: true }))}
+                onClick={() => setClaimData(prev => ({
+                  ...prev,
+                  selectedDocType: doc.type,
+                  userSelectedDocType: true,
+                  // CRITICAL: Clear cached document when changing type to force regeneration
+                  generated: prev.generated?.documentType !== doc.type ? undefined : prev.generated
+                }))}
                 className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all ${
                   isSelected
-                    ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
+                    ? 'border-teal-600 bg-teal-600 text-white shadow-lg ring-4 ring-teal-200'
                     : isRecommended
-                    ? 'border-teal-400 bg-teal-50 hover:border-teal-500 hover:shadow-md'
-                    : 'border-slate-200 bg-white hover:border-teal-300 hover:shadow-sm'
+                    ? 'border-teal-300 bg-teal-50/50 hover:border-teal-400 hover:shadow-md'
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
                 }`}
               >
-                {/* Recommended Badge */}
+                {/* Selected Badge - Always visible when selected */}
+                {isSelected && (
+                  <div className="absolute -top-3 -right-3 bg-teal-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md flex items-center gap-1.5 border-2 border-white">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Selected
+                  </div>
+                )}
+
+                {/* Recommended Badge - Only show when not selected */}
                 {isRecommended && !isSelected && (
-                  <div className="absolute -top-3 -right-3 bg-teal-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md flex items-center gap-1">
+                  <div className="absolute -top-3 -right-3 bg-slate-100 text-slate-600 text-xs font-medium px-3 py-1 rounded-full shadow-sm flex items-center gap-1 border border-slate-200">
                     <Sparkles className="w-3 h-3" />
-                    Recommended
+                    Suggested
                   </div>
                 )}
 
@@ -903,20 +1016,21 @@ export const WizardPage = () => {
   };
 
   const renderDraftStep = () => (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-24 h-full flex flex-col">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-12 h-full flex flex-col">
           <div className="flex justify-between items-center mb-6">
             <Button variant="ghost" icon={<ArrowLeft className="w-4 h-4"/>} onClick={() => handleNextStep(Step.STRATEGY)}>Back to Strategy</Button>
             <h2 className="text-2xl font-bold text-slate-900">Draft Your Document</h2>
           </div>
 
-          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
-             {isGeneratingDocument && (
+          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[360px] md:min-h-[480px]">
+             {/* Only show spinner when generating AND no document exists yet */}
+             {isGeneratingDocument && !claimData.generated && !docError && (
                <div className="p-6 text-sm text-slate-600 flex items-center gap-3">
                  <div className="w-5 h-5 border-2 border-teal-200 border-t-teal-600 rounded-full animate-spin"></div>
                  Generating your document…
                </div>
              )}
-             {docError && (
+             {docError && !claimData.generated && (
                <div className="p-6">
                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800">
                    <p className="font-semibold mb-1">Document generation failed</p>
@@ -958,6 +1072,7 @@ export const WizardPage = () => {
                      paidAt: new Date().toISOString()
                    }))
                  }
+                 onFinish={() => navigate('/dashboard')}
                />
              )}
           </div>
@@ -980,7 +1095,7 @@ export const WizardPage = () => {
   );
 
   const renderReviewStep = () => (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-24 h-full flex flex-col">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-12 h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <Button
           variant="ghost"
@@ -996,7 +1111,7 @@ export const WizardPage = () => {
         <h2 className="text-2xl font-bold text-slate-900">Review & Send</h2>
       </div>
 
-      <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
+      <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[360px] md:min-h-[480px]">
         {claimData.generated ? (
           <DocumentPreview
             data={claimData}
@@ -1016,6 +1131,7 @@ export const WizardPage = () => {
                 paidAt: new Date().toISOString()
               }))
             }
+            onFinish={() => navigate('/dashboard')}
           />
         ) : (
           <div className="p-6 text-sm text-slate-600">
@@ -1044,52 +1160,50 @@ export const WizardPage = () => {
     return lastSaveTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Build right content for header (rendered by WizardLayout's Header)
+  const headerRightContent = useMemo(() => (
+      <div className="flex items-center gap-3">
+        {/* Save Status Indicator */}
+        <div className="hidden sm:flex items-center">
+          {hasUnsavedChanges ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+              <Clock className="w-3.5 h-3.5 animate-pulse" />
+              <span>Saving...</span>
+            </div>
+          ) : lastSaveTime ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+              <CheckCircle className="w-3.5 h-3.5" />
+              <span>Saved</span>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Cancel Button */}
+        <Button
+          variant="ghost"
+          onClick={handleCancelWizard}
+          icon={<X className="w-4 h-4" />}
+          className="text-slate-600 hover:text-red-600"
+          title="Cancel and discard changes"
+          size="sm"
+        >
+          <span className="hidden sm:inline">Cancel</span>
+        </Button>
+      </div>
+  ), [hasUnsavedChanges, lastSaveTime, handleCancelWizard]);
+
+  // Configure the layout header from this page to avoid double-stacked headers
+  useEffect(() => {
+    if (!setHeaderConfig) return;
+    setHeaderConfig({ breadcrumbs: breadcrumbItems, rightContent: headerRightContent });
+    return () => setHeaderConfig({});
+  }, [setHeaderConfig, breadcrumbItems, headerRightContent]);
+
   return (
     <div className="flex flex-col min-h-full">
-        {/* Wizard Header with Breadcrumb and Actions */}
-        <div className="bg-white border-b border-slate-200 sticky top-12 z-30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-            <div className="flex items-center justify-between gap-4">
-              {/* Breadcrumb */}
-              <div className="hidden md:block">
-                <Breadcrumb items={breadcrumbItems} />
-              </div>
-
-              {/* Mobile Progress */}
-              <div className="md:hidden flex-1">
-                <ProgressStepsCompact steps={WIZARD_STEPS} currentStep={step} />
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-3">
-                {/* Save Status Indicator - Enhanced pill badges */}
-                <div className="hidden sm:flex items-center">
-                  {hasUnsavedChanges ? (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                      <Clock className="w-3.5 h-3.5 animate-pulse" />
-                      <span>Saving changes...</span>
-                    </div>
-                  ) : lastSaveTime ? (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      <span>All changes saved</span>
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Cancel Button */}
-                <Button
-                  variant="ghost"
-                  onClick={handleCancelWizard}
-                  icon={<X className="w-4 h-4" />}
-                  className="text-slate-600 hover:text-red-600"
-                  title="Cancel and discard changes"
-                >
-                  <span className="hidden sm:inline">Cancel</span>
-                </Button>
-              </div>
-            </div>
-          </div>
+        {/* Mobile Progress - shown at top of content on mobile */}
+        <div className="md:hidden bg-white border-b border-slate-200 px-4 py-2 mb-4">
+          <ProgressStepsCompact steps={WIZARD_STEPS} currentStep={step} />
         </div>
 
         {/* Legacy Save Indicator (for compatibility) */}

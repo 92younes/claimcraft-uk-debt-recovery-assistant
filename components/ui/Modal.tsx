@@ -71,7 +71,7 @@ export const Modal: React.FC<ModalProps> = ({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`bg-white rounded-2xl shadow-soft-lg ${responsiveWidthClass} max-w-[640px] ${maxHeightClassName} overflow-hidden border border-slate-200 outline-none flex flex-col animate-scale-in`}
+        className={`bg-white rounded-2xl shadow-soft-lg ${responsiveWidthClass} ${maxHeightClassName} overflow-hidden border border-slate-200 outline-none flex flex-col animate-scale-in`}
       >
         {hideHeader ? (
           <div className="sr-only">

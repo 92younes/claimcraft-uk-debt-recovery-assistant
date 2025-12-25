@@ -1,18 +1,31 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Shield, Lock, Database, Eye, UserCheck, FileText, Mail } from 'lucide-react';
 
 interface PrivacyPolicyProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
+  const navigate = useNavigate();
+  const handleBack = () => {
+    if (onBack) return onBack();
+    // Prefer going back to where the user came from (dashboard/landing),
+    // but fall back to landing if there is no history.
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/');
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button
-            onClick={onBack}
+            onClick={handleBack}
             className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors font-medium"
           >
             <ArrowLeft className="w-5 h-5" />

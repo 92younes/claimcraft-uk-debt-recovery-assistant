@@ -23,6 +23,8 @@ import { DEADLINE_COLORS, DEADLINE_TYPE_LABELS } from '../constants';
 import { getDaysUntilDeadline } from '../services/deadlineService';
 import { downloadICalFile, downloadSingleDeadlineIcal } from '../services/icalService';
 import { formatDateISO } from '../utils/formatters';
+import { Modal } from '../components/ui/Modal';
+import { Button } from '../components/ui/Button';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -475,141 +477,144 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const daysUntil = getDaysUntilDeadline(selectedDeadline.dueDate);
     const claim = claims.find(c => c.id === selectedDeadline.claimId);
 
+    const statusLabel =
+      selectedDeadline.status === DeadlineStatus.COMPLETED
+        ? 'Completed'
+        : isOverdue
+          ? `${Math.abs(daysUntil)} days overdue`
+          : daysUntil === 0
+            ? 'Due today'
+            : daysUntil === 1
+              ? 'Due tomorrow'
+              : `${daysUntil} days remaining`;
+
+    const statusPillClass =
+      selectedDeadline.status === DeadlineStatus.COMPLETED
+        ? 'bg-teal-100 text-teal-700'
+        : isOverdue
+          ? 'bg-red-100 text-red-700'
+          : 'bg-amber-100 text-amber-700';
+
+    const titleIconBg =
+      selectedDeadline.status === DeadlineStatus.COMPLETED
+        ? 'bg-teal-100'
+        : isOverdue
+          ? 'bg-red-100'
+          : 'bg-amber-100';
+
     return (
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-lg shadow-2xl">
-          {/* Header */}
-          <div className={`px-6 py-4 border-b border-slate-200 rounded-t-2xl ${
-            isOverdue ? 'bg-red-50' : 'bg-slate-50'
-          }`}>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                {getPriorityIcon(selectedDeadline.priority, isOverdue)}
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">{selectedDeadline.title}</h3>
-                  <p className="text-sm text-slate-500">
-                    {DEADLINE_TYPE_LABELS[selectedDeadline.type] || selectedDeadline.type}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedDeadline(null)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                aria-label="Close deadline details"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        isOpen={!!selectedDeadline}
+        onClose={() => setSelectedDeadline(null)}
+        title={selectedDeadline.title}
+        description={DEADLINE_TYPE_LABELS[selectedDeadline.type] || selectedDeadline.type}
+        titleIcon={(
+          <div className={`w-10 h-10 rounded-xl ${titleIconBg} flex items-center justify-center`}>
+            {getPriorityIcon(selectedDeadline.priority, isOverdue)}
           </div>
+        )}
+        maxWidthClassName="max-w-lg"
+        footer={(
+          <div className="w-full flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+            <Button variant="secondary" onClick={() => setSelectedDeadline(null)} className="flex-1">
+              Close
+            </Button>
 
-          {/* Body */}
-          <div className="p-6 space-y-4">
-            {/* Status */}
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Status</span>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                selectedDeadline.status === DeadlineStatus.COMPLETED
-                  ? 'bg-teal-100 text-teal-700'
-                  : isOverdue
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-amber-100 text-amber-700'
-              }`}>
-                {selectedDeadline.status === DeadlineStatus.COMPLETED
-                  ? 'Completed'
-                  : isOverdue
-                    ? `${Math.abs(daysUntil)} days overdue`
-                    : daysUntil === 0
-                      ? 'Due today'
-                      : daysUntil === 1
-                        ? 'Due tomorrow'
-                        : `${daysUntil} days remaining`}
-              </span>
-            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                onDeadlineClick(selectedDeadline);
+                setSelectedDeadline(null);
+              }}
+              className="flex-1"
+              icon={<Eye className="w-4 h-4" />}
+            >
+              View
+            </Button>
 
-            {/* Due Date */}
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Due Date</span>
-              <span className="text-slate-900 font-medium">
-                {new Date(selectedDeadline.dueDate).toLocaleDateString('en-GB', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric'
-                })}
-              </span>
-            </div>
+            <Button
+              variant="secondary"
+              onClick={() => handleExportSingle(selectedDeadline)}
+              className="flex-1"
+              icon={<Download className="w-4 h-4" />}
+            >
+              Export
+            </Button>
 
-            {/* Claim */}
-            {claim && (
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500">Claim</span>
-                <span className="text-slate-900 font-medium">{claim.defendant.name}</span>
-              </div>
+            {selectedDeadline.status !== DeadlineStatus.COMPLETED && (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  onCompleteDeadline(selectedDeadline);
+                  setSelectedDeadline(null);
+                }}
+                className="flex-1"
+                icon={<CheckCircle2 className="w-4 h-4" />}
+              >
+                Mark Complete
+              </Button>
             )}
 
-            {/* Description */}
+            {onDeleteDeadline && (
+              <Button
+                variant="danger"
+                onClick={() => {
+                  onDeleteDeadline(selectedDeadline.id);
+                  setSelectedDeadline(null);
+                }}
+                className="flex-1"
+                icon={<Trash2 className="w-4 h-4" />}
+              >
+                Delete
+              </Button>
+            )}
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Status</span>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusPillClass}`}>
+              {statusLabel}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Due Date</span>
+            <span className="text-slate-900 font-medium">
+              {new Date(selectedDeadline.dueDate).toLocaleDateString('en-GB', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              })}
+            </span>
+          </div>
+
+          {claim && (
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Claim</span>
+              <span className="text-slate-900 font-medium">{claim.defendant.name}</span>
+            </div>
+          )}
+
+          {selectedDeadline.description && (
             <div className="pt-2">
               <span className="text-slate-500 block mb-2">Description</span>
               <p className="text-slate-700 text-sm leading-relaxed">
                 {selectedDeadline.description}
               </p>
             </div>
+          )}
 
-            {/* Legal Reference */}
-            {selectedDeadline.legalReference && (
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                <span className="text-xs text-slate-500 block mb-1">Legal Reference</span>
-                <p className="text-sm text-slate-700">{selectedDeadline.legalReference}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3">
-            {selectedDeadline.status !== DeadlineStatus.COMPLETED && (
-              <button
-                onClick={() => {
-                  onCompleteDeadline(selectedDeadline);
-                  setSelectedDeadline(null);
-                }}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-500 text-white font-medium rounded-lg hover:bg-teal-600 transition-colors"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Mark Complete
-              </button>
-            )}
-            <button
-              onClick={() => handleExportSingle(selectedDeadline)}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-            <button
-              onClick={() => {
-                onDeadlineClick(selectedDeadline);
-                setSelectedDeadline(null);
-              }}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors"
-            >
-              <Eye className="w-4 h-4" />
-              View
-            </button>
-            {onDeleteDeadline && (
-              <button
-                onClick={() => {
-                  onDeleteDeadline(selectedDeadline.id);
-                  setSelectedDeadline(null);
-                }}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 font-medium rounded-lg hover:bg-red-100 transition-colors"
-                title="Delete deadline"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          {selectedDeadline.legalReference && (
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+              <span className="text-xs text-slate-500 block mb-1">Legal Reference</span>
+              <p className="text-sm text-slate-700">{selectedDeadline.legalReference}</p>
+            </div>
+          )}
         </div>
-      </div>
+      </Modal>
     );
   };
 

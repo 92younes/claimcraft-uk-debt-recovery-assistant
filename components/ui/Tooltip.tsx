@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 interface TooltipProps {
-  content: string;
+  content: React.ReactNode;
   children: React.ReactElement;
   position?: 'top' | 'bottom' | 'left' | 'right';
   delay?: number;
@@ -170,7 +170,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   );
 
   // Don't show tooltip if no content
-  if (!content) {
+  if (content === null || content === undefined || content === '') {
     return wrapDisabled ? <>{children}</> : children;
   }
 

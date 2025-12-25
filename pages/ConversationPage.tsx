@@ -78,10 +78,10 @@ export const ConversationPage = () => {
       const mergedDefendant = mergeDefinedValues(prev.defendant, extractedData.defendant as Partial<Party>);
       const mergedInvoice = mergeDefinedValues(prev.invoice, extractedData.invoice as Partial<InvoiceData>);
 
-      // CRITICAL FIX: Never overwrite claimant data from conversation
-      // Claimant is ALWAYS the logged-in user's profile data set in ConversationEntry
-      // extractedData.claimant comes from ConversationEntry which already uses profileToClaimantParty
-      const mergedClaimant = extractedData.claimant || prev.claimant;
+      // CRITICAL FIX: Never overwrite claimant data from AI extraction
+      // Claimant is ALWAYS the logged-in user's profile data (set when claim was created)
+      // AI may hallucinate claimant addresses from documents - always use user's profile instead
+      const mergedClaimant = prev.claimant;
 
       // Recalculate interest and compensation based on merged data
       const interest = calculateInterest(
@@ -134,7 +134,7 @@ export const ConversationPage = () => {
   };
 
   return (
-    <div className="h-screen bg-white flex flex-col overflow-hidden">
+    <div className="h-screen h-[100dvh] bg-white flex flex-col overflow-hidden">
         <ConversationEntry
             userProfile={userProfile}
             onComplete={handleConversationComplete}

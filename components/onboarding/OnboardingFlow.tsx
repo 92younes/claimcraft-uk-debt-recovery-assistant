@@ -243,7 +243,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       tabIndex={-1}
       className={`flex bg-white outline-none ${
         layout === 'fullscreen'
-          ? 'h-screen'
+          ? 'h-screen h-[100dvh]'
           : 'rounded-2xl border border-slate-200 shadow-sm overflow-hidden'
       }`}
     >

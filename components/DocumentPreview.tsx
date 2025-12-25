@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClaimState, DocumentType, PartyType } from '../types';
-import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown, RefreshCw, ExternalLink, CreditCard, Settings, Mail, ZoomIn, ZoomOut, Maximize2, FileText, Info, MessageSquare, Clock } from 'lucide-react';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown, RefreshCw, ExternalLink, CreditCard, Settings, Mail, ZoomIn, ZoomOut, Maximize2, FileText, Info, MessageSquare, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrencySymbol } from '../utils/calculations';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
@@ -23,12 +24,14 @@ interface DocumentPreviewProps {
   mailSuccess?: boolean;
   onPaymentComplete?: (paymentIntentId: string) => void;
   onMarkAsFiled?: () => void; // Issue 7: Mark N1 as filed to unlock post-filing docs
+  onFinish?: () => void; // Navigate to dashboard after completion
 }
 
 // A4 Page Wrapper with optional Watermark and Overflow Handling
 // Mobile responsive: full width on small screens, A4 width on larger screens
+// Tablet: scales to fit viewport without horizontal scroll
 const Page = ({ children, className = "", watermark = false, id }: { children?: React.ReactNode; className?: string; watermark?: boolean; id?: string }) => (
-  <div id={id} className={`bg-white shadow-xl w-full max-w-full md:w-[210mm] md:max-w-none min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-x-auto flex-shrink-0 ${className}`}>
+  <div id={id} className={`bg-white shadow-xl w-full max-w-full md:w-[210mm] md:max-w-none min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-visible flex-shrink-0 ${className}`}>
     {watermark && (
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10 opacity-15 select-none overflow-hidden">
         <div className="transform -rotate-45 text-3xl sm:text-5xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-4 md:border-[10px] border-slate-900 p-4 md:p-10 rounded-2xl mix-blend-multiply">
@@ -51,7 +54,8 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   onOpenMcol,
   mailSuccess = false,
   onPaymentComplete,
-  onMarkAsFiled
+  onMarkAsFiled,
+  onFinish
 }) => {
   const [viewMode, setViewMode] = useState<'letter' | 'reply-form' | 'info-sheet' | 'n1-form'>('letter');
   const [isSigning, setIsSigning] = useState(false);
@@ -84,6 +88,16 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 150));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 50));
   const handleZoomReset = () => setZoom(100);
+
+  // Collapsible correction details state
+  const [showCorrectionDetails, setShowCorrectionDetails] = useState(false);
+
+  // Tablet responsive scaling - uses CSS-based scaling to avoid state updates
+  const isTablet = useMediaQuery('(min-width: 768px) and (max-width: 1024px)');
+
+  // For tablet, use a fixed scale that fits most tablets (avoid state updates)
+  // 85% scale fits 210mm (794px) into ~900px viewport with padding
+  const effectiveZoom = isTablet ? 85 : zoom;
 
   const review = data.generated?.review;
 
@@ -420,7 +434,7 @@ ${data.claimant.name}`);
                : 'Your Letter Before Action has been dispatched.'}
           </p>
           <div className="flex justify-center">
-            <Button onClick={onBack} className="px-8">
+            <Button onClick={onFinish || onBack} className="px-8">
               Return to Dashboard
             </Button>
           </div>
@@ -431,68 +445,140 @@ ${data.claimant.name}`);
   // Render warning panels - extracted for split-pane layout
   const renderWarningPanels = () => (
     <>
-      {/* CRITICAL: Compliance Check Panel - Shows FIRST (red warnings take priority) */}
+      {/* CRITICAL: Compliance Check Panel */}
       {!isFinalized && review && (
         <div className="mb-4 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden animate-fade-in no-print ring-4 ring-slate-50">
-           <div className={`p-4 flex items-center justify-between ${review.isPass ? 'bg-green-50 border-b border-green-100' : 'bg-red-50 border-b border-red-100'}`}>
-              <div className="flex items-center gap-3">
-                 <div className={`p-2 rounded-full ${review.isPass ? 'bg-green-100' : 'bg-red-100'}`}>
-                    {review.isPass ? <ShieldCheck className="w-6 h-6 text-green-700" /> : <AlertTriangle className="w-6 h-6 text-red-700" />}
+           {review.isPass ? (
+             /* GREEN "Verified" panel - shows when document passed or was auto-corrected */
+             <>
+               <div className="p-4 bg-green-50 border-b border-green-100">
+                 <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                     <div className="p-2 rounded-full bg-green-100">
+                       <ShieldCheck className="w-6 h-6 text-green-700" />
+                     </div>
+                     <div>
+                       <h3 className="font-bold text-lg text-green-900">Document Verified</h3>
+                       <p className="text-sm text-green-700">
+                         {review.wasAutoCorrected
+                           ? 'Compliance check completed. Minor issues were automatically corrected.'
+                           : 'Automated compliance check passed.'}
+                       </p>
+                     </div>
+                   </div>
+                   {/* Collapsible toggle - only show if auto-corrected */}
+                   {review.wasAutoCorrected && review.originalImprovements && review.originalImprovements.length > 0 && (
+                     <button
+                       onClick={() => setShowCorrectionDetails(!showCorrectionDetails)}
+                       className="flex items-center gap-1 text-sm text-green-600 hover:text-green-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-green-100"
+                     >
+                       {showCorrectionDetails ? 'Hide' : 'View'} corrections
+                       {showCorrectionDetails
+                         ? <ChevronUp className="w-4 h-4" />
+                         : <ChevronDown className="w-4 h-4" />
+                       }
+                     </button>
+                   )}
                  </div>
-                 <div>
-                    <h3 className={`font-bold text-lg ${review.isPass ? 'text-green-900' : 'text-red-900'}`}>
-                       {review.isPass ? "Compliance Check: Passed" : "Compliance Check: Hallucinations Detected"}
-                    </h3>
-                    <p className="text-sm text-slate-600">Automated audit against invoice data & timeline to prevent hallucinations.</p>
-                 </div>
-              </div>
-           </div>
-           <div className="p-6">
-              <div className="flex gap-4 mb-6">
-                 <div className="w-1 bg-slate-200 rounded-full self-stretch"></div>
-                 <div>
-                    <p className="font-bold text-slate-900 mb-1 text-sm uppercase tracking-wider">Legal Assistant Critique</p>
-                    <p className="text-slate-700 italic text-lg font-serif leading-relaxed">"{review.critique}"</p>
-                 </div>
-              </div>
+               </div>
 
-              {review.improvements && review.improvements.length > 0 && (
-                 <div className="mb-8 pl-5">
-                    <p className="text-xs font-bold text-slate-500 uppercase mb-3">Required Corrections</p>
-                    <ul className="space-y-3">
+               {/* Collapsible details section - shows what was auto-corrected */}
+               {review.wasAutoCorrected && showCorrectionDetails && review.originalImprovements && (
+                 <div className="p-4 bg-slate-50 border-t border-slate-100 animate-fade-in">
+                   <p className="text-xs font-bold text-slate-500 uppercase mb-3">Auto-Corrections Applied</p>
+                   <ul className="space-y-2">
+                     {review.originalImprovements.map((imp, i) => (
+                       <li key={i} className="flex items-start gap-3 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-200">
+                         <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                         <span className="line-through opacity-60 flex-1">{imp}</span>
+                         <span className="text-green-600 font-medium text-xs uppercase">Fixed</span>
+                       </li>
+                     ))}
+                   </ul>
+                 </div>
+               )}
+
+               {/* Action buttons for verified state */}
+               <div className="p-4 flex justify-end border-t border-slate-100">
+                 <Button
+                   onClick={onConfirm}
+                   variant="primary"
+                   icon={<CheckCircle className="w-4 h-4" />}
+                 >
+                   Approve & Finalize
+                 </Button>
+               </div>
+             </>
+           ) : (
+             /* RED warning panel - shows when auto-correction failed or wasn't possible */
+             <>
+               {(() => {
+                 const critique = (review.critique || '').toLowerCase();
+                 const isUnavailable =
+                   critique.includes('unavailable') || critique.includes('failed') || critique.includes('could not');
+
+                 return (
+                   <div className="p-4 flex items-center justify-between bg-red-50 border-b border-red-100">
+                     <div className="flex items-center gap-3">
+                       <div className="p-2 rounded-full bg-red-100">
+                         <AlertTriangle className="w-6 h-6 text-red-700" />
+                       </div>
+                       <div>
+                         <h3 className="font-bold text-lg text-red-900">
+                           {isUnavailable ? "Review Required" : "Issues Detected"}
+                         </h3>
+                         <p className="text-sm text-slate-600">
+                           {isUnavailable
+                             ? 'Automated review unavailable. Please verify the document manually.'
+                             : 'Some issues could not be auto-corrected. Please review and edit.'}
+                         </p>
+                       </div>
+                     </div>
+                   </div>
+                 );
+               })()}
+               <div className="p-6">
+                 <div className="flex gap-4 mb-6">
+                   <div className="w-1 bg-slate-200 rounded-full self-stretch"></div>
+                   <div>
+                     <p className="font-bold text-slate-900 mb-1 text-sm uppercase tracking-wider">Review Summary</p>
+                     <p className="text-slate-700 italic text-lg font-serif leading-relaxed">"{review.critique}"</p>
+                   </div>
+                 </div>
+
+                 {review.improvements && review.improvements.length > 0 && (
+                   <div className="mb-8 pl-5">
+                     <p className="text-xs font-bold text-slate-500 uppercase mb-3">Items to Address</p>
+                     <ul className="space-y-3">
                        {review.improvements.map((imp, i) => (
                          <li key={i} className="flex items-start gap-3 text-sm font-medium text-red-700 bg-red-50 p-3 rounded-lg border border-red-100">
-                            <XCircle className="w-5 h-5 text-red-500 shrink-0" />
-                            {imp}
+                           <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+                           {imp}
                          </li>
                        ))}
-                    </ul>
-                 </div>
-              )}
+                     </ul>
+                   </div>
+                 )}
 
-              <div className="flex flex-col md:flex-row justify-end gap-4 pt-6 border-t border-slate-100">
-                 <Button
-                    variant="secondary"
-                    onClick={onBack}
-                    className="px-6"
-                 >
-                   Back & Edit Data
-                 </Button>
-                 <Button
-                    onClick={() => {
-                      if (!review.isPass) {
-                        setShowOverrideConfirm(true);
-                      } else {
-                        onConfirm();
-                      }
-                    }}
-                    variant={review.isPass ? 'primary' : 'danger'}
-                    icon={<CheckCircle className="w-4 h-4" />}
-                 >
-                    {review.isPass ? "Approve & Finalize" : "Override & Approve"}
-                 </Button>
-              </div>
-           </div>
+                 <div className="flex flex-col md:flex-row justify-end gap-4 pt-6 border-t border-slate-100">
+                   <Button
+                     variant="secondary"
+                     onClick={onBack}
+                     className="px-6"
+                   >
+                     Back & Edit Data
+                   </Button>
+                   <Button
+                     onClick={() => setShowOverrideConfirm(true)}
+                     variant="danger"
+                     icon={<CheckCircle className="w-4 h-4" />}
+                   >
+                     Override & Approve
+                   </Button>
+                 </div>
+               </div>
+             </>
+           )}
         </div>
       )}
 
@@ -563,7 +649,7 @@ ${data.claimant.name}`);
   );
 
   return (
-    <div className="max-w-7xl mx-auto pb-20">
+    <div className="max-w-7xl mx-auto pb-10">
 
       {/* Actions Bar - Always at top, full width */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 no-print gap-4 px-4 md:px-0">
@@ -732,49 +818,60 @@ ${data.claimant.name}`);
         <div className="lg:col-span-8">
           {/* Zoom Controls */}
           <div className="flex items-center justify-center gap-2 mb-4 print:hidden">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleZoomOut}
-              disabled={zoom <= 50}
-              icon={<ZoomOut className="w-4 h-4" />}
-              iconOnly
-              aria-label="Zoom out"
-            />
-            <select
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-            >
-              {zoomLevels.map(level => (
-                <option key={level} value={level}>{level}%</option>
-              ))}
-            </select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleZoomIn}
-              disabled={zoom >= 150}
-              icon={<ZoomIn className="w-4 h-4" />}
-              iconOnly
-              aria-label="Zoom in"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleZoomReset}
-              icon={<Maximize2 className="w-4 h-4" />}
-              iconOnly
-              aria-label="Reset zoom"
-              className="ml-1"
-            />
+            {isTablet ? (
+              /* Tablet: Show auto-fit indicator */
+              <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-100 px-4 py-2 rounded-lg">
+                <Maximize2 className="w-4 h-4" />
+                <span>Auto-fit ({Math.round(effectiveZoom)}%)</span>
+              </div>
+            ) : (
+              /* Desktop/Mobile: Show manual zoom controls */
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleZoomOut}
+                  disabled={zoom <= 50}
+                  icon={<ZoomOut className="w-4 h-4" />}
+                  iconOnly
+                  aria-label="Zoom out"
+                />
+                <select
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                >
+                  {zoomLevels.map(level => (
+                    <option key={level} value={level}>{level}%</option>
+                  ))}
+                </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleZoomIn}
+                  disabled={zoom >= 150}
+                  icon={<ZoomIn className="w-4 h-4" />}
+                  iconOnly
+                  aria-label="Zoom in"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleZoomReset}
+                  icon={<Maximize2 className="w-4 h-4" />}
+                  iconOnly
+                  aria-label="Reset zoom"
+                  className="ml-1"
+                />
+              </>
+            )}
           </div>
 
           {/* Document Container */}
-          <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 overflow-auto">
+          <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 overflow-visible">
             <div
               className="w-full md:min-w-[210mm] mx-auto bg-white shadow-xl md:shadow-2xl transition-transform origin-top"
-              style={{ transform: `scale(${zoom / 100})` }}
+              style={{ transform: `scale(${effectiveZoom / 100})` }}
             >
               {isLetter ? (
                 <>
@@ -811,8 +908,21 @@ ${data.claimant.name}`);
                       </div>
 
                       <div className="mb-8">
-                        <p className="font-bold uppercase underline tracking-wide">LETTER BEFORE ACTION</p>
-                        <p className="font-bold mt-2">Re: Outstanding Balance of {getCurrencySymbol(data.invoice.currency)}{(data.invoice.totalAmount + data.interest.totalInterest + data.compensation).toFixed(2)}</p>
+                        <p className="font-bold uppercase underline tracking-wide">
+                          {data.selectedDocType === DocumentType.POLITE_CHASER
+                            ? 'PAYMENT REMINDER'
+                            : data.selectedDocType === DocumentType.LBA
+                            ? 'LETTER BEFORE ACTION'
+                            : data.selectedDocType === DocumentType.INSTALLMENT_AGREEMENT
+                            ? 'INSTALLMENT PAYMENT AGREEMENT'
+                            : 'LETTER BEFORE ACTION'}
+                        </p>
+                        <p className="font-bold mt-2">
+                          Re: Outstanding Balance of {getCurrencySymbol(data.invoice.currency)}
+                          {data.selectedDocType === DocumentType.POLITE_CHASER
+                            ? data.invoice.totalAmount.toFixed(2)
+                            : (data.invoice.totalAmount + data.interest.totalInterest + data.compensation).toFixed(2)}
+                        </p>
                       </div>
 
                       <div
@@ -1004,7 +1114,7 @@ ${data.claimant.name}`);
             <>
                {/* Show actual PDF instead of HTML recreation */}
                {isLoadingPreview ? (
-                  <div className="w-full min-h-[800px] flex flex-col items-center justify-center bg-slate-100 rounded-lg p-8">
+                  <div className="w-full min-h-[60vh] flex flex-col items-center justify-center bg-slate-100 rounded-lg p-8">
                     <Loader2 className="w-12 h-12 animate-spin text-slate-400 mb-4" />
                     <p className="text-slate-600 font-medium">Generating official N1 form preview...</p>
                     <p className="text-slate-400 text-sm mt-2">Using HMCTS template (N1_1224, Dec 2024)</p>
@@ -1039,12 +1149,12 @@ ${data.claimant.name}`);
                     )}
                     <iframe
                       src={pdfPreviewUrl}
-                      className="w-full h-[1200px] border-2 border-slate-300 rounded-lg shadow-xl bg-white"
+                      className="w-full h-[70vh] md:h-[80vh] border-2 border-slate-300 rounded-lg shadow-xl bg-white"
                       title="N1 Claim Form Preview"
                     />
                   </div>
                ) : (
-                  <div className="w-full min-h-[800px] flex flex-col items-center justify-center bg-red-50 rounded-lg border-2 border-red-200 p-8">
+                  <div className="w-full min-h-[60vh] flex flex-col items-center justify-center bg-red-50 rounded-lg border-2 border-red-200 p-8">
                     <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
                     <p className="text-red-700 font-bold mb-2">Failed to generate PDF preview</p>
                     {pdfError && (
