@@ -139,16 +139,36 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
            - Invoice Number: Look for patterns like "Invoice #123", "Inv No: 456", or reference numbers
        - Due Date: Calculate from payment terms if mentioned (e.g., "30 days" = Invoice Date + 30 days)
        - Payment Terms: Extract any mention of payment periods
-    5. Look for any other dates in the documents (emails, contracts) to build a mini-timeline of events.
-    5. CLASSIFY each document:
+    5. Extract Company Registration Numbers (Companies House format):
+       - Look for "Company No.", "Reg No.", "Registration:", "Companies House No."
+       - UK format: 8 digits, may have SC/NI/NC prefix for Scottish/NI companies
+       - Example: "12345678", "SC123456", "NI012345"
+    6. Look for any other dates in the documents (emails, contracts) to build a mini-timeline of events.
+    7. CLASSIFY each document:
        - Is it a "Signed Contract"?
        - Is it an "Unpaid Invoice"?
        - Is it a "Payment Chaser (Email/Letter)"?
        - Is it a "Text/Whatsapp Message"?
        - Is it a "Bank Statement"?
 
-    IMPORTANT: Extract the UK county for both claimant and defendant addresses (e.g., "Greater London", "West Midlands", "Surrey").
-    If county is not explicitly stated, infer it from the postcode (e.g., SW1A = Greater London, M1 = Greater Manchester).
+    UK ADDRESS PARSING RULES:
+    When extracting addresses, STRICTLY separate into these fields:
+    - address: ONLY the street-level address (flat/unit number, building name, street number and name)
+      Examples: "Flat 12, Riverside Apartments, 45 Thames Street", "10 Downing Street", "Unit 5, Enterprise Park"
+    - city: ONLY the town or city name (never include street names here!)
+      Examples: "Reading", "London", "Manchester", "Birmingham"
+    - county: UK ceremonial/administrative county
+      Examples: "Greater London", "Berkshire", "West Yorkshire", "Surrey"
+    - postcode: UK postcode format
+      Examples: "RG1 4QA", "SW1A 1AA", "M1 1AA"
+
+    COMMON MISTAKES TO AVOID:
+    - Do NOT put street names in the city field (e.g., "45 Thames Street" is NOT a city)
+    - Do NOT combine address and city into one field
+    - Building names (e.g., "Riverside Apartments") go in address, not city
+
+    IMPORTANT: Extract the UK county for both claimant and defendant addresses.
+    If county is not explicitly stated, infer it from the postcode (e.g., SW1A = Greater London, RG = Berkshire, M = Greater Manchester).
 
     Return valid JSON matching the schema.
     Use 'Individual' or 'Business' based on entities (Ltd/Plc = Business).
@@ -170,21 +190,23 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
         properties: {
           claimant: { type: Type.OBJECT, properties: {
               name: { type: Type.STRING },
-              address: { type: Type.STRING },
-              city: { type: Type.STRING },
-              county: { type: Type.STRING, description: "UK county (e.g. Greater London, West Yorkshire)" },
-              postcode: { type: Type.STRING },
+              address: { type: Type.STRING, description: "Street address ONLY (flat/unit, building name, street number/name). Example: 'Flat 12, Riverside Apartments, 45 Thames Street'" },
+              city: { type: Type.STRING, description: "Town or city name ONLY (NOT street names). Examples: 'Reading', 'London', 'Manchester'" },
+              county: { type: Type.STRING, description: "UK ceremonial county (e.g. Greater London, Berkshire, West Yorkshire)" },
+              postcode: { type: Type.STRING, description: "UK postcode format (e.g. 'RG1 4QA', 'SW1A 1AA')" },
               type: { type: Type.STRING, enum: ['Individual', 'Business'] },
-              contactName: { type: Type.STRING, description: "Contact person name if mentioned (e.g., 'John Smith, Managing Director')" }
+              contactName: { type: Type.STRING, description: "Contact person name if mentioned (e.g., 'John Smith, Managing Director')" },
+              companyNumber: { type: Type.STRING, description: "Companies House registration number (8 digits, may have SC/NI prefix)" }
           } },
           defendant: { type: Type.OBJECT, properties: {
               name: { type: Type.STRING },
-              address: { type: Type.STRING },
-              city: { type: Type.STRING },
-              county: { type: Type.STRING, description: "UK county (e.g. Greater London, West Yorkshire)" },
-              postcode: { type: Type.STRING },
+              address: { type: Type.STRING, description: "Street address ONLY (flat/unit, building name, street number/name). Example: 'Unit 5, Enterprise Park, High Street'" },
+              city: { type: Type.STRING, description: "Town or city name ONLY (NOT street names). Examples: 'Birmingham', 'Leeds', 'Bristol'" },
+              county: { type: Type.STRING, description: "UK ceremonial county (e.g. Greater London, Berkshire, West Yorkshire)" },
+              postcode: { type: Type.STRING, description: "UK postcode format (e.g. 'B1 1AA', 'LS1 1AB')" },
               type: { type: Type.STRING, enum: ['Individual', 'Business'] },
-              contactName: { type: Type.STRING, description: "Contact person name if mentioned (e.g., 'John Smith, Managing Director')" }
+              contactName: { type: Type.STRING, description: "Contact person name if mentioned (e.g., 'John Smith, Managing Director')" },
+              companyNumber: { type: Type.STRING, description: "Companies House registration number (8 digits, may have SC/NI prefix)" }
           } },
           invoice: { type: Type.OBJECT, properties: {
               invoiceNumber: { type: Type.STRING, description: "Extract invoice/reference number from patterns like 'Invoice #123', 'Inv-456', standalone numbers" },
@@ -402,8 +424,29 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
   // Invoice number is optional - not all debts have formal invoice numbers
   if (!data.invoice.dateIssued) missingFields.push("Invoice/service date");
 
+  // Due date is required to calculate interest - if we have invoice date, we can suggest a default
+  const hasDueDate = data.invoice.dueDate && data.invoice.dueDate.trim();
+  const hasInvoiceDate = data.invoice.dateIssued && data.invoice.dateIssued.trim();
+  let dueDateSuggestion = '';
+  if (!hasDueDate) {
+    missingFields.push("Invoice due date (when payment was due)");
+    if (hasInvoiceDate) {
+      // Calculate 30 days from invoice date as typical suggestion
+      try {
+        const invoiceDate = new Date(data.invoice.dateIssued);
+        if (!isNaN(invoiceDate.getTime())) {
+          const suggestedDueDate = new Date(invoiceDate);
+          suggestedDueDate.setDate(suggestedDueDate.getDate() + 30);
+          dueDateSuggestion = ` (Typically 30 days after invoice = ${suggestedDueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })})`;
+        }
+      } catch (e) {
+        // Ignore date parsing errors
+      }
+    }
+  }
+
   const missingFieldsNote = missingFields.length > 0
-    ? `\n\nCRITICAL MISSING DATA (MUST collect before proceeding):\n${missingFields.map(f => `- ${f}`).join('\n')}\n\nYou MUST ask for these specific fields. The court requires complete addresses including county for the defendant.`
+    ? `\n\nCRITICAL MISSING DATA (MUST collect before proceeding):\n${missingFields.map(f => `- ${f}`).join('\n')}${dueDateSuggestion}\n\nYou MUST ask for these specific fields. The court requires complete addresses including county for the defendant. For due dates, if the user is unsure, suggest the standard 30-day payment terms from invoice date.`
     : '\n\nAll required defendant address and invoice fields are complete.';
 
   // Count questions already asked to prevent going in circles
@@ -456,11 +499,13 @@ YOUR GOAL: Gather enough information to recommend the RIGHT document for their s
 DOCUMENT DETERMINATION QUESTIONS (ask these to determine the right document):
 1. "Have you already started a court claim (filed Form N1)?" → If YES, ask if they need to request judgment or respond to a defence.
 2. "If you have a judgment, do you need to enforce it?" → Not yet supported, but good context.
-3. "Have you sent any payment reminders or chaser emails to the debtor?" → If NO, suggest starting with a Polite Reminder
-4. "Have you sent a formal Letter Before Action (LBA) giving them 30 days to pay?" → Critical for court claim eligibility
-5. "If you sent an LBA, when was it sent? Has 30 days passed?" → If YES to both, they can file Form N1
+3. "How many payment reminders or chaser emails have you sent to the debtor?" → IMPORTANT: If 0, suggest Polite Reminder. If 1+, they should send LBA next (not another reminder).
+4. "Have you sent a formal Letter Before Action (LBA) giving them 14-30 days to pay?" → Critical for court claim eligibility. An LBA is different from a reminder - it's a formal legal letter.
+5. "If you sent an LBA, when was it sent? Has the response period passed?" → If YES to both, they can file Form N1
 6. "Has the debtor acknowledged the debt or responded to your communications?" → Affects case strength
 7. "Would you prefer to negotiate a settlement or proceed to court?" → If settlement, suggest Part 36 Offer
+
+ESCALATION RULE: If the user has ALREADY sent 1 or more reminders/chasers but NOT sent an LBA, ALWAYS recommend LBA (not another reminder). Sending multiple reminders without a formal LBA is ineffective - they need to escalate.
 
 COMMUNICATION PROTOCOL:
 1. **ONE QUESTION AT A TIME:** Ask only ONE question per response. Never ask multiple questions in the same message - this feels overwhelming. Wait for the user's answer before asking the next question.
@@ -470,8 +515,9 @@ COMMUNICATION PROTOCOL:
 5. **ACKNOWLEDGMENT:** Briefly acknowledge the user's answer before asking the next question.
 6. **NO REPETITION:** Do NOT ask the same question twice. Track what you've learned.
 7. **CLOSING:** When you have enough info, conclude with your recommendation:
-   - If NO LBA sent: "Based on our conversation, I recommend starting with a Letter Before Action. This is required before court proceedings. Click 'Continue' to review the details."
-   - If LBA sent 30+ days ago: "Since you've already sent an LBA and 30 days have passed, you're ready to file a court claim (Form N1). Click 'Continue' to review the details."
+   - If NO reminders sent: "I recommend starting with a polite payment reminder. Click 'Continue' to review the details."
+   - If 1+ reminders sent but NO LBA: "Since you've already sent reminders without payment, I recommend escalating to a formal Letter Before Action. This is the required pre-court step. Click 'Continue' to review the details."
+   - If LBA sent 14+ days ago: "Since you've already sent an LBA and the response period has passed, you're ready to file a court claim (Form N1). Click 'Continue' to review the details."
    - If already filed claim (no response): "If the defendant hasn't responded within 14 days of service, you can request a Default Judgment (Form N225). Click 'Continue' to proceed."
    - If already filed claim (admission): "If the defendant admitted the debt, you can request Judgment on Admission (Form N225A). Click 'Continue' to proceed."
    - If user wants settlement: "Given your preference to settle, I recommend a Part 36 Settlement Offer. Click 'Continue' to review the details."
@@ -568,17 +614,33 @@ export const extractDataFromChat = async (
     EXTRACTION RULES:
     1. Extract ANY addresses, postcodes, UK counties mentioned (e.g., "Greater London", "Surrey", "West Yorkshire")
     2. Extract invoice numbers, amounts, dates if mentioned
-    3. Extract timeline events: When was invoice sent? When did they chase? When was LBA sent?
-    4. ONLY extract data that was EXPLICITLY mentioned in the chat - do not invent data
-    5. If data is already in "CURRENT" fields and matches what was said, don't re-extract it
+    3. Extract DUE DATE specifically:
+       - Look for "due on", "payment due", "due date was", "terms of 30 days", etc.
+       - If user mentions payment terms (e.g., "30 days", "net 30"), calculate due date from invoice date
+       - If user says "was due on [date]" or "payment should have been by [date]", extract that date
+    4. Extract timeline events: When was invoice sent? When did they chase? When was LBA sent?
+    5. ONLY extract data that was EXPLICITLY mentioned in the chat - do not invent data
+    6. If data is already in "CURRENT" fields and matches what was said, don't re-extract it
+
+    UK ADDRESS PARSING - STRICTLY separate into:
+    - address: Street address ONLY (flat/unit, building name, street number/name)
+      Example: "Flat 12, Riverside Apartments, 45 Thames Street"
+    - city: Town/city name ONLY (never street names!)
+      Example: "Reading", "London", "Manchester"
+    - county: UK ceremonial county
+      Example: "Greater London", "Berkshire", "West Yorkshire"
+    - postcode: UK format (e.g., "RG1 4QA")
+    COMMON MISTAKE TO AVOID: Do NOT put street names in the city field!
 
     DOCUMENT RECOMMENDATION RULES:
     Based on the conversation, determine which document the user should generate:
-    - If user mentioned sending a Letter Before Action (LBA, formal letter, final demand letter) AND it's been 30+ days → Recommend FORM_N1
-    - If user mentioned chasing/reminders but NO formal LBA yet → Recommend LBA
+    - If user mentioned sending a Letter Before Action (LBA, formal letter, final demand letter) AND 14+ days have passed → Recommend FORM_N1
+    - If user mentioned sending ANY reminders/chasers (1 or more) but NO formal LBA yet → Recommend LBA (NEVER recommend another reminder if they've already sent reminders)
     - If user wants to settle/negotiate → Recommend PART_36_OFFER
-    - If no prior contact mentioned → Recommend POLITE_CHASER
+    - If NO prior contact mentioned at all → Recommend POLITE_CHASER
     - Default if unclear → Recommend LBA (pre-action protocol requirement)
+
+    IMPORTANT ESCALATION RULE: If the user says they've "already sent reminders", "chased multiple times", "sent emails", or similar - they should NOT get another Polite Reminder. They need to escalate to LBA.
 
     Return JSON with:
     - claimant: Any NEW address fields mentioned (county especially important)
@@ -603,10 +665,10 @@ export const extractDataFromChat = async (
                   type: Type.OBJECT,
                   properties: {
                     name: { type: Type.STRING },
-                    address: { type: Type.STRING, description: "Street address only (e.g. '10 Downing Street'), no city or postcode" },
-              city: { type: Type.STRING },
-              county: { type: Type.STRING },
-              postcode: { type: Type.STRING },
+                    address: { type: Type.STRING, description: "Street address ONLY (flat/unit, building, street number/name). Example: 'Flat 12, Riverside Apartments, 45 Thames Street'" },
+              city: { type: Type.STRING, description: "Town/city name ONLY (NOT street names). Examples: 'Reading', 'London'" },
+              county: { type: Type.STRING, description: "UK ceremonial county (e.g. 'Greater London', 'Berkshire')" },
+              postcode: { type: Type.STRING, description: "UK postcode format (e.g. 'RG1 4QA')" },
               email: { type: Type.STRING },
               phone: { type: Type.STRING }
             }
@@ -615,10 +677,10 @@ export const extractDataFromChat = async (
                   type: Type.OBJECT,
                   properties: {
                     name: { type: Type.STRING },
-                    address: { type: Type.STRING, description: "Street address only (e.g. '10 Downing Street'), no city or postcode" },
-              city: { type: Type.STRING },
-              county: { type: Type.STRING },
-              postcode: { type: Type.STRING },
+                    address: { type: Type.STRING, description: "Street address ONLY (flat/unit, building, street number/name). Example: 'Unit 5, Enterprise Park, High Street'" },
+              city: { type: Type.STRING, description: "Town/city name ONLY (NOT street names). Examples: 'Birmingham', 'Leeds'" },
+              county: { type: Type.STRING, description: "UK ceremonial county (e.g. 'West Midlands', 'West Yorkshire')" },
+              postcode: { type: Type.STRING, description: "UK postcode format (e.g. 'B1 1AA')" },
               email: { type: Type.STRING },
               phone: { type: Type.STRING }
             }
@@ -952,6 +1014,13 @@ export const analyzeClaimInput = async (
     - "due 15/11/2024" → "2024-11-15"
     - Always output dates in ISO format: YYYY-MM-DD
 
+    === COMPANY REGISTRATION EXTRACTION ===
+    Extract Companies House registration numbers when visible:
+    - Look for: "Company No.", "Reg No.", "Registration:", "Companies House"
+    - UK format: 8 digits, may have SC/NI/NC prefix for Scottish/NI companies
+    - Examples: "12345678", "SC123456", "NI012345"
+    - Add to defendant.companyNumber if found
+
     === CRITICAL ROLE IDENTIFICATION ===
     CAREFULLY identify who is the CLAIMANT vs DEFENDANT:
     - CLAIMANT = The creditor = The person/company OWED money = The one who provided goods/services
@@ -964,15 +1033,28 @@ export const analyzeClaimInput = async (
     NEVER say "Work completed by [Defendant]" - the defendant RECEIVED the work, they didn't do it.
     Use phrases like: "Services provided TO [Defendant]" or "[Defendant] received services from Claimant"
 
-    === CRITICAL ADDRESS PARSING ===
-    When extracting addresses from full address strings:
-    - SPLIT addresses into separate fields: address (street only), city, postcode
-    - Example: "10 Downing Street, London, SW1A 1AA" should become:
-      address: "10 Downing Street"
-      city: "London"
-      postcode: "SW1A 1AA"
-    - Do NOT put the entire address in the address field
-    - Infer county from postcode if not stated explicitly
+    === CRITICAL UK ADDRESS PARSING ===
+    When extracting addresses, STRICTLY separate into these fields:
+    - address: Street address ONLY (flat/unit, building name, street number/name)
+      Examples: "Flat 12, Riverside Apartments, 45 Thames Street", "Unit 5, Enterprise Park, High Street"
+    - city: Town/city name ONLY (NEVER include street names!)
+      Examples: "Reading", "London", "Manchester", "Birmingham"
+    - county: UK ceremonial/administrative county
+      Examples: "Greater London", "Berkshire", "West Yorkshire", "Surrey"
+    - postcode: UK postcode format (e.g., "RG1 4QA", "SW1A 1AA")
+
+    COMPLEX ADDRESS EXAMPLE:
+    "Flat 12, Riverside Apartments, 45 Thames Street, Reading, RG1 4QA" should become:
+      address: "Flat 12, Riverside Apartments, 45 Thames Street"
+      city: "Reading"
+      postcode: "RG1 4QA"
+      county: "Berkshire" (inferred from RG postcode)
+
+    COMMON MISTAKES TO AVOID:
+    - Do NOT put street names in the city field (e.g., "45 Thames Street" is NOT a city)
+    - Do NOT combine address and city into one field
+    - Building names (e.g., "Riverside Apartments") belong in address, not city
+    - Infer county from postcode if not explicitly stated
 
     === CRITICAL VALIDATIONS ===
 
@@ -1015,10 +1097,29 @@ export const analyzeClaimInput = async (
     - If LBA sent, ask when and if 30+ days have passed
     - This determines whether to recommend LBA or Form N1
 
+    7. CORRECTIONS DETECTION (VERY IMPORTANT):
+    Detect when user is CORRECTING previously extracted data. Look for patterns like:
+    - "Actually, the city is Reading, not London"
+    - "No, the amount should be £5000"
+    - "I meant..."
+    - "That's wrong, it's..."
+    - "Not X, but Y"
+    - "The correct [field] is..."
+    - "Sorry, I meant..."
+    - "That's not right..."
+
+    When a correction is detected, return it in the 'corrections' array with:
+    - field: The field being corrected (e.g., "defendant.city", "invoice.totalAmount")
+    - oldValue: What the AI thought it was (if known)
+    - newValue: The corrected value from the user
+
+    This allows immediate data updates without waiting for conversation end.
+
     Return JSON with:
     - extractedData: Claim details (defendant, invoice, timeline ONLY - DO NOT include claimant) - leave empty if readyToExtract is false
     - followUpQuestions: Array with ONE clarifying question (the most important one) - ask questions one at a time
-    - acknowledgment: Brief acknowledgment of what you understood/found
+    - acknowledgment: Brief acknowledgment of what you understood/found (if correction detected, acknowledge the update)
+    - corrections: Array of field corrections detected in user's message (field, oldValue, newValue)
     - readyToProceed: true if we have enough info to continue (defendant name + invoice amount in GBP + defendant county)
     - readyToExtract: false if this is first file analysis AND there are ambiguities to clarify; true otherwise
     - confidence: 0-100 confidence in the data
@@ -1048,13 +1149,13 @@ export const analyzeClaimInput = async (
                   type: Type.OBJECT,
                   properties: {
                     name: { type: Type.STRING },
-                    address: { type: Type.STRING, description: "Street address only (e.g. '10 Downing Street'), no city or postcode" },
-                    city: { type: Type.STRING },
-                    county: { type: Type.STRING },
-                    postcode: { type: Type.STRING },
+                    address: { type: Type.STRING, description: "Street address ONLY (flat/unit, building, street). Example: 'Flat 12, Riverside Apartments, 45 Thames Street'" },
+                    city: { type: Type.STRING, description: "Town/city ONLY (NOT street names!). Examples: 'Reading', 'London', 'Birmingham'" },
+                    county: { type: Type.STRING, description: "UK ceremonial county. Examples: 'Greater London', 'Berkshire', 'West Midlands'" },
+                    postcode: { type: Type.STRING, description: "UK postcode format. Examples: 'RG1 4QA', 'SW1A 1AA'" },
                     email: { type: Type.STRING },
                     phone: { type: Type.STRING },
-                    companyNumber: { type: Type.STRING }
+                    companyNumber: { type: Type.STRING, description: "Companies House registration (8 digits, may have SC/NI prefix)" }
                   }
                 },
                 invoice: {
@@ -1084,6 +1185,18 @@ export const analyzeClaimInput = async (
             },
             followUpQuestions: { type: Type.ARRAY, items: { type: Type.STRING } },
             acknowledgment: { type: Type.STRING },
+            corrections: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  field: { type: Type.STRING, description: "Field path being corrected, e.g., 'defendant.city', 'invoice.totalAmount'" },
+                  oldValue: { type: Type.STRING, description: "Previous value (if known)" },
+                  newValue: { type: Type.STRING, description: "Corrected value from user" }
+                }
+              },
+              description: "Array of corrections detected in user message"
+            },
             readyToProceed: { type: Type.BOOLEAN },
             readyToExtract: { type: Type.BOOLEAN },
             confidence: { type: Type.NUMBER },
@@ -1170,6 +1283,7 @@ export const analyzeClaimInput = async (
       readyToProceed: result.readyToProceed || false,
       readyToExtract,
       confidence: result.confidence || 50,
+      corrections: result.corrections || [],  // User corrections detected in message
       currencyWarning: result.currencyWarning || false,
       countyMissing: countyStillMissing, // Use recalculated value
       limitationWarning: result.limitationWarning || false,

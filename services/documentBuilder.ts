@@ -477,18 +477,23 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
     }
 
     // 5. Check party names are present (with safety checks for empty/null names)
+    // NOTE: N1 forms use party descriptions (e.g., "an individual", "a company") instead of
+    // actual names per UK CPR Practice Direction 16, so we skip this check for N1 documents.
     const claimantName = data.claimant?.name?.trim() || '';
     const defendantName = data.defendant?.name?.trim() || '';
+    const isN1Form = data.selectedDocType === DocumentType.FORM_N1;
 
-    // Only check if we have valid non-empty names
-    if (claimantName && !document.toLowerCase().includes(claimantName.toLowerCase())) {
-      console.warn(`[validate] Claimant name "${claimantName}" not found in document`);
-      errors.push('Claimant name missing from document');
-    }
+    // Only check name presence for non-N1 documents (N1 uses descriptions, not names)
+    if (!isN1Form) {
+      if (claimantName && !document.toLowerCase().includes(claimantName.toLowerCase())) {
+        console.warn(`[validate] Claimant name "${claimantName}" not found in document`);
+        errors.push('Claimant name missing from document');
+      }
 
-    if (defendantName && !document.toLowerCase().includes(defendantName.toLowerCase())) {
-      console.warn(`[validate] Defendant name "${defendantName}" not found in document`);
-      errors.push('Defendant name missing from document');
+      if (defendantName && !document.toLowerCase().includes(defendantName.toLowerCase())) {
+        console.warn(`[validate] Defendant name "${defendantName}" not found in document`);
+        errors.push('Defendant name missing from document');
+      }
     }
 
     // Also check if names themselves are missing (sanity check)

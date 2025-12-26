@@ -4,6 +4,7 @@ import { ConversationEntry } from '../components/ConversationEntry';
 import { useClaimStore } from '../store/claimStore';
 import { Step, ChatMessage, ClaimState, ConversationMessage, TimelineEvent, Party, InvoiceData } from '../types';
 import { calculateInterest, calculateCompensation } from '../services/legalRules';
+import { normalizePaymentTerms } from '../constants';
 
 /**
  * Deep merge utility that only merges defined, non-empty values.
@@ -30,19 +31,26 @@ export const ConversationPage = () => {
   const navigate = useNavigate();
   const { userProfile, isLoading, claimData, createNewClaim, setClaimData, setStep } = useClaimStore();
 
-  // Guard: ensure we always have an active claim before intake
+  // Combined guard: ensure proper initialization sequence
+  // 1. Wait for loading to complete
+  // 2. If no user profile, redirect to onboarding
+  // 3. If profile exists but no claim, create one
+  // This prevents race conditions between navigation and claim creation
   React.useEffect(() => {
+    // Wait for auth/profile loading to complete
+    if (isLoading) return;
+
+    // If no profile, redirect to onboarding first
+    if (!userProfile) {
+      navigate('/onboarding');
+      return;
+    }
+
+    // Profile exists, ensure we have an active claim
     if (!claimData.id) {
       createNewClaim();
     }
-  }, [claimData.id, createNewClaim]);
-
-  // Guard: conversation intake requires onboarding/profile
-  React.useEffect(() => {
-    if (!isLoading && !userProfile) {
-      navigate('/onboarding');
-    }
-  }, [isLoading, userProfile, navigate]);
+  }, [isLoading, userProfile, claimData.id, createNewClaim, navigate]);
 
   const dedupeTimeline = (events: TimelineEvent[]): TimelineEvent[] => {
     const seen = new Set<string>();
@@ -76,7 +84,16 @@ export const ConversationPage = () => {
 
       // Use defensive merge to prevent overwriting valid data with undefined/empty values
       const mergedDefendant = mergeDefinedValues(prev.defendant, extractedData.defendant as Partial<Party>);
-      const mergedInvoice = mergeDefinedValues(prev.invoice, extractedData.invoice as Partial<InvoiceData>);
+
+      // Normalize payment terms from AI extraction (e.g., "30 days" -> "net_30")
+      const extractedInvoice = extractedData.invoice as Partial<InvoiceData> | undefined;
+      const normalizedPaymentTerms = normalizePaymentTerms(extractedInvoice?.paymentTerms as string);
+      const invoiceWithNormalizedTerms = extractedInvoice ? {
+        ...extractedInvoice,
+        paymentTerms: normalizedPaymentTerms || extractedInvoice.paymentTerms
+      } : undefined;
+
+      const mergedInvoice = mergeDefinedValues(prev.invoice, invoiceWithNormalizedTerms);
 
       // CRITICAL FIX: Never overwrite claimant data from AI extraction
       // Claimant is ALWAYS the logged-in user's profile data (set when claim was created)

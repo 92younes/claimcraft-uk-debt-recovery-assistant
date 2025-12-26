@@ -349,6 +349,13 @@ export interface ConversationMessage {
   attachments?: EvidenceFile[];
 }
 
+// Correction detected during conversation
+export interface DataCorrection {
+  field: string;      // Field path being corrected, e.g., 'defendant.city', 'invoice.totalAmount'
+  oldValue?: string;  // Previous value (if known)
+  newValue: string;   // Corrected value from user
+}
+
 export interface ClaimIntakeResult {
   extractedData?: Partial<ClaimState>;
   followUpQuestions?: string[];
@@ -356,6 +363,8 @@ export interface ClaimIntakeResult {
   acknowledgment?: string;
   readyToProceed?: boolean;
   readyToExtract?: boolean;
+  // Corrections detected in user message
+  corrections?: DataCorrection[];
   // Validation flags
   currencyWarning?: boolean;
   countyMissing?: boolean;

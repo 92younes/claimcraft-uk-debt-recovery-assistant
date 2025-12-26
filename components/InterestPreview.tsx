@@ -109,26 +109,27 @@ export const InterestPreview: React.FC<InterestPreviewProps> = ({
       </div>
 
       {/* Summary Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-slate-200">
-        <div className="flex items-start gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 pt-3 border-t border-slate-200">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
           <Info className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500 break-words">
             <p className="font-medium text-slate-600">Interest Rate: {applicableRate}% per annum</p>
-            <p>{rateLegalBasis}</p>
+            <p className="leading-relaxed">{rateLegalBasis}</p>
           </div>
         </div>
 
-        <div className="bg-teal-600 text-white rounded-lg px-4 py-2 text-center sm:text-right">
+        <div className="bg-teal-600 text-white rounded-lg px-4 py-2 text-center sm:text-right flex-shrink-0">
           <p className="text-xs text-teal-100">Total Claim Value</p>
           <p className="text-lg font-bold">£{totalClaimValue.toFixed(2)}</p>
         </div>
       </div>
 
-      {/* Warning if not overdue */}
+      {/* Info message if payment is not yet overdue */}
       {interestData.daysOverdue === 0 && (
-        <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs text-blue-700">
-            The payment is not yet overdue. Interest will begin accruing after the due date.
+        <div className="mt-3 p-3 bg-blue-100 border-2 border-blue-300 rounded-lg flex items-start gap-2">
+          <span className="text-blue-600 text-lg leading-none">ℹ️</span>
+          <p className="text-sm font-medium text-blue-800">
+            Payment is not yet overdue. Interest will begin accruing after the due date passes.
           </p>
         </div>
       )}

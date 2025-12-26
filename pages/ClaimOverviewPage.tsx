@@ -1,7 +1,8 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useEffect } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useClaimStore } from '../store/claimStore';
 import { Step, DocumentType, DeadlineStatus } from '../types';
+import { BreadcrumbItem } from '../components/Header';
 import {
   ArrowLeft,
   FileText,
@@ -41,9 +42,38 @@ const sanitizeDisplayValue = (value: string | undefined | null): string => {
 export const ClaimOverviewPage = () => {
   const navigate = useNavigate();
   const { claimData, deadlines, setStep, completeDeadline, deleteDeadline } = useClaimStore();
+  const { setHeaderConfig } = useOutletContext<{ setHeaderConfig?: (config: { breadcrumbs?: BreadcrumbItem[] }) => void }>() || {};
+
+  // Build claim title for breadcrumb
+  const claimTitle = useMemo(() => {
+    if (claimData.defendant?.name) {
+      return `vs ${claimData.defendant.name}`;
+    }
+    return claimData.id ? `Claim ${claimData.id.slice(0, 8).toUpperCase()}` : 'Claim Overview';
+  }, [claimData.defendant?.name, claimData.id]);
+
+  // Configure breadcrumbs
+  const breadcrumbItems: BreadcrumbItem[] = useMemo(() => [
+    {
+      label: 'Dashboard',
+      onClick: () => navigate('/dashboard')
+    },
+    {
+      label: claimTitle.length > 25 ? `${claimTitle.slice(0, 25)}...` : claimTitle,
+      isCurrentPage: true
+    }
+  ], [navigate, claimTitle]);
+
+  // Set breadcrumbs in header
+  useEffect(() => {
+    if (setHeaderConfig) {
+      setHeaderConfig({ breadcrumbs: breadcrumbItems });
+      return () => setHeaderConfig({});
+    }
+  }, [setHeaderConfig, breadcrumbItems]);
 
   // If no claim is loaded, redirect to dashboard
-  React.useEffect(() => {
+  useEffect(() => {
     if (!claimData.id) {
       navigate('/dashboard');
     }

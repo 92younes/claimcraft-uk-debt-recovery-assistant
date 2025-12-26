@@ -44,6 +44,47 @@ export const PAYMENT_TERMS_OPTIONS = [
   { value: 'custom', label: 'Custom', days: null }
 ] as const;
 
+/**
+ * Normalize payment terms string from AI extraction to enum value
+ * Handles variations like "30 days", "Net 30", "net_30", "net30", etc.
+ */
+export const normalizePaymentTerms = (terms: string | undefined): 'net_7' | 'net_14' | 'net_30' | 'net_60' | 'net_90' | 'custom' | undefined => {
+  if (!terms) return undefined;
+
+  const normalized = terms.toLowerCase().trim().replace(/\s+/g, ' ');
+
+  // Direct match for enum values
+  if (normalized === 'net_7' || normalized === 'net7') return 'net_7';
+  if (normalized === 'net_14' || normalized === 'net14') return 'net_14';
+  if (normalized === 'net_30' || normalized === 'net30') return 'net_30';
+  if (normalized === 'net_60' || normalized === 'net60') return 'net_60';
+  if (normalized === 'net_90' || normalized === 'net90') return 'net_90';
+
+  // Match variations like "7 days", "net 7 days", "due in 7 days"
+  const daysMatch = normalized.match(/(\d+)\s*days?/);
+  if (daysMatch) {
+    const days = parseInt(daysMatch[1], 10);
+    if (days <= 7) return 'net_7';
+    if (days <= 14) return 'net_14';
+    if (days <= 30) return 'net_30';
+    if (days <= 60) return 'net_60';
+    if (days <= 90) return 'net_90';
+    return 'custom';
+  }
+
+  // Match "due on receipt", "immediate", etc.
+  if (normalized.includes('receipt') || normalized.includes('immediate') || normalized.includes('upon')) {
+    return 'net_7'; // Treat as shortest term
+  }
+
+  // Match "end of month", "eom", etc.
+  if (normalized.includes('eom') || normalized.includes('end of month')) {
+    return 'net_30';
+  }
+
+  return undefined;
+};
+
 // Agreement/contract type options for invoice form
 export const AGREEMENT_TYPE_OPTIONS = [
   { value: 'goods', label: 'Sale of Goods' },

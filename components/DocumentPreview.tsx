@@ -488,7 +488,7 @@ ${data.claimant.name}`);
                    <p className="text-xs font-bold text-slate-500 uppercase mb-3">Auto-Corrections Applied</p>
                    <ul className="space-y-2">
                      {review.originalImprovements.map((imp, i) => (
-                       <li key={i} className="flex items-start gap-3 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-200">
+                       <li key={i} className="flex items-start gap-3 text-sm text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200">
                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                          <span className="line-through opacity-60 flex-1">{imp}</span>
                          <span className="text-green-600 font-medium text-xs uppercase">Fixed</span>
@@ -537,7 +537,7 @@ ${data.claimant.name}`);
                    </div>
                  );
                })()}
-               <div className="p-6">
+               <div className="p-4">
                  <div className="flex gap-4 mb-6">
                    <div className="w-1 bg-slate-200 rounded-full self-stretch"></div>
                    <div>
@@ -549,9 +549,9 @@ ${data.claimant.name}`);
                  {review.improvements && review.improvements.length > 0 && (
                    <div className="mb-8 pl-5">
                      <p className="text-xs font-bold text-slate-500 uppercase mb-3">Items to Address</p>
-                     <ul className="space-y-3">
+                     <ul className="space-y-2">
                        {review.improvements.map((imp, i) => (
-                         <li key={i} className="flex items-start gap-3 text-sm font-medium text-red-700 bg-red-50 p-3 rounded-lg border border-red-100">
+                         <li key={i} className="flex items-start gap-3 text-sm font-medium text-red-700 bg-red-50 p-2.5 rounded-lg border border-red-100">
                            <XCircle className="w-5 h-5 text-red-500 shrink-0" />
                            {imp}
                          </li>
@@ -594,34 +594,34 @@ ${data.claimant.name}`);
               <p className="text-sm text-amber-700">Best practice suggestions for a stronger claim</p>
             </div>
           </div>
-          <div className="p-5">
-            <ul className="space-y-3">
+          <div className="p-4">
+            <ul className="space-y-2">
               {isLetter && !data.signature && (
-                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-100">
                   <PenTool className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span><strong>Add your signature</strong> – Signed letters carry more weight and show genuine intent.</span>
                 </li>
               )}
               {data.timeline.length < 2 && (
-                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-100">
                   <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span><strong>Consider adding more timeline events</strong> – A detailed timeline strengthens your narrative.</span>
                 </li>
               )}
               {!data.invoice.dueDate && (
-                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-100">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span><strong>Specify the due date</strong> – A clear due date is important for calculating interest accurately.</span>
                 </li>
               )}
               {isLetter && data.evidence.length === 0 && (
-                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-100">
                   <FileText className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span><strong>Attach supporting evidence</strong> – Consider including the original invoice or contract.</span>
                 </li>
               )}
               {(data.signature || !isLetter) && data.timeline.length >= 2 && data.invoice.dueDate && (data.evidence.length > 0 || !isLetter) && (
-                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                <li className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-100">
                   <CheckCircle className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
                   <span><strong>Looking good!</strong> – Review the document carefully before finalizing.</span>
                 </li>
@@ -816,53 +816,53 @@ ${data.claimant.name}`);
 
         {/* Right Column: Document Preview (mobile: full width, desktop: 8 cols) */}
         <div className="lg:col-span-8">
-          {/* Zoom Controls */}
-          <div className="flex items-center justify-center gap-2 mb-4 print:hidden">
+          {/* Zoom Controls - Enhanced with labels and better visibility */}
+          <div className="flex items-center justify-center gap-3 mb-4 print:hidden bg-slate-100 rounded-xl p-3">
             {isTablet ? (
               /* Tablet: Show auto-fit indicator */
-              <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-100 px-4 py-2 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
                 <Maximize2 className="w-4 h-4" />
                 <span>Auto-fit ({Math.round(effectiveZoom)}%)</span>
               </div>
             ) : (
-              /* Desktop/Mobile: Show manual zoom controls */
+              /* Desktop/Mobile: Show enhanced manual zoom controls */
               <>
+                <span className="text-sm font-medium text-slate-600">Zoom:</span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={handleZoomOut}
                   disabled={zoom <= 50}
-                  icon={<ZoomOut className="w-4 h-4" />}
-                  iconOnly
+                  className="px-3 gap-1"
                   aria-label="Zoom out"
-                />
-                <select
-                  value={zoom}
-                  onChange={(e) => setZoom(Number(e.target.value))}
-                  className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                 >
-                  {zoomLevels.map(level => (
-                    <option key={level} value={level}>{level}%</option>
-                  ))}
-                </select>
+                  <ZoomOut className="w-4 h-4" />
+                  <span className="hidden sm:inline">-</span>
+                </Button>
+                <div className="flex items-center bg-white px-3 py-1.5 rounded-lg border border-slate-200 min-w-[60px] justify-center">
+                  <span className="text-sm font-bold text-slate-700">{zoom}%</span>
+                </div>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={handleZoomIn}
                   disabled={zoom >= 150}
-                  icon={<ZoomIn className="w-4 h-4" />}
-                  iconOnly
+                  className="px-3 gap-1"
                   aria-label="Zoom in"
-                />
+                >
+                  <ZoomIn className="w-4 h-4" />
+                  <span className="hidden sm:inline">+</span>
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleZoomReset}
-                  icon={<Maximize2 className="w-4 h-4" />}
-                  iconOnly
+                  className="ml-2 gap-1"
                   aria-label="Reset zoom"
-                  className="ml-1"
-                />
+                >
+                  <Maximize2 className="w-4 h-4" />
+                  <span className="hidden sm:inline text-xs">Reset</span>
+                </Button>
               </>
             )}
           </div>
@@ -891,19 +891,19 @@ ${data.claimant.name}`);
                         ) : null}
                       </div>
                     )}
-                    <div className="font-serif max-w-[90%] mx-auto pt-10">
+                    <div className="font-serif max-w-[90%] mx-auto pt-10 break-words">
                       <div className="text-right mb-12 leading-relaxed">
-                        <p className="font-bold text-lg">{data.claimant.name}</p>
-                        <p>{data.claimant.address}</p>
-                        <p>{data.claimant.city}</p>
+                        <p className="font-bold text-lg break-words">{data.claimant.name}</p>
+                        <p className="break-words">{data.claimant.address}</p>
+                        <p className="break-words">{data.claimant.city}</p>
                         <p>{data.claimant.postcode}</p>
                         <p className="mt-6 font-medium">{today}</p>
                       </div>
 
                       <div className="mb-12 leading-relaxed">
-                        <p className="font-bold">{data.defendant.name}</p>
-                        <p>{data.defendant.address}</p>
-                        <p>{data.defendant.city}</p>
+                        <p className="font-bold break-words">{data.defendant.name}</p>
+                        <p className="break-words">{data.defendant.address}</p>
+                        <p className="break-words">{data.defendant.city}</p>
                         <p>{data.defendant.postcode}</p>
                       </div>
 
@@ -983,7 +983,7 @@ ${data.claimant.name}`);
                
                {viewMode === 'info-sheet' && (
                   <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0">
-                     <div className="max-w-[90%] mx-auto pt-6 text-sm">
+                     <div className="max-w-[90%] mx-auto pt-6 text-sm break-words">
                         <h1 className="text-xl font-bold mb-6 text-center uppercase border-b-2 border-black pb-4">Annex 1: Information Sheet</h1>
                         <p className="font-bold text-justify mb-4">
                           You have received this information sheet because a claim for debt is being made against you. 
@@ -1039,7 +1039,7 @@ ${data.claimant.name}`);
 
                {viewMode === 'reply-form' && (
                   <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0">
-                     <div className="max-w-[95%] mx-auto pt-4 text-sm">
+                     <div className="max-w-[95%] mx-auto pt-4 text-sm break-words">
                         <h1 className="text-xl font-bold mb-4 text-center uppercase">Annex 2: Reply Form</h1>
                         <div className="bg-slate-50 border border-slate-300 p-3 mb-4 text-xs">
                            <strong>To the Debtor:</strong> Use this form to reply to the Letter Before Action. Return it to the Creditor within 30 days.
@@ -1148,7 +1148,7 @@ ${data.claimant.name}`);
                       </Button>
                     )}
                     <iframe
-                      src={pdfPreviewUrl}
+                      src={`${pdfPreviewUrl}#page=1`}
                       className="w-full h-[70vh] md:h-[80vh] border-2 border-slate-300 rounded-lg shadow-xl bg-white"
                       title="N1 Claim Form Preview"
                     />

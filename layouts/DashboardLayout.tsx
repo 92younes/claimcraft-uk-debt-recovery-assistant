@@ -9,6 +9,10 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 export const DashboardLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showLegalDisclaimer, setShowLegalDisclaimer] = useState(false);
+  const [headerConfig, setHeaderConfig] = useState<{
+    breadcrumbs?: React.ComponentProps<typeof Header>['breadcrumbs'];
+    rightContent?: React.ComponentProps<typeof Header>['rightContent'];
+  }>({});
   const navigate = useNavigate();
   const location = useLocation();
   const { userProfile, isLoading, isInitialized, deadlines } = useClaimStore();
@@ -81,10 +85,14 @@ export const DashboardLayout = () => {
       )}
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
+        <Header
+          onMenuClick={() => setIsMobileMenuOpen(true)}
+          breadcrumbs={headerConfig.breadcrumbs}
+          rightContent={headerConfig.rightContent}
+        />
         <main className="flex-1 overflow-y-auto p-3 md:p-4 scroll-smooth">
           <div className="max-w-7xl mx-auto">
-            <Outlet />
+            <Outlet context={{ setHeaderConfig }} />
           </div>
         </main>
       </div>

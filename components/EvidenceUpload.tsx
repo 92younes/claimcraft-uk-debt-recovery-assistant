@@ -19,6 +19,7 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [fileTypeError, setFileTypeError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const maxFileSizeBytes = 10 * 1024 * 1024; // 10MB, aligned with ConversationEntry
 
   useEffect(() => {
@@ -29,86 +30,124 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
     };
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFileTypeError(null);
-      if (errorTimeoutRef.current) {
-        clearTimeout(errorTimeoutRef.current);
-      }
+  // Shared file processing function for both input and drag-drop
+  const processFiles = (fileList: File[]) => {
+    setFileTypeError(null);
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+    }
 
-      const fileList = Array.from(e.target.files);
-      const validFiles: File[] = [];
-      const invalidTypeFiles: File[] = [];
-      const tooLargeFiles: File[] = [];
+    const validFiles: File[] = [];
+    const invalidTypeFiles: File[] = [];
+    const tooLargeFiles: File[] = [];
 
-      fileList.forEach((file: File) => {
-        if (file.size > maxFileSizeBytes) {
-          tooLargeFiles.push(file);
-          return;
-        }
-        if (validateFileType(file)) {
-          validFiles.push(file);
-        } else {
-          invalidTypeFiles.push(file);
-        }
-      });
-
-      const errorParts: string[] = [];
-      if (invalidTypeFiles.length > 0) {
-        errorParts.push(
-          invalidTypeFiles.length === 1
-            ? getFileTypeError(invalidTypeFiles[0])
-            : `${invalidTypeFiles.length} file(s) rejected (type): ${invalidTypeFiles.map(f => f.name).join(', ')}. Please upload a PDF or an image (JPG, PNG, GIF, WebP).`
-        );
-      }
-      if (tooLargeFiles.length > 0) {
-        errorParts.push(
-          tooLargeFiles.length === 1
-            ? `"${tooLargeFiles[0].name}" is too large. Maximum size is 10MB.`
-            : `${tooLargeFiles.length} file(s) rejected (size > 10MB): ${tooLargeFiles.map(f => f.name).join(', ')}.`
-        );
-      }
-      if (errorParts.length > 0) {
-        const errorMsg = errorParts.join(' ');
-        setFileTypeError(errorMsg);
-        errorTimeoutRef.current = setTimeout(() => setFileTypeError(null), 8000);
-      }
-
-      if (validFiles.length === 0) {
-        if (fileInputRef.current) fileInputRef.current.value = '';
+    fileList.forEach((file: File) => {
+      if (file.size > maxFileSizeBytes) {
+        tooLargeFiles.push(file);
         return;
       }
+      if (validateFileType(file)) {
+        validFiles.push(file);
+      } else {
+        invalidTypeFiles.push(file);
+      }
+    });
 
-      const newFiles: EvidenceFile[] = [];
-      let processedCount = 0;
+    const errorParts: string[] = [];
+    if (invalidTypeFiles.length > 0) {
+      errorParts.push(
+        invalidTypeFiles.length === 1
+          ? getFileTypeError(invalidTypeFiles[0])
+          : `${invalidTypeFiles.length} file(s) rejected (type): ${invalidTypeFiles.map(f => f.name).join(', ')}. Please upload a PDF or an image (JPG, PNG, GIF, WebP).`
+      );
+    }
+    if (tooLargeFiles.length > 0) {
+      errorParts.push(
+        tooLargeFiles.length === 1
+          ? `"${tooLargeFiles[0].name}" is too large. Maximum size is 10MB.`
+          : `${tooLargeFiles.length} file(s) rejected (size > 10MB): ${tooLargeFiles.map(f => f.name).join(', ')}.`
+      );
+    }
+    if (errorParts.length > 0) {
+      const errorMsg = errorParts.join(' ');
+      setFileTypeError(errorMsg);
+      errorTimeoutRef.current = setTimeout(() => setFileTypeError(null), 8000);
+    }
 
-      validFiles.forEach((item) => {
-        const file = item as File;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64String = (reader.result as string).split(',')[1];
-          newFiles.push({
-            name: file.name,
-            type: file.type,
-            data: base64String,
-            classification: undefined
-          });
-          processedCount++;
-          // IMPORTANT: only compare to the number of valid files (mixed selections are allowed)
-          if (processedCount === validFiles.length) {
-            onAddFiles(newFiles);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+    if (validFiles.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const newFiles: EvidenceFile[] = [];
+    let processedCount = 0;
+
+    validFiles.forEach((item) => {
+      const file = item as File;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = (reader.result as string).split(',')[1];
+        newFiles.push({
+          name: file.name,
+          type: file.type,
+          data: base64String,
+          classification: undefined
+        });
+        processedCount++;
+        // IMPORTANT: only compare to the number of valid files (mixed selections are allowed)
+        if (processedCount === validFiles.length) {
+          onAddFiles(newFiles);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFiles(Array.from(e.target.files));
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isProcessing) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (!isProcessing && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(Array.from(e.dataTransfer.files));
     }
   };
 
   return (
     <div className="animate-fade-in">
-      {/* Upload Zone - Dashed border style matching mockup */}
-      <label className="relative block cursor-pointer group mb-4">
+      {/* Upload Zone - Dashed border style with drag-and-drop support */}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => !isProcessing && fileInputRef.current?.click()}
+        className={`relative mb-4 py-6 px-4 border-2 border-dashed rounded-xl transition-all duration-200 flex flex-col items-center justify-center text-center cursor-pointer group ${
+          isDragging
+            ? 'border-teal-500 bg-teal-50 scale-[1.02] shadow-lg shadow-teal-500/10'
+            : 'border-slate-300 hover:border-teal-400 hover:bg-teal-50/30'
+        } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
         <input
           type="file"
           multiple
@@ -118,14 +157,24 @@ export const EvidenceUpload: React.FC<EvidenceUploadProps> = ({
           disabled={isProcessing}
           ref={fileInputRef}
         />
-        <div className="py-6 px-4 border-2 border-dashed border-slate-300 rounded-xl hover:border-teal-400 hover:bg-teal-50/30 transition-all duration-200 flex flex-col items-center justify-center text-center">
-          <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-105 transition-transform duration-200">
-            <Upload className="w-5 h-5 text-teal-500" />
-          </div>
-          <p className="font-medium text-slate-700">Click to upload documents</p>
-          <p className="text-xs text-slate-400 mt-1">PDF or images (JPG, PNG, GIF, WebP) • Max 10MB each</p>
-        </div>
-      </label>
+        {isDragging ? (
+          <>
+            <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mb-3 animate-pulse">
+              <Upload className="w-6 h-6 text-teal-600" />
+            </div>
+            <p className="font-semibold text-teal-700">Drop files here...</p>
+            <p className="text-xs text-teal-500 mt-1">Release to upload your documents</p>
+          </>
+        ) : (
+          <>
+            <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-105 transition-transform duration-200">
+              <Upload className="w-5 h-5 text-teal-500" />
+            </div>
+            <p className="font-medium text-slate-700">Click or drag files to upload</p>
+            <p className="text-xs text-slate-400 mt-1">PDF or images (JPG, PNG, GIF, WebP) • Max 10MB each</p>
+          </>
+        )}
+      </div>
 
       {/* File Type Error Message */}
       {fileTypeError && (

@@ -138,7 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                <button
                   type="button"
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
-                  className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 transition-all duration-200 mb-6 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+                  className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-150 mb-6 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                >
                    <LayoutDashboard className="w-4 h-4" />
                    <span className="text-sm font-medium">Back to Dashboard</span>
@@ -166,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                <button
                   type="button"
                   onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
-                  className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 transition-all duration-200 mb-6 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+                  className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-150 mb-6 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                >
                    <LayoutDashboard className="w-4 h-4" />
                    <span className="text-sm font-medium">Back to Dashboard</span>

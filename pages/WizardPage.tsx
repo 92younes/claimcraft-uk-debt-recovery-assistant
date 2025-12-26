@@ -13,9 +13,10 @@ import { ProgressStepsCompact } from '../components/ui/ProgressSteps';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { HorizontalTabs, Tab } from '../components/ui/HorizontalTabs';
 import { InterestPreview } from '../components/InterestPreview';
+import { Shimmer } from '../components/ui/Shimmer';
 import { Header, BreadcrumbItem } from '../components/Header';
 import { Step, DocumentType, EvidenceFile } from '../types';
-import { ArrowRight, ArrowLeft, FileText, Save, Calendar, Mail, MessageSquareText, Scale, X, CheckCircle, Check, Clock, User, Building2, Receipt, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowRight, ArrowLeft, FileText, Save, Calendar, Mail, MessageSquareText, Scale, X, CheckCircle, Check, Clock, User, Building2, Receipt, Sparkles, AlertCircle, ChevronRight } from 'lucide-react';
 import { DocumentBuilder } from '../services/documentBuilder';
 import { generateDeadlinesForDocument } from '../services/deadlineService';
 import { getTodayISO } from '../utils/formatters';
@@ -52,7 +53,9 @@ export const WizardPage = () => {
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
   const [activeVerifyTab, setActiveVerifyTab] = useState<string>('claimant');
   const [newFilesCount, setNewFilesCount] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const isGeneratingRef = useRef(false);
+  const deadlinesGeneratedForDocRef = useRef<string | null>(null); // Track deadlines generated for which doc type
 
   // Handler for adding evidence files (tracks new file count for analysis prompt)
   const handleAddEvidenceFiles = (newFiles: EvidenceFile[]) => {
@@ -178,6 +181,8 @@ export const WizardPage = () => {
   }, [claimData, hasUnsavedChanges, saveClaim]);
 
   // Auto-generate document when entering Draft/Review (best-effort)
+  // IMPORTANT: deadlines is intentionally excluded from deps to prevent infinite loop
+  // when addDeadline modifies the deadlines array during generation
   useEffect(() => {
     const isDocStep = step === Step.DRAFT || step === Step.REVIEW;
     if (!isDocStep) return;
@@ -206,24 +211,30 @@ export const WizardPage = () => {
         setClaimData(prev => ({ ...prev, generated }));
         toast.success('Document generated successfully');
 
-        // Auto-generate deadlines based on document type
-        const newDeadlines = generateDeadlinesForDocument(
-          claimData.selectedDocType,
-          claimData,
-          deadlines,
-          claimData.lbaSentDate || undefined
-        );
+        // Auto-generate deadlines based on document type (only if not already generated for this doc type)
+        // Using ref to prevent re-generation when deadlines array changes
+        const docTypeKey = `${claimData.id}-${claimData.selectedDocType}`;
+        if (deadlinesGeneratedForDocRef.current !== docTypeKey) {
+          deadlinesGeneratedForDocRef.current = docTypeKey;
 
-        // Add each deadline to the store
-        for (const deadline of newDeadlines) {
-          await addDeadline(deadline);
-        }
+          const newDeadlines = generateDeadlinesForDocument(
+            claimData.selectedDocType,
+            claimData,
+            deadlines,
+            claimData.lbaSentDate || undefined
+          );
 
-        if (newDeadlines.length > 0) {
-          toast.success(`${newDeadlines.length} deadline(s) added to calendar`, {
-            icon: '📅',
-            duration: 4000
-          });
+          // Add each deadline to the store
+          for (const deadline of newDeadlines) {
+            await addDeadline(deadline);
+          }
+
+          if (newDeadlines.length > 0) {
+            toast.success(`${newDeadlines.length} deadline(s) added to calendar`, {
+              icon: '📅',
+              duration: 4000
+            });
+          }
         }
       } catch (e: any) {
         if (cancelled) return;
@@ -245,13 +256,14 @@ export const WizardPage = () => {
   }, [
     step,
     claimData.selectedDocType,
+    claimData.id,
     // Note: claimData.generated?.documentType intentionally excluded to prevent re-triggering when doc is generated
+    // Note: deadlines intentionally excluded to prevent infinite loop when addDeadline is called
     claimData.claimant.name,
     claimData.defendant.name,
     claimData.invoice.totalAmount,
     claimData.lbaSentDate,
     userProfile,
-    deadlines,
     setClaimData,
     addDeadline
   ]);
@@ -286,7 +298,20 @@ export const WizardPage = () => {
   };
 
   const handleNextStep = (nextStep: Step) => {
+    // Reset stuck generation ref if transitioning to Draft/Review and not actively generating
+    // This fixes the issue where the button doesn't respond after a failed/cancelled generation
+    if ((nextStep === Step.DRAFT || nextStep === Step.REVIEW) && isGeneratingRef.current && !isGeneratingDocument) {
+      console.warn('[WizardPage] Resetting stuck isGeneratingRef');
+      isGeneratingRef.current = false;
+    }
+    // Show brief loading state for visual feedback during step transitions
+    setIsTransitioning(true);
+    // Use requestAnimationFrame to ensure smooth transition
+    requestAnimationFrame(() => {
       setStep(nextStep);
+      // Clear transition state after a brief moment
+      setTimeout(() => setIsTransitioning(false), 150);
+    });
   };
 
   const handleManualEntry = () => {
@@ -319,7 +344,9 @@ export const WizardPage = () => {
     }
 
     const today = getTodayISO();
-    const lbaSentDate = claimData.lbaSentDate || today;
+    // Try to get LBA date from timeline events first, then fall back to existing value or today
+    const lbaTimelineEvent = claimData.timeline.find(e => e.type === 'lba_sent');
+    const lbaSentDate = lbaTimelineEvent?.date || claimData.lbaSentDate || today;
 
     setClaimData(prev => ({
       ...prev,
@@ -565,6 +592,33 @@ export const WizardPage = () => {
       }
     };
 
+    // Helper to infer payment terms from dates (reverse calculation)
+    const inferPaymentTermsFromDates = (dateIssued: string, dueDate: string): string | null => {
+      if (!dateIssued || !dueDate) return null;
+      const issue = new Date(dateIssued);
+      const due = new Date(dueDate);
+      const daysDiff = Math.round((due.getTime() - issue.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysDiff <= 7) return 'net_7';
+      if (daysDiff <= 14) return 'net_14';
+      if (daysDiff <= 30) return 'net_30';
+      if (daysDiff <= 60) return 'net_60';
+      if (daysDiff <= 90) return 'net_90';
+      return 'custom';
+    };
+
+    // Handler for due date changes with auto-fill
+    const handleDueDateChange = (dueDate: string) => {
+      updateInvoiceDetails('dueDate', dueDate);
+      // Auto-fill payment terms if not already set
+      if (!claimData.invoice.paymentTerms && claimData.invoice.dateIssued) {
+        const inferredTerms = inferPaymentTermsFromDates(claimData.invoice.dateIssued, dueDate);
+        if (inferredTerms) {
+          updateInvoiceDetails('paymentTerms', inferredTerms);
+        }
+      }
+    };
+
     return (
       <div className="space-y-6 animate-fade-in py-4 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
         <Button
@@ -715,7 +769,7 @@ export const WizardPage = () => {
                 <DateInput
                   label="Due Date"
                   value={claimData.invoice.dueDate || ''}
-                  onChange={(value) => updateInvoiceDetails('dueDate', value)}
+                  onChange={handleDueDateChange}
                   min={claimData.invoice.dateIssued}
                   helpText="When payment was due"
                 />
@@ -755,7 +809,7 @@ export const WizardPage = () => {
 
           {/* Timeline Tab */}
           {activeVerifyTab === 'timeline' && (
-            <div className="animate-fade-in">
+            <div id="timeline-section" className="animate-fade-in">
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="w-5 h-5 text-teal-600" />
                 <span className="font-bold text-slate-900">Claim Timeline</span>
@@ -840,6 +894,17 @@ export const WizardPage = () => {
                 <div className="flex items-center gap-2 text-amber-600 text-sm">
                   <Clock className="w-4 h-4" />
                   <span>Timeline is empty - consider adding key events</span>
+                  <button
+                    onClick={() => {
+                      setActiveVerifyTab('timeline');
+                      setTimeout(() => {
+                        document.getElementById('timeline-section')?.scrollIntoView({ behavior: 'smooth' });
+                      }, 100);
+                    }}
+                    className="ml-2 px-2 py-1 text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                  >
+                    + Add Event
+                  </button>
                 </div>
               )}
             </div>
@@ -910,12 +975,43 @@ export const WizardPage = () => {
                 </p>
                 {recommendation.warnings.length > 0 && (
                   <div className="space-y-1 mt-2">
-                    {recommendation.warnings.map((warning, idx) => (
-                      <p key={idx} className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded-lg flex items-center gap-1.5">
-                        <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                        {warning}
-                      </p>
-                    ))}
+                    {recommendation.warnings.map((warning, idx) => {
+                      // Determine action based on warning content
+                      const getWarningAction = (w: string): (() => void) | null => {
+                        const lowerWarning = w.toLowerCase();
+                        if (lowerWarning.includes('14-day') || lowerWarning.includes('timeline')) {
+                          return () => { handleNextStep(Step.VERIFY); setTimeout(() => setActiveVerifyTab('timeline'), 100); };
+                        }
+                        if (lowerWarning.includes('claim strength') || lowerWarning.includes('invoice')) {
+                          return () => { handleNextStep(Step.VERIFY); setTimeout(() => setActiveVerifyTab('invoice'), 100); };
+                        }
+                        if (lowerWarning.includes('claimant') || lowerWarning.includes('your details')) {
+                          return () => { handleNextStep(Step.VERIFY); setTimeout(() => setActiveVerifyTab('claimant'), 100); };
+                        }
+                        if (lowerWarning.includes('debtor') || lowerWarning.includes('defendant')) {
+                          return () => { handleNextStep(Step.VERIFY); setTimeout(() => setActiveVerifyTab('debtor'), 100); };
+                        }
+                        return null; // Info-only warnings (e.g., "small claims limit")
+                      };
+                      const action = getWarningAction(warning);
+
+                      return action ? (
+                        <button
+                          key={idx}
+                          onClick={action}
+                          className="text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg flex items-center gap-1.5 w-full text-left transition-colors cursor-pointer"
+                        >
+                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                          <span className="flex-1">{warning}</span>
+                          <ChevronRight className="w-3 h-3 flex-shrink-0 text-amber-500" />
+                        </button>
+                      ) : (
+                        <p key={idx} className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded-lg flex items-center gap-1.5">
+                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                          {warning}
+                        </p>
+                      );
+                    })}
                   </div>
                 )}
                 {recommendation.alternatives.length > 0 && (
@@ -1077,6 +1173,46 @@ export const WizardPage = () => {
              )}
           </div>
 
+          {/* Deadline Summary Panel - shows after document generation */}
+          {claimData.generated && deadlines.filter(d => d.claimId === claimData.id).length > 0 && (
+            <div className="mt-4 p-4 bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-teal-600" />
+                  <span className="font-bold text-teal-800">Upcoming Deadlines</span>
+                </div>
+                <button
+                  onClick={() => navigate('/calendar')}
+                  className="text-xs text-teal-600 hover:text-teal-800 underline"
+                >
+                  View Calendar
+                </button>
+              </div>
+              <div className="space-y-2">
+                {deadlines
+                  .filter(d => d.claimId === claimData.id && d.status === 'pending')
+                  .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+                  .slice(0, 3)
+                  .map((deadline) => (
+                    <div
+                      key={deadline.id}
+                      className="flex items-center justify-between bg-white p-3 rounded-lg border border-teal-100"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">{deadline.title}</p>
+                        <p className="text-xs text-slate-500">{deadline.description}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-teal-700">
+                          {new Date(deadline.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {/* Fallback navigation to Review step */}
           {claimData.generated && !isFinalized && (
             <div className="mt-6 flex justify-end">
@@ -1207,7 +1343,7 @@ export const WizardPage = () => {
         </div>
 
         {/* Legacy Save Indicator (for compatibility) */}
-        <div className={`fixed top-16 right-4 z-50 bg-white/80 backdrop-blur border border-slate-200 px-3 py-1.5 rounded-full shadow-sm text-xs font-medium text-teal-700 flex items-center gap-1.5 transition-opacity duration-300 ${showSaveIndicator ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`fixed top-16 right-4 z-50 bg-white/80 backdrop-blur border border-slate-200 px-3 py-1.5 rounded-full shadow-sm text-xs font-medium text-teal-700 flex items-center gap-1.5 transition-opacity duration-300 ${showSaveIndicator ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <Save className="w-3 h-3" /> Saved
         </div>
 
@@ -1234,11 +1370,21 @@ export const WizardPage = () => {
           variant="danger"
         />
 
-        {step === Step.EVIDENCE && renderEvidenceStep()}
-        {step === Step.VERIFY && renderVerifyStep()}
-        {step === Step.STRATEGY && renderStrategyStep()}
-        {step === Step.DRAFT && renderDraftStep()}
-        {step === Step.REVIEW && renderReviewStep()}
+        {/* Step content with transition effect */}
+        <div className={`transition-opacity duration-150 ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
+          {isTransitioning ? (
+            <div className="py-8">
+              <Shimmer variant="card" />
+            </div>
+          ) : (
+            <>
+              {step === Step.EVIDENCE && renderEvidenceStep()}
+              {step === Step.VERIFY && renderVerifyStep()}
+              {step === Step.STRATEGY && renderStrategyStep()}
+              {step === Step.DRAFT && renderDraftStep()}
+              {step === Step.REVIEW && renderReviewStep()}
+            </>
+          )}</div>
     </div>
   );
 };

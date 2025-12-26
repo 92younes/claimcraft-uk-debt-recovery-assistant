@@ -11,7 +11,7 @@ import { Upload, MessageSquare, Send, X, Loader2, ArrowRight, FileText, Sparkles
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { analyzeClaimInput, extractDataFromChat } from '../services/geminiService';
-import { ClaimState, EvidenceFile, UserProfile, ClaimIntakeResult, ConversationMessage, ChatMessage, DocumentType, Party } from '../types';
+import { ClaimState, EvidenceFile, UserProfile, ClaimIntakeResult, ConversationMessage, ChatMessage, DocumentType, Party, DataCorrection } from '../types';
 import { profileToClaimantParty } from '../services/userProfileService';
 import { getCurrencySymbol } from '../utils/calculations';
 import { AlertTriangle, Scale, Calendar, MapPin, User } from 'lucide-react';
@@ -106,7 +106,49 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
   const [profilePartyData, setProfilePartyData] = useState<Party | null>(null);
   const [chatPartyData, setChatPartyData] = useState<Partial<Party> | null>(null);
 
+  // Applied corrections state (for visual feedback)
+  const [appliedCorrections, setAppliedCorrections] = useState<DataCorrection[]>([]);
+
   // Helpers
+
+  /**
+   * Apply corrections to extracted data
+   * Returns the updated data with corrections applied
+   */
+  const applyCorrections = (
+    data: Partial<ClaimState> | null,
+    corrections: DataCorrection[]
+  ): Partial<ClaimState> | null => {
+    if (!corrections || corrections.length === 0) return data;
+    if (!data) data = {};
+
+    const updated = JSON.parse(JSON.stringify(data)); // Deep clone
+
+    for (const correction of corrections) {
+      const { field, newValue } = correction;
+      const parts = field.split('.');
+
+      if (parts.length === 2) {
+        const [section, key] = parts;
+        // Ensure the section exists
+        if (!updated[section]) updated[section] = {};
+
+        // Handle numeric values for certain fields
+        if (key === 'totalAmount' && section === 'invoice') {
+          const parsed = parseFloat(newValue.replace(/[£$,\s]/g, ''));
+          if (!isNaN(parsed)) {
+            updated[section][key] = parsed;
+          }
+        } else {
+          updated[section][key] = newValue;
+        }
+
+        console.log(`[ConversationEntry] Applied correction: ${field} = "${newValue}"`);
+      }
+    }
+
+    return updated;
+  };
   const buildChatHistory = (msgs: ConversationMessage[]): ChatMessage[] => {
     return msgs.map((msg, idx) => ({
       id: `msg-${idx}-${msg.timestamp}`,
@@ -305,6 +347,21 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
         setExtractedData(nextExtractedData);
       }
       // If readyToExtract is false, don't update extractedData - wait for user to answer clarifying questions
+
+      // Apply any corrections detected in user message
+      if (result.corrections && result.corrections.length > 0) {
+        console.log('[ConversationEntry] Corrections detected:', result.corrections);
+        nextExtractedData = applyCorrections(nextExtractedData, result.corrections);
+        setExtractedData(nextExtractedData);
+        setAppliedCorrections(prev => [...prev, ...result.corrections]);
+
+        // Add corrected fields to newly extracted fields for preview highlighting
+        const correctedFields = result.corrections.map(c => c.field);
+        setNewlyExtractedFields(prev => [...new Set([...prev, ...correctedFields])]);
+
+        // Expand preview panel to show the correction
+        setPreviewPanelCollapsed(false);
+      }
 
       // Build AI response
       let aiContent = result.acknowledgment;
