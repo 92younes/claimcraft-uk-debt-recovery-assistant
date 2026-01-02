@@ -45,7 +45,7 @@ interface DataPreviewPanelProps {
 /**
  * Field status indicator
  */
-type FieldStatus = 'extracted' | 'missing' | 'edited' | 'new';
+type FieldStatus = 'extracted' | 'missing' | 'edited' | 'new' | 'optional';
 
 interface FieldDisplayProps {
   label: string;
@@ -68,6 +68,7 @@ const FieldDisplay: React.FC<FieldDisplayProps> = ({
   editable
 }) => {
   const hasValue = value !== undefined && value !== null && value !== '';
+  const isOptional = status === 'optional';
 
   return (
     <div
@@ -82,6 +83,8 @@ const FieldDisplay: React.FC<FieldDisplayProps> = ({
         <span className="text-xs text-slate-500">{label}</span>
         {hasValue ? (
           <p className="text-sm text-slate-900 font-medium truncate">{String(value)}</p>
+        ) : isOptional ? (
+          <p className="text-sm text-slate-300 italic">—</p>
         ) : (
           <p className="text-sm text-slate-400 italic">Not captured</p>
         )}
@@ -89,6 +92,8 @@ const FieldDisplay: React.FC<FieldDisplayProps> = ({
       <div className="flex items-center gap-1">
         {hasValue ? (
           <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
+        ) : isOptional ? (
+          <span className="w-3.5 h-3.5" /> // Empty space for alignment
         ) : (
           <AlertCircle className="w-3.5 h-3.5 text-slate-300" />
         )}
@@ -241,7 +246,7 @@ export const DataPreviewPanel: React.FC<DataPreviewPanelProps> = ({
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <span className="text-xs text-slate-500">{progress}%</span>
+            <span className="text-xs text-slate-500">{progress === 100 ? 'Required complete' : `${progress}%`}</span>
             <ChevronDown className="w-4 h-4 text-slate-400" />
           </div>
         </div>
@@ -268,7 +273,7 @@ export const DataPreviewPanel: React.FC<DataPreviewPanelProps> = ({
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <span className="text-xs font-medium text-slate-600">{progress}%</span>
+            <span className="text-xs font-medium text-slate-600">{progress === 100 ? 'Required complete' : `${progress}%`}</span>
           </div>
           <ChevronUp className="w-4 h-4 text-slate-400" />
         </div>
@@ -303,10 +308,10 @@ export const DataPreviewPanel: React.FC<DataPreviewPanelProps> = ({
             onEdit={() => onEdit?.('defendant.address', data.defendant?.address || '')}
           />
           <FieldDisplay
-            label="City"
+            label="City (Optional)"
             value={data.defendant?.city}
             icon={<Building className="w-3.5 h-3.5" />}
-            status={data.defendant?.city ? 'extracted' : 'missing'}
+            status={data.defendant?.city ? 'extracted' : 'optional'}
             fieldKey="defendant.city"
             isNew={isFieldNew('defendant.city')}
             editable={editable}
@@ -321,19 +326,19 @@ export const DataPreviewPanel: React.FC<DataPreviewPanelProps> = ({
             editable={editable}
           />
           <FieldDisplay
-            label="Email"
+            label="Email (Optional)"
             value={data.defendant?.email}
             icon={<Mail className="w-3.5 h-3.5" />}
-            status={data.defendant?.email ? 'extracted' : 'missing'}
+            status={data.defendant?.email ? 'extracted' : 'optional'}
             fieldKey="defendant.email"
             isNew={isFieldNew('defendant.email')}
             editable={editable}
           />
           <FieldDisplay
-            label="Phone"
+            label="Phone (Optional)"
             value={data.defendant?.phone}
             icon={<Phone className="w-3.5 h-3.5" />}
-            status={data.defendant?.phone ? 'extracted' : 'missing'}
+            status={data.defendant?.phone ? 'extracted' : 'optional'}
             fieldKey="defendant.phone"
             isNew={isFieldNew('defendant.phone')}
             editable={editable}
@@ -356,10 +361,10 @@ export const DataPreviewPanel: React.FC<DataPreviewPanelProps> = ({
             editable={editable}
           />
           <FieldDisplay
-            label="Invoice Number"
+            label="Invoice Number (Optional)"
             value={data.invoice?.invoiceNumber}
             icon={<FileText className="w-3.5 h-3.5" />}
-            status={data.invoice?.invoiceNumber ? 'extracted' : 'missing'}
+            status={data.invoice?.invoiceNumber ? 'extracted' : 'optional'}
             fieldKey="invoice.invoiceNumber"
             isNew={isFieldNew('invoice.invoiceNumber')}
             editable={editable}

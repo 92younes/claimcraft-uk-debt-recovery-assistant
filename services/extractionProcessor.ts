@@ -48,6 +48,7 @@ export interface RawExtractionInput {
   /** Defendant/debtor information */
   defendant?: {
     name?: string;
+    contactName?: string;
     address?: string;
     city?: string;
     county?: string;
@@ -60,6 +61,7 @@ export interface RawExtractionInput {
   /** Claimant/creditor information */
   claimant?: {
     name?: string;
+    contactName?: string;
     address?: string;
     city?: string;
     county?: string;
@@ -172,6 +174,12 @@ const processParty = (
     tracked.email = createExtractedField(raw.email.toLowerCase().trim(), source, confidence, {
       sourceReference,
       rawValue: raw.email
+    });
+  }
+
+  if (raw.contactName) {
+    tracked.contactName = createExtractedField(raw.contactName.trim(), source, confidence, {
+      sourceReference
     });
   }
 

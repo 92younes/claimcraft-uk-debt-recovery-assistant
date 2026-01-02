@@ -29,7 +29,8 @@ export const DashboardPage = () => {
     deadlines,
     accountingConnection,
     setAccountingConnection,
-    completeDeadline
+    completeDeadline,
+    isLoading
   } = useClaimStore();
 
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -96,6 +97,7 @@ export const DashboardPage = () => {
     <>
       <Dashboard
         claims={dashboardClaims}
+        isLoading={isLoading}
         onCreateNew={handleStartNewClaim}
         onResume={handleResumeClaim}
         onDelete={handleDeleteClaim}

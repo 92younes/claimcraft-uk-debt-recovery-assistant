@@ -1,8 +1,11 @@
 import React from 'react';
 import { Menu, Home, ChevronRight } from 'lucide-react';
+import { Tooltip } from './ui/Tooltip';
 
 export interface BreadcrumbItem {
   label: string;
+  /** Full label to show on hover if truncated */
+  fullLabel?: string;
   onClick?: () => void;
   isCurrentPage?: boolean;
 }
@@ -37,21 +40,25 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, breadcrumbs, rightC
                      <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
                    )}
                    {item.onClick && !item.isCurrentPage ? (
-                     <button
-                       onClick={item.onClick}
-                       className="text-sm text-slate-600 hover:text-teal-600 transition-colors flex items-center gap-1.5 truncate"
-                     >
-                       {index === 0 && <Home className="w-3.5 h-3.5 flex-shrink-0" />}
-                       <span className="truncate">{item.label}</span>
-                     </button>
+                     <Tooltip content={item.fullLabel || item.label} position="bottom">
+                       <button
+                         onClick={() => { console.log('[DEBUG] Breadcrumb clicked:', item.label); item.onClick?.(); }}
+                         className="text-sm text-slate-600 hover:text-teal-600 transition-colors flex items-center gap-1.5 truncate"
+                       >
+                         {index === 0 && <Home className="w-3.5 h-3.5 flex-shrink-0" />}
+                         <span className="truncate">{item.label}</span>
+                       </button>
+                     </Tooltip>
                    ) : (
-                     <span
-                       className={`text-sm truncate ${item.isCurrentPage ? 'text-slate-900 font-medium' : 'text-slate-600'}`}
-                       aria-current={item.isCurrentPage ? 'page' : undefined}
-                     >
-                       {index === 0 && <Home className="w-3.5 h-3.5 inline mr-1.5" />}
-                       {item.label}
-                     </span>
+                     <Tooltip content={item.fullLabel || item.label} position="bottom">
+                       <span
+                         className={`text-sm truncate ${item.isCurrentPage ? 'text-slate-900 font-medium' : 'text-slate-600'}`}
+                         aria-current={item.isCurrentPage ? 'page' : undefined}
+                       >
+                         {index === 0 && <Home className="w-3.5 h-3.5 inline mr-1.5" />}
+                         {item.label}
+                       </span>
+                     </Tooltip>
                    )}
                  </div>
                ))}

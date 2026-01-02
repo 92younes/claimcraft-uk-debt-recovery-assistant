@@ -68,6 +68,7 @@ export const createExtractedField = <T>(
  */
 export interface TrackedParty {
   name?: ExtractedField<string>;
+  contactName?: ExtractedField<string>;
   address?: ExtractedField<string>;
   city?: ExtractedField<string>;
   county?: ExtractedField<string>;
@@ -145,6 +146,7 @@ export const toParty = (tracked: TrackedParty | undefined): Partial<Party> => {
 
   return {
     name: tracked.name?.value,
+    contactName: tracked.contactName?.value,
     address: tracked.address?.value,
     city: tracked.city?.value,
     county: tracked.county?.value,

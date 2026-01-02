@@ -219,6 +219,8 @@ export interface ClaimState {
   lbaSentDate?: string;
   // User document selection flag
   userSelectedDocType?: boolean;
+  // Option to include accrued interest in polite reminder (defaults to false)
+  includeInterestInReminder?: boolean;
   // Interest verification
   hasVerifiedInterest?: boolean;
   // Payment tracking

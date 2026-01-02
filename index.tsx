@@ -61,7 +61,7 @@ const getResumeStep = (claim: ClaimState): Step => {
 // Calendar page wrapper that connects to store
 const CalendarPage = () => {
   const navigate = useNavigate();
-  const { deadlines, dashboardClaims, completeDeadline, deleteDeadline, addDeadline, setClaimData, setStep } = useClaimStore();
+  const { deadlines, dashboardClaims, completeDeadline, deleteDeadline, addDeadline, setClaimData, setStep, isLoading } = useClaimStore();
   const [showAddDeadlineModal, setShowAddDeadlineModal] = React.useState(false);
 
   const handleSaveDeadline = async (title: string, description: string, date: string, priority: DeadlinePriority, claimId: string) => {
@@ -86,6 +86,7 @@ const CalendarPage = () => {
       <CalendarView
         deadlines={deadlines}
         claims={dashboardClaims}
+        isLoading={isLoading}
         onBack={() => navigate('/dashboard')}
         onDeadlineClick={(deadline) => {
           // Navigate to the claim overview for the associated deadline

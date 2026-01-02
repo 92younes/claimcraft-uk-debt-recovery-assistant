@@ -16,6 +16,7 @@ import {
   Settings
 } from 'lucide-react';
 import { Button } from './ui/Button';
+import { Tooltip } from './ui/Tooltip';
 import { UserProfile } from '../types';
 
 interface SidebarProps {
@@ -71,24 +72,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
 
       {/* User Profile */}
       <div className="px-5 pb-5 flex-shrink-0">
-         <button
-           type="button"
-           className="w-full text-left flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
-           onClick={() => { onSettingsClick?.(); onCloseMobile?.(); }}
-           aria-label={userProfile ? 'Open profile settings' : 'Open settings'}
-           title={userProfile?.businessName || 'Guest User'}
-         >
-            <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-               {userProfile?.businessName?.charAt(0).toUpperCase() || 'G'}
-            </div>
-            <div className="overflow-hidden flex-1 min-w-0">
-               <p className="text-sm font-medium text-slate-900 truncate" title={userProfile?.businessName || 'Guest User'}>
-                  {userProfile?.businessName || 'Guest User'}
-               </p>
-               <p className="text-xs text-slate-400 truncate">{userProfile ? 'Click to edit profile' : 'Local Session'}</p>
-            </div>
-            {userProfile && <Settings className="w-4 h-4 text-slate-400 flex-shrink-0" />}
-         </button>
+         <Tooltip content={userProfile?.businessName || 'Guest User'} position="right">
+           <button
+             type="button"
+             className="w-full text-left flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+             onClick={() => { onSettingsClick?.(); onCloseMobile?.(); }}
+             aria-label={userProfile ? 'Open profile settings' : 'Open settings'}
+           >
+              <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                 {userProfile?.businessName?.charAt(0).toUpperCase() || 'G'}
+              </div>
+              <div className="overflow-hidden flex-1 min-w-0">
+                 <p className="text-sm font-medium text-slate-900 truncate">
+                    {userProfile?.businessName || 'Guest User'}
+                 </p>
+                 <p className="text-xs text-slate-400 truncate">{userProfile ? 'Click to edit profile' : 'Local Session'}</p>
+              </div>
+              {userProfile && <Settings className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+           </button>
+         </Tooltip>
       </div>
 
       {/* Navigation */}
@@ -98,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                 <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-3 tracking-wider">Main Menu</p>
                 <button
                   type="button"
-                  onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
+                  onClick={() => { console.log('[DEBUG] Dashboard nav clicked from:', view); onDashboardClick(); onCloseMobile?.(); }}
                   className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
                     view === 'dashboard'
                       ? 'bg-teal-100 text-teal-800 border-l-4 border-teal-500 shadow-sm'
@@ -137,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                {/* Back to Dashboard */}
                <button
                   type="button"
-                  onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
+                  onClick={() => { console.log('[DEBUG] Back to Dashboard clicked from: conversation'); onDashboardClick(); onCloseMobile?.(); }}
                   className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-150 mb-6 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                >
                    <LayoutDashboard className="w-4 h-4" />
@@ -165,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                {/* Back to Dashboard */}
                <button
                   type="button"
-                  onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
+                  onClick={() => { console.log('[DEBUG] Back to Dashboard clicked from: wizard'); onDashboardClick(); onCloseMobile?.(); }}
                   className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-150 mb-6 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                >
                    <LayoutDashboard className="w-4 h-4" />

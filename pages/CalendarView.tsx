@@ -31,6 +31,7 @@ type ViewMode = 'month' | 'week' | 'day';
 interface CalendarViewProps {
   deadlines: Deadline[];
   claims: ClaimState[];
+  isLoading?: boolean;
   onBack: () => void;
   onDeadlineClick: (deadline: Deadline) => void;
   onCompleteDeadline: (deadline: Deadline) => void;
@@ -76,6 +77,7 @@ const formatDateKey = (date: Date): string => {
 export const CalendarView: React.FC<CalendarViewProps> = ({
   deadlines,
   claims,
+  isLoading = false,
   onBack,
   onDeadlineClick,
   onCompleteDeadline,
@@ -681,22 +683,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
           {/* Stats cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <div className="bg-white rounded-xl p-4 border border-slate-200">
-              <p className="text-slate-500 text-sm">Pending</p>
-              <p className="text-2xl font-bold text-slate-900">{stats.pending}</p>
-            </div>
-            <div className={`rounded-xl p-4 border ${stats.overdue > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
-              <p className={`text-sm ${stats.overdue > 0 ? 'text-red-600' : 'text-slate-500'}`}>Overdue</p>
-              <p className={`text-2xl font-bold ${stats.overdue > 0 ? 'text-red-600' : 'text-slate-900'}`}>{stats.overdue}</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 border border-slate-200">
-              <p className="text-slate-500 text-sm">Due This Week</p>
-              <p className="text-2xl font-bold text-slate-900">{stats.dueThisWeek}</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 border border-slate-200">
-              <p className="text-slate-500 text-sm">Completed</p>
-              <p className="text-2xl font-bold text-teal-600">{stats.completed}</p>
-            </div>
+            {isLoading ? (
+              <>
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <div key={idx} className="bg-white rounded-xl p-4 border border-slate-200">
+                    <div className="shimmer h-4 bg-slate-200 rounded w-16 mb-2"></div>
+                    <div className="shimmer h-7 bg-slate-200 rounded w-10"></div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="bg-white rounded-xl p-4 border border-slate-200">
+                  <p className="text-slate-500 text-sm">Pending</p>
+                  <p className="text-2xl font-bold text-slate-900">{stats.pending}</p>
+                </div>
+                <div className={`rounded-xl p-4 border ${stats.overdue > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+                  <p className={`text-sm ${stats.overdue > 0 ? 'text-red-600' : 'text-slate-500'}`}>Overdue</p>
+                  <p className={`text-2xl font-bold ${stats.overdue > 0 ? 'text-red-600' : 'text-slate-900'}`}>{stats.overdue}</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 border border-slate-200">
+                  <p className="text-slate-500 text-sm">Due This Week</p>
+                  <p className="text-2xl font-bold text-slate-900">{stats.dueThisWeek}</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 border border-slate-200">
+                  <p className="text-slate-500 text-sm">Completed</p>
+                  <p className="text-2xl font-bold text-teal-600">{stats.completed}</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -808,9 +823,37 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         )}
 
         {/* Calendar view */}
-        {viewMode === 'month' && renderMonthView()}
-        {viewMode === 'week' && renderWeekView()}
-        {viewMode === 'day' && renderDayView()}
+        {isLoading ? (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            {/* Skeleton Day headers */}
+            <div className="grid grid-cols-7 bg-slate-50">
+              {Array.from({ length: 7 }).map((_, idx) => (
+                <div key={idx} className="px-2 py-3 flex justify-center">
+                  <div className="shimmer h-4 bg-slate-200 rounded w-8"></div>
+                </div>
+              ))}
+            </div>
+            {/* Skeleton calendar grid */}
+            {Array.from({ length: 5 }).map((_, weekIdx) => (
+              <div key={weekIdx} className="grid grid-cols-7 border-t border-slate-100">
+                {Array.from({ length: 7 }).map((_, dayIdx) => (
+                  <div key={dayIdx} className="min-h-[100px] p-2 border-r border-slate-100 last:border-r-0">
+                    <div className="shimmer h-5 w-5 bg-slate-200 rounded-full mb-2"></div>
+                    {weekIdx % 2 === 0 && dayIdx % 3 === 1 && (
+                      <div className="shimmer h-5 bg-slate-200 rounded w-full mb-1"></div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            {viewMode === 'month' && renderMonthView()}
+            {viewMode === 'week' && renderWeekView()}
+            {viewMode === 'day' && renderDayView()}
+          </>
+        )}
 
         {/* Empty state */}
         {filteredDeadlines.length === 0 && (

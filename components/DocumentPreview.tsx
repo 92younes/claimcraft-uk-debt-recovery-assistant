@@ -27,6 +27,41 @@ interface DocumentPreviewProps {
   onFinish?: () => void; // Navigate to dashboard after completion
 }
 
+// Legal context explanations for document validation issues
+// Helps users understand WHY each issue matters legally
+const ISSUE_LEGAL_CONTEXT: { pattern: RegExp; context: string }[] = [
+  {
+    pattern: /amount|£\d+|principal|total/i,
+    context: 'Pre-Action Protocol requires accurate statement of claim value including all elements (principal, interest, and fees).'
+  },
+  {
+    pattern: /interest|late payment|1998|citation/i,
+    context: 'The Late Payment of Commercial Debts (Interest) Act 1998 must be cited for B2B statutory interest claims.'
+  },
+  {
+    pattern: /days?\s*(overdue|calculation)|period/i,
+    context: 'Interest calculation must use the correct number of days for accurate claim value.'
+  },
+  {
+    pattern: /party|claimant|defendant|name/i,
+    context: 'CPR requires clear identification of all parties to proceedings.'
+  },
+  {
+    pattern: /case\s*law|citation|fabricat|hallucinat/i,
+    context: 'SRA rules require accurate legal citations - fabricated case law is professional misconduct.'
+  }
+];
+
+// Match an issue to its legal context explanation
+const getLegalContext = (issue: string): string | null => {
+  for (const { pattern, context } of ISSUE_LEGAL_CONTEXT) {
+    if (pattern.test(issue)) {
+      return context;
+    }
+  }
+  return null;
+};
+
 // A4 Page Wrapper with optional Watermark and Overflow Handling
 // Mobile responsive: full width on small screens, A4 width on larger screens
 // Tablet: scales to fit viewport without horizontal scroll
@@ -74,6 +109,23 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingPaymentAction, setPendingPaymentAction] = useState<'download' | 'send' | null>(null);
 
+  // Download dropdown state
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    if (showDownloadMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDownloadMenu]);
+
   // Content editing state
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
@@ -110,10 +162,62 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   ];
 
   const handlePrint = () => {
-    window.print();
+    // Get document content - try letter preview first, then N1 form container
+    const printContent = document.getElementById('letter-preview-container')?.innerHTML
+      || document.getElementById('n1-form-container')?.innerHTML;
+
+    if (!printContent) {
+      // Fallback to window.print() if no container found
+      window.print();
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      window.print(); // Fallback if popup blocked
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print Document</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              font-family: 'Times New Roman', Times, serif;
+              padding: 20mm;
+              margin: 0;
+              line-height: 1.5;
+              color: #000;
+            }
+            @page { margin: 15mm; }
+            h1, h2, h3, h4 { font-family: Arial, sans-serif; }
+            .font-bold, strong, b { font-weight: bold; }
+            .text-center { text-align: center; }
+            .border { border: 1px solid #000; }
+            table { border-collapse: collapse; width: 100%; }
+            td, th { padding: 8px; vertical-align: top; }
+          </style>
+        </head>
+        <body>${printContent}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
   };
 
-  const handleDownloadPDF = async () => {
+  // Download type for dropdown options
+  type DownloadType = 'main' | 'bundle' | 'info-sheet' | 'reply-form';
+  const [pendingDownloadType, setPendingDownloadType] = useState<DownloadType>('main');
+
+  const handleDownloadPDF = async (downloadType: DownloadType = 'main') => {
+    setShowDownloadMenu(false);
+    setPendingDownloadType(downloadType);
+
     // Payment gate: show modal if unpaid
     if (!data.hasPaid) {
       setPendingPaymentAction('download');
@@ -128,10 +232,73 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     }
 
     // For other documents (letters), proceed directly
-    await performDownload();
+    await performDownload(downloadType);
   };
 
-  const performDownload = async () => {
+  const performDownload = async (downloadType: DownloadType = 'main') => {
+    // Handle specific attachment downloads for letters
+    if (isLetter && (downloadType === 'info-sheet' || downloadType === 'reply-form')) {
+      setIsGeneratingPdf(true);
+      try {
+        const containerId = downloadType === 'info-sheet' ? 'info-sheet-container' : 'reply-form-container';
+        // Temporarily switch view mode to render the attachment
+        const previousMode = viewMode;
+        setViewMode(downloadType);
+        // Wait for render
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const blob = await generateLetterPDF(containerId);
+        const filename = downloadType === 'info-sheet'
+          ? `Pre_Action_Protocol_Info_Sheet.pdf`
+          : `Reply_Form_${data.invoice.invoiceNumber}.pdf`;
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Restore view mode
+        setViewMode(previousMode);
+      } catch (error) {
+        console.error(`Failed to generate ${downloadType} PDF`, error);
+        setPdfError(error instanceof Error ? error.message : 'Unknown error');
+      } finally {
+        setIsGeneratingPdf(false);
+      }
+      return;
+    }
+
+    // Handle bundle download (main + attachments)
+    if (isLetter && downloadType === 'bundle') {
+      setIsGeneratingPdf(true);
+      try {
+        // For now, just download the main letter
+        // TODO: Implement generateBundledPDF in pdfGenerator.ts
+        const blob = await generateLetterPDF('letter-preview-container');
+        const docTypeSlug = data.selectedDocType.replace(/\s+/g, '_');
+        const filename = `${docTypeSlug}_Bundle_${data.invoice.invoiceNumber || 'document'}.pdf`;
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Failed to generate bundle PDF", error);
+        setPdfError(error instanceof Error ? error.message : 'Unknown error');
+      } finally {
+        setIsGeneratingPdf(false);
+      }
+      return;
+    }
+
     // Check if this document type has an official PDF form
     const pdfFormTypes = [
       DocumentType.FORM_N1,
@@ -268,7 +435,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         if (formsRequiringReview.includes(data.selectedDocType)) {
           setShowFinalReview(true);
         } else {
-          await performDownload();
+          await performDownload(pendingDownloadType);
         }
       } else if (pendingPaymentAction === 'send') {
         // Trigger send
@@ -549,13 +716,24 @@ ${data.claimant.name}`);
                  {review.improvements && review.improvements.length > 0 && (
                    <div className="mb-8 pl-5">
                      <p className="text-xs font-bold text-slate-500 uppercase mb-3">Items to Address</p>
-                     <ul className="space-y-2">
-                       {review.improvements.map((imp, i) => (
-                         <li key={i} className="flex items-start gap-3 text-sm font-medium text-red-700 bg-red-50 p-2.5 rounded-lg border border-red-100">
-                           <XCircle className="w-5 h-5 text-red-500 shrink-0" />
-                           {imp}
-                         </li>
-                       ))}
+                     <ul className="space-y-3">
+                       {review.improvements.map((imp, i) => {
+                         const legalContext = getLegalContext(imp);
+                         return (
+                           <li key={i} className="bg-red-50 rounded-lg border border-red-100 overflow-hidden">
+                             <div className="flex items-start gap-3 text-sm font-medium text-red-700 p-2.5">
+                               <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+                               <span className="flex-1">{imp}</span>
+                             </div>
+                             {legalContext && (
+                               <div className="flex items-start gap-2 px-2.5 pb-2.5 pt-0 ml-8">
+                                 <Info className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                                 <p className="text-xs text-slate-500 leading-relaxed">{legalContext}</p>
+                               </div>
+                             )}
+                           </li>
+                         );
+                       })}
                      </ul>
                    </div>
                  )}
@@ -652,15 +830,7 @@ ${data.claimant.name}`);
     <div className="max-w-7xl mx-auto pb-10">
 
       {/* Actions Bar - Always at top, full width */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 no-print gap-4 px-4 md:px-0">
-        <Button
-          variant="secondary"
-          onClick={onBack}
-          icon={<ArrowLeft className="w-4 h-4" />}
-          className="w-full md:w-auto"
-        >
-          Back to Editor
-        </Button>
+      <div className="flex flex-col md:flex-row justify-end items-center mb-6 no-print gap-4 px-4 md:px-0">
         <div className="flex flex-wrap gap-2 items-center justify-center">
            {isLetter && (
              <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
@@ -750,22 +920,62 @@ ${data.claimant.name}`);
                   <span className="hidden md:inline">Print</span>
                 </Button>
 
+                {/* Download Dropdown for Letters */}
                 {isLetter && (
-                  <Button
-                    variant={data.hasPaid ? 'secondary' : 'primary'}
-                    onClick={handleDownloadPDF}
-                    isLoading={isGeneratingPdf}
-                    className={data.hasPaid ? 'border-slate-200' : 'border-teal-600'}
-                    icon={!isGeneratingPdf && (data.hasPaid ? <FileDown className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />)}
-                    aria-label="Download PDF"
-                  >
-                    <span className="hidden md:inline">
-                      {data.hasPaid ? 'Download PDF' : 'Download PDF (£2.50)'}
-                    </span>
-                    <span className="md:hidden">
-                      {data.hasPaid ? 'PDF' : '£2.50'}
-                    </span>
-                  </Button>
+                  <div className="relative" ref={downloadMenuRef}>
+                    <Button
+                      variant={data.hasPaid ? 'secondary' : 'primary'}
+                      onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                      isLoading={isGeneratingPdf}
+                      className={data.hasPaid ? 'border-slate-200' : 'border-teal-600'}
+                      icon={!isGeneratingPdf && (data.hasPaid ? <FileDown className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />)}
+                      aria-label="Download PDF"
+                    >
+                      <span className="hidden md:inline">
+                        {data.hasPaid ? 'Download' : 'Download (£2.50)'}
+                      </span>
+                      <span className="md:hidden">
+                        {data.hasPaid ? 'PDF' : '£2.50'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${showDownloadMenu ? 'rotate-180' : ''}`} />
+                    </Button>
+
+                    {/* Download Dropdown Menu */}
+                    {showDownloadMenu && (
+                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50 py-1">
+                        <button
+                          onClick={() => handleDownloadPDF('main')}
+                          className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <FileText className="w-4 h-4 text-slate-400" />
+                          Main Document Only
+                        </button>
+                        <button
+                          onClick={() => handleDownloadPDF('bundle')}
+                          className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <FileDown className="w-4 h-4 text-teal-500" />
+                          Complete Bundle (All)
+                        </button>
+                        <div className="border-t border-slate-100 my-1" />
+                        <p className="px-4 py-1 text-xs text-slate-400 font-medium">Individual Attachments</p>
+                        <button
+                          onClick={() => handleDownloadPDF('info-sheet')}
+                          className="w-full px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <Info className="w-4 h-4 text-slate-400" />
+                          Info Sheet (Annex 1)
+                        </button>
+                        <button
+                          onClick={() => handleDownloadPDF('reply-form')}
+                          className="w-full px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <MessageSquare className="w-4 h-4 text-slate-400" />
+                          Reply Form (Annex 2)
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {isLetter && (
@@ -806,16 +1016,11 @@ ${data.claimant.name}`);
         </div>
       </div>
 
-      {/* Split-Pane Layout: Warnings (left) | Preview (right) on desktop */}
-      <div className="lg:grid lg:grid-cols-12 lg:gap-6 px-4 md:px-0">
+      {/* Stacked Layout: Document first, then Quality Recommendations below */}
+      <div className="flex flex-col gap-6 px-4 md:px-0">
 
-        {/* Left Column: Warning Panels (mobile: full width stacked, desktop: 4 cols) */}
-        <div className="lg:col-span-4 lg:sticky lg:top-4 lg:self-start">
-          {renderWarningPanels()}
-        </div>
-
-        {/* Right Column: Document Preview (mobile: full width, desktop: 8 cols) */}
-        <div className="lg:col-span-8">
+        {/* Document Preview - Full width */}
+        <div className="w-full">
           {/* Zoom Controls - Enhanced with labels and better visibility */}
           <div className="flex items-center justify-center gap-3 mb-4 print:hidden bg-slate-100 rounded-xl p-3">
             {isTablet ? (
@@ -868,7 +1073,7 @@ ${data.claimant.name}`);
           </div>
 
           {/* Document Container */}
-          <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 overflow-visible">
+          <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 overflow-auto max-h-[75vh]">
             <div
               className="w-full md:min-w-[210mm] mx-auto bg-white shadow-xl md:shadow-2xl transition-transform origin-top"
               style={{ transform: `scale(${effectiveZoom / 100})` }}
@@ -1197,6 +1402,11 @@ ${data.claimant.name}`);
             </div>
           </div>
         </div>
+
+        {/* Quality Recommendations - Below document */}
+        <div className="w-full">
+          {renderWarningPanels()}
+        </div>
       </div>
 
       {/* Signature Modal */}
@@ -1221,7 +1431,7 @@ ${data.claimant.name}`);
         onClose={() => setShowFinalReview(false)}
         onConfirm={async () => {
           setShowFinalReview(false);
-          await performDownload();
+          await performDownload(pendingDownloadType);
         }}
         claimData={{
           claimantName: data.claimant.name,

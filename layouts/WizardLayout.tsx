@@ -6,6 +6,7 @@ import { LegalDisclaimerModal } from '../components/LegalDisclaimerModal';
 import { useClaimStore } from '../store/claimStore';
 import { Sparkles, ClipboardList } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { Tooltip } from '../components/ui/Tooltip';
 
 export const WizardLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -94,22 +95,30 @@ export const WizardLayout = () => {
               </div>
 
               {/* Switch Mode Button */}
-              <button
-                onClick={() => navigate(currentView === 'conversation' ? '/wizard' : '/conversation')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+              <Tooltip
+                content={currentView === 'conversation'
+                  ? 'Enter claim details manually using forms'
+                  : 'Use AI to extract claim details from uploaded documents'
+                }
+                position="bottom"
               >
-                {currentView === 'conversation' ? (
-                  <>
-                    <ClipboardList className="w-3.5 h-3.5" />
-                    Switch to Manual
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Switch to AI
-                  </>
-                )}
-              </button>
+                <button
+                  onClick={() => navigate(currentView === 'conversation' ? '/wizard' : '/conversation')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  {currentView === 'conversation' ? (
+                    <>
+                      <ClipboardList className="w-3.5 h-3.5" />
+                      Switch to Manual
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Switch to AI
+                    </>
+                  )}
+                </button>
+              </Tooltip>
             </div>
           </div>
         )}

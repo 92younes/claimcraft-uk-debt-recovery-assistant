@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useClaimStore } from '../store/claimStore';
@@ -56,6 +56,11 @@ export const WizardPage = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const isGeneratingRef = useRef(false);
   const deadlinesGeneratedForDocRef = useRef<string | null>(null); // Track deadlines generated for which doc type
+  const claimDataRef = useRef(claimData); // Stable ref for auto-save to prevent infinite loop
+  const recommendationAppliedRef = useRef<string | null>(null); // Track if recommendation was already applied
+
+  // Keep ref in sync with state (outside of effects to avoid stale closures)
+  claimDataRef.current = claimData;
 
   // Handler for adding evidence files (tracks new file count for analysis prompt)
   const handleAddEvidenceFiles = (newFiles: EvidenceFile[]) => {
@@ -123,6 +128,7 @@ export const WizardPage = () => {
       },
       {
         label: claimTitle.length > 20 ? `${claimTitle.slice(0, 20)}...` : claimTitle,
+        fullLabel: claimTitle.length > 20 ? claimTitle : undefined,
         onClick: step !== Step.EVIDENCE ? () => setStep(Step.EVIDENCE) : undefined
       },
       {
@@ -138,20 +144,33 @@ export const WizardPage = () => {
   }, [claimData]);
 
   // Auto-select recommended document when entering Strategy step (if user hasn't manually selected)
+  // Uses ref to prevent re-applying recommendation when claimData changes
   useEffect(() => {
-    if (step === Step.STRATEGY && recommendation?.primaryDocument && !claimData.userSelectedDocType) {
-      // Only auto-select if current selection differs from recommendation
-      if (claimData.selectedDocType !== recommendation.primaryDocument) {
-        setClaimData(prev => ({
-          ...prev,
-          selectedDocType: recommendation.primaryDocument,
-          // Don't set userSelectedDocType - this is an auto-selection
-          // Clear any previously generated document for the old type
-          generated: undefined
-        }));
-      }
+    if (step !== Step.STRATEGY || !recommendation?.primaryDocument || claimData.userSelectedDocType) {
+      return;
     }
-  }, [step, recommendation?.primaryDocument, claimData.userSelectedDocType, claimData.selectedDocType, setClaimData]);
+
+    // Create a unique key for this recommendation application
+    const recommendationKey = `${claimData.id}-${recommendation.primaryDocument}`;
+
+    // Skip if we've already applied this recommendation
+    if (recommendationAppliedRef.current === recommendationKey) {
+      return;
+    }
+
+    // Only auto-select if current selection differs from recommendation
+    if (claimData.selectedDocType !== recommendation.primaryDocument) {
+      recommendationAppliedRef.current = recommendationKey;
+      setClaimData(prev => ({
+        ...prev,
+        selectedDocType: recommendation.primaryDocument,
+        // Don't set userSelectedDocType - this is an auto-selection
+        // Clear any previously generated document for the old type
+        generated: undefined
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, recommendation?.primaryDocument, claimData.userSelectedDocType, claimData.id, setClaimData]);
 
   // Guard: ensure wizard always has an active claim id (needed for save/payment flows)
   useEffect(() => {
@@ -161,14 +180,15 @@ export const WizardPage = () => {
   }, [claimData.id, createNewClaim]);
 
   // Auto-save when data changes (debounced)
+  // IMPORTANT: Uses claimDataRef to prevent infinite loop - claimData is NOT in deps
   useEffect(() => {
-    if (!hasUnsavedChanges || !claimData.id) return;
+    if (!hasUnsavedChanges || !claimDataRef.current.id) return;
 
     const saveTimer = setTimeout(async () => {
       try {
         await saveClaim();
         // Update the saved snapshot to match current data (excluding lastModified)
-        const newSnapshot = { ...claimData, lastModified: undefined };
+        const newSnapshot = { ...claimDataRef.current, lastModified: undefined };
         setLastSavedSnapshot(JSON.stringify(newSnapshot));
         setLastSaveTime(new Date());
       } catch (error) {
@@ -178,7 +198,8 @@ export const WizardPage = () => {
     }, 2000); // Save 2 seconds after last change
 
     return () => clearTimeout(saveTimer);
-  }, [claimData, hasUnsavedChanges, saveClaim]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnsavedChanges, saveClaim]); // Intentionally excludes claimData to prevent infinite loop
 
   // Auto-generate document when entering Draft/Review (best-effort)
   // IMPORTANT: deadlines is intentionally excluded from deps to prevent infinite loop
@@ -283,13 +304,13 @@ export const WizardPage = () => {
     navigate('/dashboard');
   };
 
-  const handleCancelWizard = () => {
+  const handleCancelWizard = useCallback(() => {
     if (hasUnsavedChanges) {
       setShowCancelConfirm(true);
     } else {
       navigate('/dashboard');
     }
-  };
+  }, [hasUnsavedChanges, navigate]);
 
   const handleConfirmCancel = () => {
     setShowCancelConfirm(false);
@@ -1101,6 +1122,34 @@ export const WizardPage = () => {
             );
           })}
         </div>
+
+        {/* Interest toggle for Polite Reminder */}
+        {claimData.selectedDocType === DocumentType.POLITE_CHASER && (
+          <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={claimData.includeInterestInReminder || false}
+                onChange={(e) => setClaimData(prev => ({
+                  ...prev,
+                  includeInterestInReminder: e.target.checked,
+                  // Clear cached document to force regeneration with new setting
+                  generated: undefined
+                }))}
+                className="mt-1 w-4 h-4 text-teal-600 border-slate-300 rounded focus:ring-teal-500"
+              />
+              <div>
+                <span className="font-medium text-slate-900">Include accrued interest in reminder</span>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {claimData.includeInterestInReminder
+                    ? `Amount shown: £${(claimData.invoice.totalAmount + claimData.interest.totalInterest + claimData.compensation).toFixed(2)} (principal + interest)`
+                    : `Amount shown: £${claimData.invoice.totalAmount.toFixed(2)} (principal only)`
+                  }
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
 
         <div className="mt-8 flex justify-end">
           <Button onClick={() => handleNextStep(Step.DRAFT)} rightIcon={<ArrowRight className="w-5 h-5"/>}>

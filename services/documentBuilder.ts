@@ -75,6 +75,7 @@ export class DocumentBuilder {
   /**
    * Call Anthropic API through backend proxy
    * This keeps the API key secure on the server side
+   * Includes 30-second timeout to prevent hanging
    */
   private static async callAnthropicAPI(
     messages: AnthropicMessage[],
@@ -83,35 +84,50 @@ export class DocumentBuilder {
       max_tokens?: number;
       temperature?: number;
       system?: string;
+      timeout?: number; // Optional timeout in ms, defaults to 30000
     } = {}
   ): Promise<string> {
-    const response = await fetch(`${API_BASE_URL}/api/anthropic/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: options.model || 'claude-sonnet-4-20250514',
-        max_tokens: options.max_tokens || 4000,
-        temperature: options.temperature ?? 0.1,
-        messages,
-        system: options.system
-      })
-    });
+    const timeoutMs = options.timeout ?? 30000; // 30 second default timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-      throw new Error(`Anthropic API error: ${error.message || response.statusText}`);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/anthropic/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: options.model || 'claude-sonnet-4-20250514',
+          max_tokens: options.max_tokens || 4000,
+          temperature: options.temperature ?? 0.1,
+          messages,
+          system: options.system
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Anthropic API error: ${error.message || response.statusText}`);
+      }
+
+      const data: AnthropicResponse = await response.json();
+
+      const textContent = data.content.find(c => c.type === 'text');
+      if (!textContent || !textContent.text) {
+        throw new Error('Unexpected response format from Claude API');
+      }
+
+      return textContent.text;
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        throw new Error(`API request timed out after ${timeoutMs / 1000} seconds. Please try again.`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data: AnthropicResponse = await response.json();
-
-    const textContent = data.content.find(c => c.type === 'text');
-    if (!textContent || !textContent.text) {
-      throw new Error('Unexpected response format from Claude API');
-    }
-
-    return textContent.text;
   }
 
   /**
@@ -205,7 +221,10 @@ export class DocumentBuilder {
       .replace(/\[LBA_RESPONSE_DAYS\]/g, LBA_RESPONSE_DAYS.toString())
       // Additional placeholders for new document types
       .replace(/\[DUE_DATE\]/g, data.invoice.dueDate ? this.formatDate(data.invoice.dueDate) : 'N/A')
+      .replace(/\[INVOICE_DESCRIPTION\]/g, data.invoice.description || 'Goods/services as per invoice')
       .replace(/\[DAYS_OVERDUE\]/g, data.interest.daysOverdue.toString())
+      // AMOUNT_DUE: For polite reminders, user can choose principal-only or total (with interest)
+      .replace(/\[AMOUNT_DUE\]/g, data.includeInterestInReminder ? totalClaim : data.invoice.totalAmount.toFixed(2))
       .replace(/\[SETTLEMENT_AMOUNT\]/g, (parseFloat(totalClaim) * 0.85).toFixed(2)) // 15% discount as settlement
       .replace(/\[PAYMENT_DETAILS\]/g, formatPaymentDetails(paymentDetails))
       .replace(/\[NUMBER_OF_INSTALLMENTS\]/g, '6') // Default 6 month plan

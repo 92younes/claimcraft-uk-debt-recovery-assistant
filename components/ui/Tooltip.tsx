@@ -39,9 +39,13 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const triggerRef = useRef<HTMLElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
   const showTooltip = () => {
     timeoutRef.current = setTimeout(() => {
-      if (triggerRef.current) {
+      // Only show tooltip if component is still mounted
+      if (triggerRef.current && isMountedRef.current) {
         const rect = triggerRef.current.getBoundingClientRect();
         const tooltipOffset = 8;
 
@@ -81,8 +85,10 @@ export const Tooltip: React.FC<TooltipProps> = ({
     setIsVisible(false);
   };
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }

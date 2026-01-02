@@ -60,6 +60,7 @@ export const ClaimOverviewPage = () => {
     },
     {
       label: claimTitle.length > 25 ? `${claimTitle.slice(0, 25)}...` : claimTitle,
+      fullLabel: claimTitle.length > 25 ? claimTitle : undefined,
       isCurrentPage: true
     }
   ], [navigate, claimTitle]);

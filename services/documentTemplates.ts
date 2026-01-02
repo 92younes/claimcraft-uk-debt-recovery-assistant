@@ -128,8 +128,9 @@ AND the Claimant claims:
 /**
  * TEMPLATE: Polite Payment Reminder (Pre-LBA Step)
  *
- * A friendly reminder sent before formal Letter Before Action.
+ * A friendly, informal reminder sent before formal Letter Before Action.
  * Maintains professional relationship while requesting payment.
+ * NO formal legal elements, NO annexes - purely relationship-focused.
  */
 export const POLITE_CHASER_TEMPLATE = `[CLAIMANT_NAME]
 [CLAIMANT_ADDRESS]
@@ -141,43 +142,50 @@ export const POLITE_CHASER_TEMPLATE = `[CLAIMANT_NAME]
 
 Dear Sir/Madam,
 
-RE: PAYMENT REMINDER - INVOICE [INVOICE_NUMBER]
+RE: FRIENDLY REMINDER - INVOICE [INVOICE_NUMBER]
 
-I hope this letter finds you well. I am writing regarding the following outstanding invoice:
+I hope this letter finds you well. I am writing regarding an outstanding invoice that may have been overlooked:
 
-**INVOICE DETAILS**
+INVOICE DETAILS
 
 Invoice Number: [INVOICE_NUMBER]
 Invoice Date: [INVOICE_DATE]
-Amount Due: £[PRINCIPAL]
+Amount Due: £[AMOUNT_DUE]
+Description: [INVOICE_DESCRIPTION]
 Payment Due Date: [DUE_DATE]
 
-We have not yet received payment for this invoice, which is now [DAYS_OVERDUE] days overdue. I wanted to reach out as there may be a simple explanation for this delay.
+Our records show that payment is now [DAYS_OVERDUE] days overdue. I wanted to reach out personally as there may be a simple explanation.
 
-**POSSIBLE REASONS**
+POSSIBLE REASONS
 
 - The invoice may not have reached your accounts department
-- There may be a query about the goods/services provided
-- Payment may have been overlooked
+- There may be a query about the goods or services provided
+- Payment may have simply been overlooked in a busy period
 
-If any of these apply, please contact me immediately so we can resolve this matter amicably.
+If any of these apply, please do get in touch so we can sort this out together.
 
-**NEXT STEPS**
+HOW TO PAY
 
-If payment has not yet been made, please arrange payment within 7 days to avoid escalation to formal legal proceedings. We value our business relationship and would prefer to resolve this matter informally.
+Payment can be made by bank transfer to:
 
-If there is a genuine dispute regarding this invoice, please contact me within 7 days to discuss.
+[PAYMENT_DETAILS]
 
-Should you require a copy of the original invoice or any supporting documentation, I am happy to provide these upon request.
+Please use invoice number [INVOICE_NUMBER] as your payment reference.
+
+NEED TO DISCUSS?
+
+If there is anything you would like to discuss about this invoice, or if you are experiencing any difficulties, please contact me:
+
+[CLAIMANT_NAME]
+[CLAIMANT_ADDRESS]
+
+We value our relationship and are happy to discuss payment arrangements if that would help.
 
 I look forward to hearing from you soon.
 
 Yours faithfully,
 
 [CLAIMANT_NAME]
-
----
-This is a polite payment reminder. If payment is not received or a response provided within 7 days, formal legal action may be commenced.
 `;
 
 /**
@@ -455,9 +463,9 @@ export const getTemplate = (docType: DocumentType): string => {
  */
 export const DISCLAIMERS = {
   [DocumentType.POLITE_CHASER]: `
-DISCLAIMER: This document was prepared using AI-assisted document assembly software.
-We are not a law firm and do not provide legal advice. This is an informal payment
-reminder. You should consult a qualified solicitor before taking further legal action.
+DISCLAIMER: This is an informal, friendly payment reminder prepared using AI-assisted
+document assembly software. We are not a law firm and do not provide legal advice.
+This letter is designed to maintain a positive business relationship while requesting payment.
   `.trim(),
 
   [DocumentType.LBA]: `

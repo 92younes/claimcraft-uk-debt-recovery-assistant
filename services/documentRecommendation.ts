@@ -277,11 +277,33 @@ export const recommendFromClaimState = (state: Partial<ClaimState>): DocumentRec
     daysSinceDue: calculateDaysSinceDue(state.invoice?.dueDate)
   };
 
-  // Check for LBA in timeline
+  // Check for LBA in timeline or manual override
   if (state.timeline) {
-    const lbaStatus = detectLbaStatus(state.timeline);
     input.chaserCount = state.timeline.filter(e => e.type === 'chaser').length;
     input.hasPartialPayment = state.timeline.some(e => e.type === 'part_payment');
+  }
+
+  // ENHANCED LBA DETECTION: Also check lbaAlreadySent flag and lbaSentDate
+  // This ensures we detect LBA even if timeline event has wrong type
+  if (state.lbaAlreadySent && state.lbaSentDate) {
+    // Calculate days since LBA was sent
+    const lbaSentDate = new Date(state.lbaSentDate);
+    const today = new Date();
+    const daysSinceLba = Math.floor((today.getTime() - lbaSentDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Inject synthetic LBA event if not already in timeline
+    const hasLbaInTimeline = state.timeline?.some(e => e.type === 'lba_sent') ?? false;
+    if (!hasLbaInTimeline && input.timeline) {
+      // Add synthetic LBA event for recommendation calculation
+      input.timeline = [
+        ...input.timeline,
+        {
+          type: 'lba_sent',
+          date: state.lbaSentDate,
+          description: 'Letter Before Action sent (manually recorded)'
+        }
+      ];
+    }
   }
 
   return recommendDocument(input);

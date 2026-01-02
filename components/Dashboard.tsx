@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { ConfirmModal } from './ConfirmModal';
 import { QuickEditModal } from './QuickEditModal';
 import { Tooltip } from './ui/Tooltip';
+import { Shimmer, ShimmerTableRow } from './ui/Shimmer';
 import { getDaysUntilDeadline } from '../services/deadlineService';
 import { DashboardEmptyState } from './Dashboard_empty_state';
 import { safeFormatDate } from '../utils/formatters';
@@ -25,6 +26,7 @@ const sanitizeDisplayValue = (value: string | undefined | null): string => {
 
 interface DashboardProps {
   claims: ClaimState[];
+  isLoading?: boolean;
   onCreateNew: () => void;
   onResume: (claim: ClaimState) => void;
   onDelete: (id: string) => void;
@@ -48,6 +50,7 @@ type SortDirection = 'asc' | 'desc' | null;
 
 export const Dashboard: React.FC<DashboardProps> = ({
   claims,
+  isLoading = false,
   onCreateNew,
   onResume,
   onDelete,
@@ -438,69 +441,86 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Stats Row - Compact cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
-        {/* Total Recoverable */}
-        <button
-          onClick={() => {
-            setStatusFilter('all');
-            setSearchQuery('');
-          }}
-          className="bg-gradient-to-br from-teal-50 to-white p-3 rounded-lg border border-teal-100 flex items-center gap-2.5 relative overflow-hidden hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer text-left w-full"
-          aria-label="Show all claims with recoverable amounts"
-        >
-           <div className="absolute top-0 right-0 w-16 h-16 bg-teal-100/50 rounded-full -mr-4 -mt-4"></div>
-           <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
-              <PoundSterling className="w-4 h-4" />
-           </div>
-           <div className="relative z-10">
-              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Total Recoverable</p>
-              <p className="text-lg font-bold text-slate-900">£{totalRecoverable.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p>
-           </div>
-        </button>
+        {isLoading ? (
+          <>
+            {/* Skeleton Stats Cards */}
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 flex items-center gap-2.5">
+                <div className="shimmer w-8 h-8 bg-slate-200 rounded-lg flex-shrink-0"></div>
+                <div className="space-y-1.5 flex-1">
+                  <div className="shimmer h-2.5 bg-slate-200 rounded w-20"></div>
+                  <div className="shimmer h-5 bg-slate-200 rounded w-24"></div>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            {/* Total Recoverable */}
+            <button
+              onClick={() => {
+                setStatusFilter('all');
+                setSearchQuery('');
+              }}
+              className="bg-gradient-to-br from-teal-50 to-white p-3 rounded-lg border border-teal-100 flex items-center gap-2.5 relative overflow-hidden hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer text-left w-full"
+              aria-label="Show all claims with recoverable amounts"
+            >
+               <div className="absolute top-0 right-0 w-16 h-16 bg-teal-100/50 rounded-full -mr-4 -mt-4"></div>
+               <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
+                  <PoundSterling className="w-4 h-4" />
+               </div>
+               <div className="relative z-10">
+                  <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Total Recoverable</p>
+                  <p className="text-lg font-bold text-slate-900">£{totalRecoverable.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p>
+               </div>
+            </button>
 
-        {/* Active Claims */}
-        <button
-          onClick={() => {
-            setStatusFilter('all');
-            setSearchQuery('');
-          }}
-          className="bg-white p-3 rounded-lg border border-slate-200 flex items-center gap-2.5 hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer text-left w-full"
-          aria-label="Show all active claims"
-        >
-           <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
-              <Briefcase className="w-4 h-4" />
-           </div>
-           <div>
-              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Active Claims</p>
-              <p className="text-lg font-bold text-slate-900">{activeClaims}</p>
-           </div>
-        </button>
+            {/* Active Claims */}
+            <button
+              onClick={() => {
+                setStatusFilter('all');
+                setSearchQuery('');
+              }}
+              className="bg-white p-3 rounded-lg border border-slate-200 flex items-center gap-2.5 hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer text-left w-full"
+              aria-label="Show all active claims"
+            >
+               <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
+                  <Briefcase className="w-4 h-4" />
+               </div>
+               <div>
+                  <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Active Claims</p>
+                  <p className="text-lg font-bold text-slate-900">{activeClaims}</p>
+               </div>
+            </button>
 
-        {/* Status */}
-        <button
-          onClick={() => {
-            if (urgentActions > 0) {
-              setStatusFilter('overdue');
-              setSearchQuery('');
-            }
-          }}
-          className={`bg-white p-3 rounded-lg border flex items-center gap-2.5 transition-all text-left w-full ${
-            urgentActions > 0
-              ? 'border-amber-200 bg-amber-50 hover:border-amber-400 hover:shadow-sm cursor-pointer'
-              : 'border-slate-200 cursor-default'
-          }`}
-          disabled={urgentActions === 0}
-          aria-label={urgentActions > 0 ? 'Show overdue claims' : 'No claims need action'}
-        >
-           <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${urgentActions > 0 ? 'bg-amber-100 text-amber-600' : 'bg-teal-50 text-teal-500'}`}>
-              {urgentActions > 0 ? <AlertTriangle className="w-4 h-4" /> : <CircleCheck className="w-4 h-4" />}
-           </div>
-           <div>
-              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Status</p>
-              <p className={`text-base font-bold ${urgentActions > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
-                {urgentActions > 0 ? `${urgentActions} Need Action` : 'All Good'}
-              </p>
-           </div>
-        </button>
+            {/* Status */}
+            <button
+              onClick={() => {
+                if (urgentActions > 0) {
+                  setStatusFilter('overdue');
+                  setSearchQuery('');
+                }
+              }}
+              className={`bg-white p-3 rounded-lg border flex items-center gap-2.5 transition-all text-left w-full ${
+                urgentActions > 0
+                  ? 'border-amber-200 bg-amber-50 hover:border-amber-400 hover:shadow-sm cursor-pointer'
+                  : 'border-slate-200 cursor-default'
+              }`}
+              disabled={urgentActions === 0}
+              aria-label={urgentActions > 0 ? 'Show overdue claims' : 'No claims need action'}
+            >
+               <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${urgentActions > 0 ? 'bg-amber-100 text-amber-600' : 'bg-teal-50 text-teal-500'}`}>
+                  {urgentActions > 0 ? <AlertTriangle className="w-4 h-4" /> : <CircleCheck className="w-4 h-4" />}
+               </div>
+               <div>
+                  <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Status</p>
+                  <p className={`text-base font-bold ${urgentActions > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+                    {urgentActions > 0 ? `${urgentActions} Need Action` : 'All Good'}
+                  </p>
+               </div>
+            </button>
+          </>
+        )}
       </div>
 
       {/* Status Color Legend */}
@@ -646,7 +666,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       {/* Claims Table - Clean table design matching mockup */}
-      {claims.length === 0 ? (
+      {isLoading ? (
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+          {/* Skeleton Header */}
+          <div className="grid grid-cols-12 gap-3 px-3 md:px-4 py-2 border-b border-slate-100 bg-slate-50/50">
+            <div className="col-span-1"><div className="shimmer w-4 h-4 bg-slate-200 rounded"></div></div>
+            <div className="col-span-3"><div className="shimmer w-20 h-4 bg-slate-200 rounded"></div></div>
+            <div className="col-span-2 hidden md:block"><div className="shimmer w-12 h-4 bg-slate-200 rounded"></div></div>
+            <div className="col-span-2 hidden md:block"><div className="shimmer w-16 h-4 bg-slate-200 rounded"></div></div>
+            <div className="col-span-2"><div className="shimmer w-14 h-4 bg-slate-200 rounded"></div></div>
+            <div className="col-span-2 hidden md:block"><div className="shimmer w-20 h-4 bg-slate-200 rounded ml-auto"></div></div>
+          </div>
+          {/* Skeleton Rows */}
+          {Array.from({ length: 5 }).map((_, idx) => (
+            <div key={idx} className="grid grid-cols-12 gap-3 px-3 md:px-4 py-3 border-b border-slate-100 last:border-b-0">
+              <div className="col-span-1"><div className="shimmer w-4 h-4 bg-slate-200 rounded"></div></div>
+              <div className="col-span-3 space-y-2">
+                <div className="shimmer h-4 bg-slate-200 rounded w-3/4"></div>
+                <div className="shimmer h-3 bg-slate-200 rounded w-1/2"></div>
+              </div>
+              <div className="col-span-2 hidden md:block"><div className="shimmer h-4 bg-slate-200 rounded w-20"></div></div>
+              <div className="col-span-2 hidden md:block"><div className="shimmer h-4 bg-slate-200 rounded w-16"></div></div>
+              <div className="col-span-2"><div className="shimmer h-5 bg-slate-200 rounded w-14"></div></div>
+              <div className="col-span-2 hidden md:block"><div className="shimmer h-4 bg-slate-200 rounded w-16 ml-auto"></div></div>
+            </div>
+          ))}
+        </div>
+      ) : claims.length === 0 ? (
         <DashboardEmptyState onCreateNew={onCreateNew} />
       ) : (
         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">

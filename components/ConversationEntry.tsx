@@ -722,13 +722,12 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
                     {msg.attachments && msg.attachments.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {msg.attachments.map((file, fileIdx) => (
-                          <div
-                            key={fileIdx}
-                            className="flex items-center gap-1 px-2 py-1 bg-black/20 rounded text-xs"
-                          >
-                            <FileText className="w-3 h-3" />
-                            {file.name}
-                          </div>
+                          <Tooltip key={fileIdx} content={file.name} position="top">
+                            <div className="flex items-center gap-1 px-2 py-1 bg-black/20 rounded text-xs">
+                              <FileText className="w-3 h-3" />
+                              <span className="truncate max-w-[100px]">{file.name}</span>
+                            </div>
+                          </Tooltip>
                         ))}
                       </div>
                     )}
@@ -882,19 +881,18 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
           {files.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {files.map((file, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm"
-                >
-                  <FileText className="w-4 h-4 text-teal-500" />
-                  <span className="text-slate-700 truncate max-w-[150px]">{file.name}</span>
-                  <button
-                    onClick={() => handleRemoveFile(idx)}
-                    className="text-slate-400 hover:text-red-500 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+                <Tooltip key={idx} content={file.name} position="top">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm">
+                    <FileText className="w-4 h-4 text-teal-500" />
+                    <span className="text-slate-700 truncate max-w-[150px]">{file.name}</span>
+                    <button
+                      onClick={() => handleRemoveFile(idx)}
+                      className="text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </Tooltip>
               ))}
             </div>
           )}
