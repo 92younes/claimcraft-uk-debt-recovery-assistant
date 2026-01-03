@@ -114,6 +114,8 @@ export interface ProcessingOptions {
 
 /**
  * Process a raw party extraction into tracked party with provenance
+ * Note: We process all available fields even if name is missing,
+ * so partial data (address, email, etc.) can still be merged into the claim.
  */
 const processParty = (
   raw: RawExtractionInput['defendant'],
@@ -122,7 +124,15 @@ const processParty = (
   sourceReference?: string,
   options?: { inferCounty?: boolean; inferPartyType?: boolean }
 ): TrackedParty | undefined => {
-  if (!raw || !raw.name) return undefined;
+  // Only return undefined if raw is completely missing
+  if (!raw) return undefined;
+
+  // Check if there's any meaningful data to process
+  const hasAnyData = raw.name || raw.address || raw.city || raw.county ||
+    raw.postcode || raw.phone || raw.email || raw.contactName ||
+    raw.type || raw.companyNumber;
+
+  if (!hasAnyData) return undefined;
 
   const tracked: TrackedParty = {};
 
@@ -185,13 +195,21 @@ const processParty = (
 
   if (raw.type) {
     tracked.type = createExtractedField(raw.type, source, confidence, { sourceReference });
-  } else if (options?.inferPartyType && raw.name) {
-    // Infer party type from name
-    const inferredType = inferPartyType(raw.name, raw.companyNumber);
-    tracked.type = createExtractedField(inferredType, source, 70, {
-      sourceReference,
-      inferred: true
-    });
+  } else if (options?.inferPartyType) {
+    // Infer party type from name or company number
+    if (raw.name) {
+      const inferredType = inferPartyType(raw.name, raw.companyNumber);
+      tracked.type = createExtractedField(inferredType, source, 70, {
+        sourceReference,
+        inferred: true
+      });
+    } else if (raw.companyNumber) {
+      // If no name but has company number, it's a business
+      tracked.type = createExtractedField('Business', source, 70, {
+        sourceReference,
+        inferred: true
+      });
+    }
   }
 
   if (raw.companyNumber) {

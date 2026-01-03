@@ -441,6 +441,7 @@ export const useClaimStore = create<ClaimStore>()(
           // Normalize + validate + infer (county/type) via extractionProcessor
           const extraction = processEvidenceExtraction(
             {
+              claimant: evidenceResult.claimant,
               defendant: evidenceResult.defendant,
               invoice: evidenceResult.invoice,
               timeline: evidenceResult.timelineEvents,
@@ -493,6 +494,7 @@ export const useClaimStore = create<ClaimStore>()(
             );
           };
 
+          const mergedClaimant = mergeDefined(claimData.claimant, update.claimant as any);
           const mergedDefendant = mergeDefined(claimData.defendant, update.defendant as any);
           const mergedInvoice = mergeDefined(claimData.invoice, update.invoice as any);
 
@@ -506,13 +508,13 @@ export const useClaimStore = create<ClaimStore>()(
             mergedInvoice.totalAmount,
             mergedInvoice.dateIssued,
             mergedInvoice.dueDate,
-            claimData.claimant.type,
+            mergedClaimant.type,
             mergedDefendant.type
           );
 
           const compensation = calculateCompensation(
             mergedInvoice.totalAmount,
-            claimData.claimant.type,
+            mergedClaimant.type,
             mergedDefendant.type
           );
 
@@ -524,6 +526,7 @@ export const useClaimStore = create<ClaimStore>()(
             ...prev,
             source: 'upload',
             evidence: evidenceWithClassifications,
+            claimant: mergedClaimant,
             defendant: mergedDefendant,
             invoice: mergedInvoice,
             timeline: mergedTimeline,

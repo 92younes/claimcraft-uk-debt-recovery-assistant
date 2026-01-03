@@ -192,25 +192,25 @@ B. The parties have agreed that the Debt shall be repaid by installments on the 
 
 **AGREED TERMS**
 
-1. **ACKNOWLEDGMENT OF DEBT**
+**1. ACKNOWLEDGMENT OF DEBT**
    The Debtor acknowledges that they owe the Creditor the sum of £[TOTAL_CLAIM].
 
-2. **PAYMENT BY INSTALLMENTS**
+**2. PAYMENT BY INSTALLMENTS**
    The Debtor agrees to pay the Debt by [NUMBER_OF_INSTALLMENTS] monthly installments of £[INSTALLMENT_AMOUNT] each.
 
-3. **PAYMENT SCHEDULE**
+**3. PAYMENT SCHEDULE**
    The first payment shall be due on [FIRST_PAYMENT_DATE] and subsequent payments shall be due on the same day of each following month until the Debt is paid in full.
 
-4. **DEFAULT**
+**4. DEFAULT**
    If the Debtor misses any payment, the entire outstanding balance shall become immediately due and payable, and the Creditor may commence legal proceedings without further notice.
 
-5. **INTEREST**
+**5. INTEREST**
    No further interest shall accrue provided all installments are paid on time. If the Debtor defaults, interest shall accrue at [INTEREST_RATE] on the outstanding balance.
 
-6. **EARLY REPAYMENT**
+**6. EARLY REPAYMENT**
    The Debtor may repay the Debt in full or in part at any time without penalty.
 
-7. **GOVERNING LAW**
+**7. GOVERNING LAW**
    This Agreement shall be governed by the laws of England and Wales.
 
 **SIGNED BY THE PARTIES**

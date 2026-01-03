@@ -75,6 +75,54 @@ const getLegalContext = (issue: string): string | null => {
   return null;
 };
 
+/**
+ * Render document content with proper formatting
+ * Converts markdown-style formatting to styled elements
+ */
+const renderFormattedContent = (content: string | undefined): React.ReactNode => {
+  if (!content) return null;
+
+  // Split content into lines
+  const lines = content.split('\n');
+  const elements: React.ReactNode[] = [];
+
+  lines.forEach((line, index) => {
+    const trimmedLine = line.trim();
+
+    // Check for bold section headers (entire line is **TEXT**)
+    if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**') && trimmedLine.length > 4) {
+      const headerText = trimmedLine.slice(2, -2);
+      elements.push(
+        <div key={index} className="font-bold text-slate-900 mt-6 mb-2 text-[12pt]">
+          {headerText}
+        </div>
+      );
+    }
+    // Check for inline bold within a line
+    else if (trimmedLine.includes('**')) {
+      const parts = trimmedLine.split(/\*\*([^*]+)\*\*/g);
+      elements.push(
+        <span key={index}>
+          {parts.map((part, partIndex) =>
+            partIndex % 2 === 1 ? (
+              <strong key={partIndex}>{part}</strong>
+            ) : (
+              <span key={partIndex}>{part}</span>
+            )
+          )}
+          {'\n'}
+        </span>
+      );
+    }
+    // Regular line
+    else {
+      elements.push(<span key={index}>{line}{'\n'}</span>);
+    }
+  });
+
+  return elements;
+};
+
 // A4 Page Wrapper with optional Watermark and Overflow Handling
 // Mobile responsive: full width on small screens, A4 width on larger screens
 // Tablet: scales to fit viewport without horizontal scroll
@@ -342,10 +390,18 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     `);
     printWindow.document.close();
     printWindow.focus();
+
     // Small delay to ensure content is fully rendered before printing
     setTimeout(() => {
+      // Listen for when the print dialog closes (user prints or cancels)
+      printWindow.onafterprint = () => {
+        printWindow.close();
+      };
+
       printWindow.print();
-      printWindow.close();
+
+      // Fallback: If onafterprint doesn't fire (some browsers), don't auto-close
+      // User can manually close the window after printing
     }, 300);
   };
 
@@ -1330,18 +1386,20 @@ ${data.claimant.name}`);
                         </p>
                       </div>
 
-                      <div
-                        className={`whitespace-pre-wrap text-justify leading-relaxed mb-12 text-[11pt] transition-all duration-200 ${
-                          !isFinalized
-                            ? 'hover:outline-2 hover:outline-dashed hover:outline-slate-300 hover:outline-offset-4 focus:outline-2 focus:outline-solid focus:outline-teal-500 focus:outline-offset-4 cursor-text rounded'
-                            : ''
-                        }`}
-                        contentEditable={!isFinalized}
-                        suppressContentEditableWarning
-                        title={!isFinalized ? 'Click to edit this content' : undefined}
-                        onInput={() => setHasUnsavedChanges(true)}
-                        onBlur={(e) => {
-                          if (!isFinalized) {
+                      {isFinalized ? (
+                        // Finalized: Show nicely formatted content (no editing)
+                        <div className="text-justify leading-relaxed mb-12 text-[11pt]">
+                          {renderFormattedContent(data.generated?.content)}
+                        </div>
+                      ) : (
+                        // Draft: Editable raw content (user sees markdown markers)
+                        <div
+                          className="whitespace-pre-wrap text-justify leading-relaxed mb-12 text-[11pt] transition-all duration-200 hover:outline-2 hover:outline-dashed hover:outline-slate-300 hover:outline-offset-4 focus:outline-2 focus:outline-solid focus:outline-teal-500 focus:outline-offset-4 cursor-text rounded"
+                          contentEditable
+                          suppressContentEditableWarning
+                          title="Click to edit this content"
+                          onInput={() => setHasUnsavedChanges(true)}
+                          onBlur={(e) => {
                             const newText = e.currentTarget.innerText;
                             if (newText !== data.generated?.content) {
                               onUpdateContent(newText);
@@ -1349,11 +1407,11 @@ ${data.claimant.name}`);
                               setShowSavedFeedback(true);
                               setTimeout(() => setShowSavedFeedback(false), 2000);
                             }
-                          }
-                        }}
-                      >
-                        {data.generated?.content}
-                      </div>
+                          }}
+                        >
+                          {data.generated?.content}
+                        </div>
+                      )}
 
                       <div className="mt-16">
                         <p>{isPoliteReminder ? 'Kind regards,' : 'Yours sincerely,'}</p>
@@ -1681,8 +1739,8 @@ ${data.claimant.name}`);
               className="bg-white rounded-xl p-8 shadow-xl mx-auto"
               style={{ width: '210mm', minHeight: '297mm' }}
             >
-              <div className="font-serif max-w-[90%] mx-auto whitespace-pre-wrap text-justify leading-relaxed">
-                {data.generated?.content}
+              <div className="font-serif max-w-[90%] mx-auto text-justify leading-relaxed">
+                {renderFormattedContent(data.generated?.content)}
               </div>
             </div>
           )}

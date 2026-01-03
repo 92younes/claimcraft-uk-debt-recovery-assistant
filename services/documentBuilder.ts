@@ -1068,7 +1068,7 @@ If the document is accurate and matches the SOURCE OF TRUTH, set isPass to true 
         [{ role: 'user', content: prompt }],
         {
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
+          max_tokens: 4000, // Increased to allow full corrected document
           temperature: 0
         }
       );
