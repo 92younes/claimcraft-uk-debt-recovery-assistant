@@ -24,6 +24,7 @@ export interface InvoiceData {
   invoiceNumber: string;
   dateIssued: string;
   dueDate: string;
+  serviceDeliveryDate?: string; // When goods were delivered or services completed
   paymentTerms?: 'net_7' | 'net_14' | 'net_30' | 'net_60' | 'net_90' | 'custom';
   agreementType?: 'goods' | 'services' | 'ongoing_contract' | 'one_time_purchase';
   totalAmount: number;
@@ -170,7 +171,7 @@ export interface EvidenceFile {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'ai' | 'assistant';
+  role: 'user' | 'assistant';  // Standardized: 'assistant' for AI responses (not 'ai')
   content: string;
   timestamp: number | string;
 }
@@ -327,7 +328,8 @@ export const INITIAL_STATE: ClaimState = {
   assessment: null,
   selectedDocType: DocumentType.LBA,
   generated: null,
-  signature: null
+  signature: null,
+  hasPaid: true // TODO: Remove for production - bypasses paywall for testing
 };
 
 // ==========================================
@@ -345,7 +347,7 @@ export enum Step {
 // Conversation Types
 // ==========================================
 export interface ConversationMessage {
-  role: 'user' | 'assistant' | 'ai';
+  role: 'user' | 'assistant';  // Standardized: 'assistant' for AI responses (not 'ai')
   content: string;
   timestamp: string | number;
   attachments?: EvidenceFile[];
@@ -358,12 +360,39 @@ export interface DataCorrection {
   newValue: string;   // Corrected value from user
 }
 
+/**
+ * Result from AI claim intake analysis
+ *
+ * STATE FLOW DOCUMENTATION:
+ * -------------------------
+ * Two-phase extraction flow to handle ambiguous documents:
+ *
+ * Phase 1 - Initial Analysis:
+ *   - readyToExtract: false → AI needs clarification before extracting data
+ *     (e.g., multiple invoices, unclear currency, ambiguous parties)
+ *   - readyToExtract: true  → Data can be safely extracted from documents
+ *   - extractedData is ONLY merged into state when readyToExtract is true
+ *
+ * Phase 2 - Proceeding to Wizard:
+ *   - readyToProceed: false → More information needed (missing required fields)
+ *   - readyToProceed: true  → Minimum viable data collected, can proceed to verification
+ *
+ * Typical State Transitions:
+ *   1. User uploads document with multiple invoices
+ *      → readyToExtract: false, readyToProceed: false (ask which invoice)
+ *   2. User clarifies which invoice
+ *      → readyToExtract: true, readyToProceed: false (extract, but missing county)
+ *   3. User provides county
+ *      → readyToExtract: true, readyToProceed: true (ready for wizard)
+ */
 export interface ClaimIntakeResult {
   extractedData?: Partial<ClaimState>;
   followUpQuestions?: string[];
   confidence?: number;
   acknowledgment?: string;
+  /** Set true when minimum viable data collected and user can proceed to wizard */
   readyToProceed?: boolean;
+  /** Set true when data can be safely extracted (no ambiguities requiring clarification) */
   readyToExtract?: boolean;
   // Corrections detected in user message
   corrections?: DataCorrection[];

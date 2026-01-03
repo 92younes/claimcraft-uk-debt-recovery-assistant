@@ -3,6 +3,7 @@ import { formatCurrency, formatTotalDebt, formatGrandTotal } from "../utils/calc
 import { postcodeToCounty } from "../utils/postcodeToCounty";
 import { cleanPartyAddress } from "../utils/addressParser";
 import { generateContent, Type, createMultimodalContent } from "./geminiApiClient";
+import { LATE_PAYMENT_ACT_RATE, BOE_BASE_RATE } from "../constants";
 
 // Helper to get today's date in UK format
 const getTodayUK = (): string => {
@@ -113,6 +114,7 @@ const sanitizeInvoice = (invoice: any): any => {
     description: sanitizeValue(invoice.description),
     currency: sanitizeValue(invoice.currency) || 'GBP',
     paymentTerms: sanitizeValue(invoice.paymentTerms),
+    agreementType: sanitizeValue(invoice.agreementType),
     totalAmount
   };
 };
@@ -125,6 +127,16 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
   timelineEvents: any[],
   classifications: { fileName: string, type: string }[]
 }> => {
+  if (!files || files.length === 0) {
+    console.warn('[analyzeEvidence] No files provided');
+    return {
+      claimant: {} as Party,
+      defendant: {} as Party,
+      invoice: {} as InvoiceData,
+      timelineEvents: [],
+      classifications: []
+    };
+  }
   const prompt = `
     Analyze the provided evidence documents (Invoices, Contracts, Emails).
     Extract the following details for a UK Debt Claim.
@@ -215,7 +227,8 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
               paymentTerms: { type: Type.STRING, description: "Extract payment terms mentioned (e.g., 'Net 30', '30 days', 'Due on receipt', '14 days')" },
               totalAmount: { type: Type.NUMBER },
               currency: { type: Type.STRING },
-              description: { type: Type.STRING, description: "Brief description of goods/services provided" }
+              description: { type: Type.STRING, description: "Brief description of goods/services provided" },
+              agreementType: { type: Type.STRING, enum: ['goods', 'services', 'ongoing_contract', 'one_time_purchase'], description: "Infer type: 'services' for work performed (web design, consulting, construction), 'goods' for physical products, 'ongoing_contract' for retainers/subscriptions, 'one_time_purchase' for single transactions" }
           } },
           timelineEvents: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
               date: { type: Type.STRING },
@@ -243,6 +256,23 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
     }
     if (result.invoice) {
       result.invoice = sanitizeInvoice(result.invoice);
+
+      // Validate that dueDate is after dateIssued
+      // NOTE: We flag invalid date orders instead of silently swapping them
+      // This allows the user to review and confirm the correct dates
+      if (result.invoice.dateIssued && result.invoice.dueDate) {
+        const issuedDate = new Date(result.invoice.dateIssued);
+        const dueDate = new Date(result.invoice.dueDate);
+
+        if (!isNaN(issuedDate.getTime()) && !isNaN(dueDate.getTime())) {
+          if (dueDate < issuedDate) {
+            console.warn(`[analyzeEvidence] Due date (${result.invoice.dueDate}) is before issue date (${result.invoice.dateIssued}) - flagging for user review`);
+            // Flag for user review instead of silently swapping
+            result.dateError = true;
+            result.dateErrorMessage = `Due date (${result.invoice.dueDate}) appears to be before issue date (${result.invoice.dateIssued}). Please verify these dates.`;
+          }
+        }
+      }
     }
 
     // Post-process: Infer county from postcode if missing
@@ -251,6 +281,8 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
       if (inferredCounty) {
         result.defendant.county = inferredCounty;
         console.log(`[analyzeEvidence] Inferred defendant county: ${inferredCounty}`);
+      } else {
+        console.warn(`[analyzeEvidence] Could not infer defendant county from postcode: ${result.defendant.postcode}`);
       }
     }
 
@@ -259,6 +291,8 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
       if (inferredCounty) {
         result.claimant.county = inferredCounty;
         console.log(`[analyzeEvidence] Inferred claimant county: ${inferredCounty}`);
+      } else {
+        console.warn(`[analyzeEvidence] Could not infer claimant county from postcode: ${result.claimant.postcode}`);
       }
     }
 
@@ -279,75 +313,94 @@ export const analyzeEvidence = async (files: EvidenceFile[]): Promise<{
 
     return result;
   } catch (e) {
-    console.error("JSON Parse Error", e);
-    throw new Error("Failed to parse AI response");
+    console.error('[analyzeEvidence] JSON Parse Error:', e);
+    console.warn('[analyzeEvidence] Returning default values due to parse error');
+    return {
+      claimant: {} as Party,
+      defendant: {} as Party,
+      invoice: {} as InvoiceData,
+      timelineEvents: [],
+      classifications: []
+    };
   }
 };
 
 export const getClaimStrengthAssessment = async (data: ClaimState): Promise<{ score: number, strength: ClaimStrength, analysis: string, weaknesses: string[] }> => {
-  const prompt = `
-    Act as an Expert Legal Assistant for UK Small Claims.
-    Assess the "Winnability" (Probability of Success) of this claim based on the available evidence, timeline, and clarifications.
+  try {
+    const prompt = `
+      Act as an Expert Legal Assistant for UK Small Claims.
+      Assess the "Winnability" (Probability of Success) of this claim based on the available evidence, timeline, and clarifications.
 
-    CLAIMANT: ${data.claimant.name}
-    DEFENDANT: ${data.defendant.name}
-    AMOUNT: £${data.invoice.totalAmount}
+      CLAIMANT: ${data.claimant.name}
+      DEFENDANT: ${data.defendant.name}
+      AMOUNT: £${data.invoice.totalAmount}
 
-    TIMELINE OF EVENTS:
-    ${JSON.stringify(data.timeline)}
+      TIMELINE OF EVENTS:
+      ${JSON.stringify(data.timeline)}
 
-    EVIDENCE BUNDLE:
-    ${data.evidence.map(e => `- ${e.name}: Classified as "${e.classification || 'Unknown Document'}"`).join('\n')}
+      EVIDENCE BUNDLE:
+      ${data.evidence.map(e => `- ${e.name}: Classified as "${e.classification || 'Unknown Document'}"`).join('\n')}
 
-    CLARIFICATIONS (Client Interview):
-    ${data.chatHistory.filter(m => m.role === 'user').map(m => `- Client: ${m.content}`).join('\n')}
+      CLARIFICATIONS (Client Interview):
+      ${data.chatHistory.filter(m => m.role === 'user').map(m => `- Client: ${m.content}`).join('\n')}
 
-    JUDGMENT CRITERIA:
-    1. **Contract**: Is there a signed contract or clear written agreement? (High impact)
-    2. **Proof**: Is there proof of delivery/service performance?
-    3. **Admissions**: Did the defendant admit the debt in emails/chats?
-    4. **Procedure**: Did the claimant send chasers/warnings?
-    5. **Disputes**: Is there a valid counterclaim or dispute mentioned in the chat?
+      JUDGMENT CRITERIA:
+      1. **Contract**: Is there a signed contract or clear written agreement? (High impact)
+      2. **Proof**: Is there proof of delivery/service performance?
+      3. **Admissions**: Did the defendant admit the debt in emails/chats?
+      4. **Procedure**: Did the claimant send chasers/warnings?
+      5. **Disputes**: Is there a valid counterclaim or dispute mentioned in the chat?
 
-    Return JSON:
-    - score: number (0-100, where 75+ = strong case, 50-74 = moderate, <50 = weak)
-    - analysis: string (Concise summary of the case strength)
-    - weaknesses: string[] (List specific gaps, e.g., "Missing signed contract", "No proof of delivery", "Debt relies on verbal agreement")
-  `;
+      Return JSON:
+      - score: number (0-100, where 75+ = strong case, 50-74 = moderate, <50 = weak)
+      - analysis: string (Concise summary of the case strength)
+      - weaknesses: string[] (List specific gaps, e.g., "Missing signed contract", "No proof of delivery", "Debt relies on verbal agreement")
+    `;
 
-  const response = await generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          score: { type: Type.NUMBER },
-          analysis: { type: Type.STRING },
-          weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } }
+    const response = await generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            score: { type: Type.NUMBER },
+            analysis: { type: Type.STRING },
+            weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } }
+          }
         }
       }
+    });
+
+    try {
+      const result = JSON.parse(cleanJson(response.text || '{}'));
+      // Use nullish coalescing to handle legitimate 0 scores
+      const rawScore = Number(result.score);
+      // Clamp score to [0, 100] range to guard against model drift or out-of-range values
+      const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 50;
+
+      console.log(`[getClaimStrengthAssessment] Raw score: ${rawScore}, Clamped score: ${score}`);
+
+      return {
+        score,
+        strength: scoreToStrength(score),
+        analysis: result.analysis || "Could not assess strength automatically.",
+        weaknesses: result.weaknesses || []
+      };
+    } catch (parseError) {
+      console.error('[getClaimStrengthAssessment] JSON parse error:', parseError);
+      console.warn('[getClaimStrengthAssessment] Returning default values');
+      return {
+        score: 50,
+        strength: ClaimStrength.MEDIUM,
+        analysis: "Could not assess strength automatically.",
+        weaknesses: []
+      };
     }
-  });
-
-  try {
-    const result = JSON.parse(cleanJson(response.text || '{}'));
-    // Use nullish coalescing to handle legitimate 0 scores
-    const rawScore = Number(result.score);
-    // Clamp score to [0, 100] range to guard against model drift or out-of-range values
-    const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 50;
-
-    console.log(`[getClaimStrengthAssessment] Raw score: ${rawScore}, Clamped score: ${score}`);
-
-    return {
-      score,
-      strength: scoreToStrength(score),
-      analysis: result.analysis || "Could not assess strength automatically.",
-      weaknesses: result.weaknesses || []
-    };
-  } catch (e) {
-    console.error('[getClaimStrengthAssessment] JSON parse error:', e);
+  } catch (error) {
+    console.error('[getClaimStrengthAssessment] Error:', error);
+    console.warn('[getClaimStrengthAssessment] Returning default values due to error');
     return {
       score: 50,
       strength: ClaimStrength.MEDIUM,
@@ -450,7 +503,7 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
     : '\n\nAll required defendant address and invoice fields are complete.';
 
   // Count questions already asked to prevent going in circles
-  const aiMessages = history.filter(m => m.role === 'ai').length;
+  const aiMessages = history.filter(m => m.role === 'assistant').length;
   const circleWarning = aiMessages > 5
     ? '\n\nIMPORTANT: You have asked several questions already. If you have gathered contract, invoice, and payment chase information, conclude the consultation. Do not keep asking similar questions.'
     : '';
@@ -467,7 +520,7 @@ export const sendChatMessage = async (history: ChatMessage[], userMessage: strin
 
   // Build conversation history for context
   const conversationContext = history.slice(0, -1)
-    .map(msg => `${msg.role === 'ai' ? 'ASSISTANT' : 'USER'}: ${msg.content}`)
+    .map(msg => `${msg.role === 'assistant' ? 'ASSISTANT' : 'USER'}: ${msg.content}`)
     .join('\n\n');
 
   const prompt = `
@@ -702,7 +755,7 @@ export const extractDataFromChat = async (
               properties: {
                 date: { type: Type.STRING },
                 description: { type: Type.STRING },
-                type: { type: Type.STRING, enum: ['contract', 'service_delivered', 'invoice', 'payment_due', 'part_payment', 'chaser', 'lba_sent', 'acknowledgment', 'communication'] }
+                type: { type: Type.STRING, enum: ['contract', 'service_delivered', 'invoice', 'payment_due', 'part_payment', 'chaser', 'lba_sent', 'acknowledgment', 'communication', 'payment_reminder', 'promise_to_pay'] }
               }
             }
           },
@@ -722,10 +775,17 @@ export const extractDataFromChat = async (
     const result = JSON.parse(cleanJson(response.text || '{}'));
 
     // Sanitize party and invoice data to remove null/"null" values
-    const claimantData = sanitizeParty(result.claimant || {});
     const defendantData = sanitizeParty(result.defendant || {});
     if (result.invoice) {
       result.invoice = sanitizeInvoice(result.invoice);
+    }
+
+    // SECURITY: Log and discard any AI-extracted claimant data
+    // Claimant must come from user profile, not AI extraction
+    if (result.claimant && (result.claimant.name || result.claimant.address)) {
+      console.warn('[extractDataFromChat] AI extracted claimant data - discarding. Claimant must come from user profile only.', {
+        attemptedClaimant: result.claimant.name || 'unknown'
+      });
     }
 
     // Infer defendant county from postcode if missing
@@ -737,23 +797,7 @@ export const extractDataFromChat = async (
       }
     }
 
-    // Infer claimant county from postcode if missing
-    if (claimantData.postcode && !claimantData.county) {
-      const inferredCounty = postcodeToCounty(claimantData.postcode);
-      if (inferredCounty) {
-        claimantData.county = inferredCounty;
-        console.log(`[extractDataFromChat] Inferred claimant county: ${inferredCounty}`);
-      }
-    }
-
-    // Clean addresses if they contain full address strings
-    if (claimantData.address) {
-      const cleanedClaimant = cleanPartyAddress(claimantData);
-      claimantData.address = cleanedClaimant.address;
-      claimantData.city = cleanedClaimant.city || claimantData.city;
-      claimantData.postcode = cleanedClaimant.postcode || claimantData.postcode;
-    }
-
+    // Clean defendant addresses if they contain full address strings
     if (defendantData.address) {
       const cleanedDefendant = cleanPartyAddress(defendantData);
       defendantData.address = cleanedDefendant.address;
@@ -774,7 +818,7 @@ export const extractDataFromChat = async (
     const recommendedDoc = docTypeMap[result.recommendedDocument] || DocumentType.LBA;
 
     return {
-      claimant: claimantData,
+      // NOTE: claimant intentionally NOT included - must come from user profile only
       defendant: defendantData,
       invoice: result.invoice || {},
       timeline: result.timeline || [],
@@ -815,7 +859,10 @@ export const draftUKClaim = async (data: ClaimState): Promise<GeneratedContent> 
       ? "the Late Payment of Commercial Debts (Interest) Act 1998"
       : "section 69 of the County Courts Act 1984";
 
-  const interestRate = isB2B ? "8% above Bank of England Base Rate" : "8% per annum";
+  // Use actual rate values for accuracy in generated documents
+  const interestRate = isB2B
+    ? `${LATE_PAYMENT_ACT_RATE}% per annum (8% above Bank of England Base Rate of ${BOE_BASE_RATE}%)`
+    : "8% per annum";
 
   // Prepare Chat Context for Drafting
   const chatContext = data.chatHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
@@ -957,6 +1004,7 @@ export const analyzeClaimInput = async (
     The CLAIMANT is the logged-in user (the person filing the claim). Their details come from their user profile.
     You should ONLY extract DEFENDANT (debtor) information from the documents/conversation.
     If you see two companies in a document, the one OWED money is the claimant (ignore it), the one OWING money is the defendant (extract it).
+    DO NOT include claimant fields in the extraction schema - only defendant, invoice, and timeline.
 
     Previous conversation:
     ${conversationContext || 'None'}
@@ -1163,8 +1211,8 @@ export const analyzeClaimInput = async (
                   properties: {
                     invoiceNumber: { type: Type.STRING, description: "Extract from patterns like 'Invoice #123', 'Inv-456'" },
                     totalAmount: { type: Type.NUMBER },
-                    dateIssued: { type: Type.STRING },
-                    dueDate: { type: Type.STRING, description: "Calculate from payment terms if mentioned (e.g., '30 days' = dateIssued + 30 days)" },
+                    dateIssued: { type: Type.STRING, description: "Date when invoice was issued (ISO format: YYYY-MM-DD)" },
+                    dueDate: { type: Type.STRING, description: "Date when payment was due (ISO format: YYYY-MM-DD). Calculate from payment terms if mentioned (e.g., '30 days' = dateIssued + 30 days). MUST be after dateIssued." },
                     paymentTerms: { type: Type.STRING, description: "Extract payment terms (e.g., 'Net 30', '30 days')" },
                     description: { type: Type.STRING },
                     currency: { type: Type.STRING }
@@ -1222,11 +1270,28 @@ export const analyzeClaimInput = async (
     if (extractedData.defendant) {
       extractedData.defendant = sanitizeParty(extractedData.defendant);
     }
-    if (extractedData.claimant) {
-      extractedData.claimant = sanitizeParty(extractedData.claimant);
-    }
+
+    // Track date validation errors separately from AI-detected ones
+    let detectedDateError = false;
+
     if (extractedData.invoice) {
       extractedData.invoice = sanitizeInvoice(extractedData.invoice);
+
+      // Validate that dueDate is after dateIssued
+      // NOTE: We flag invalid date orders instead of silently swapping them
+      // This allows the user to review and confirm the correct dates
+      if (extractedData.invoice.dateIssued && extractedData.invoice.dueDate) {
+        const issuedDate = new Date(extractedData.invoice.dateIssued);
+        const dueDate = new Date(extractedData.invoice.dueDate);
+
+        if (!isNaN(issuedDate.getTime()) && !isNaN(dueDate.getTime())) {
+          if (dueDate < issuedDate) {
+            console.warn(`[analyzeClaimInput] Due date (${extractedData.invoice.dueDate}) is before issue date (${extractedData.invoice.dateIssued}) - flagging for user review`);
+            // Flag for user review instead of silently swapping
+            detectedDateError = true;
+          }
+        }
+      }
     }
 
     // Clean addresses if they contain full address strings
@@ -1237,19 +1302,14 @@ export const analyzeClaimInput = async (
       extractedData.defendant.postcode = cleanedDefendant.postcode || extractedData.defendant.postcode;
     }
 
-    if (extractedData.claimant) {
-      const cleanedClaimant = cleanPartyAddress(extractedData.claimant);
-      extractedData.claimant.address = cleanedClaimant.address;
-      extractedData.claimant.city = cleanedClaimant.city || extractedData.claimant.city;
-      extractedData.claimant.postcode = cleanedClaimant.postcode || extractedData.claimant.postcode;
-    }
-
     // Infer defendant county from postcode if missing
     if (extractedData.defendant?.postcode && !extractedData.defendant?.county) {
       const inferredCounty = postcodeToCounty(extractedData.defendant.postcode);
       if (inferredCounty) {
         extractedData.defendant.county = inferredCounty;
         console.log(`[analyzeClaimInput] Inferred defendant county: ${inferredCounty} from postcode ${extractedData.defendant.postcode}`);
+      } else {
+        console.warn(`[analyzeClaimInput] Could not infer county from postcode: ${extractedData.defendant.postcode} - user will need to select manually`);
       }
     }
 
@@ -1289,17 +1349,19 @@ export const analyzeClaimInput = async (
       limitationWarning: result.limitationWarning || false,
       debtAgeYears: result.debtAgeYears,
       exceedsSmallClaims: result.exceedsSmallClaims || false,
-      dateError: result.dateError || false,
+      dateError: result.dateError || detectedDateError, // Combine AI-detected and validation errors
       lbaSent: result.lbaSent,
       lbaDaysAgo: result.lbaDaysAgo
     };
   } catch (error) {
     console.error('[analyzeClaimInput] Error:', error);
+    console.warn('[analyzeClaimInput] Returning default values due to error');
     return {
       extractedData: {},
       followUpQuestions: ['Could you tell me more about your claim?'],
       acknowledgment: 'I had trouble processing that. Let me ask some questions.',
       readyToProceed: false,
+      readyToExtract: false,
       confidence: 0
     };
   }

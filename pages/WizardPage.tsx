@@ -33,6 +33,21 @@ const WIZARD_STEPS = [
   { number: Step.REVIEW, label: 'Review', description: 'Final check' }
 ];
 
+// Helper to format relative time for autosave indicator
+const formatRelativeTime = (date: Date): string => {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+
+  if (diffSec < 10) return 'just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  if (diffMin < 60) return `${diffMin} min ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+};
+
 export const WizardPage = () => {
   const navigate = useNavigate();
   const { setHeaderConfig } = useOutletContext<{
@@ -53,6 +68,11 @@ export const WizardPage = () => {
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
   const [activeVerifyTab, setActiveVerifyTab] = useState<string>('claimant');
   const [newFilesCount, setNewFilesCount] = useState(0);
+
+  // Claimant section auto-collapse: collapsed if profile exists and claimant data is complete
+  const [claimantCollapsed, setClaimantCollapsed] = useState(() => {
+    return !!(userProfile && claimData.claimant.name && claimData.claimant.address && claimData.claimant.postcode);
+  });
   const [isTransitioning, setIsTransitioning] = useState(false);
   const isGeneratingRef = useRef(false);
   const deadlinesGeneratedForDocRef = useRef<string | null>(null); // Track deadlines generated for which doc type
@@ -82,6 +102,27 @@ export const WizardPage = () => {
       step
     });
   }, [claimData, step]);
+
+  // Helper to auto-suggest agreement type based on description
+  const suggestAgreementType = useCallback((description: string): 'goods' | 'services' | 'ongoing_contract' | 'one_time_purchase' | null => {
+    if (!description) return null;
+    const lower = description.toLowerCase();
+    if (/consult|advice|design|develop|build|support|maint|software|web|app|creative|market|legal|account/i.test(lower)) return 'services';
+    if (/product|goods|deliver|ship|supplie|material|equipment|hardware|stock|item|purchase/i.test(lower)) return 'goods';
+    if (/month|annual|subscription|retain|ongoing|contract|agreement|term|recurring/i.test(lower)) return 'ongoing_contract';
+    if (/one-off|single|project|job|task|once|commission/i.test(lower)) return 'one_time_purchase';
+    return null;
+  }, []);
+
+  // Auto-suggest agreement type when description is available
+  useEffect(() => {
+    if (claimData.invoice.description && !claimData.invoice.agreementType) {
+      const suggested = suggestAgreementType(claimData.invoice.description);
+      if (suggested) {
+        updateInvoiceDetails('agreementType', suggested);
+      }
+    }
+  }, [claimData.invoice.description, claimData.invoice.agreementType, suggestAgreementType, updateInvoiceDetails]);
 
   // Computed checks
   const hasExistingData = claimData.source !== 'manual' || claimData.invoice.totalAmount > 0 || !!claimData.defendant.name;
@@ -710,11 +751,75 @@ export const WizardPage = () => {
           {/* Claimant Tab */}
           {activeVerifyTab === 'claimant' && (
             <div className="animate-fade-in">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-2 h-2 rounded-full bg-teal-500" />
-                <span className="text-sm font-semibold text-teal-700 uppercase tracking-wide">Your Details</span>
-              </div>
-              <PartyForm party={claimData.claimant} onChange={handleClaimantChange} title="Claimant" />
+              {claimantCollapsed && userProfile ? (
+                /* Collapsed read-only view when profile exists */
+                <div className="bg-gradient-to-r from-slate-50 to-teal-50/30 rounded-xl p-5 border border-slate-200">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-4">
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <span className="font-semibold text-slate-900">Your Details (from profile)</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-slate-500 text-xs mb-0.5">Name/Business</p>
+                          <p className="font-medium text-slate-800">{claimData.claimant.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-500 text-xs mb-0.5">Type</p>
+                          <p className="font-medium text-slate-800">{claimData.claimant.type}</p>
+                        </div>
+                        <div className="md:col-span-2">
+                          <p className="text-slate-500 text-xs mb-0.5">Address</p>
+                          <p className="font-medium text-slate-800">
+                            {claimData.claimant.address}, {claimData.claimant.city}, {claimData.claimant.postcode}
+                          </p>
+                        </div>
+                        {claimData.claimant.email && (
+                          <div>
+                            <p className="text-slate-500 text-xs mb-0.5">Email</p>
+                            <p className="font-medium text-slate-800">{claimData.claimant.email}</p>
+                          </div>
+                        )}
+                        {claimData.claimant.phone && (
+                          <div>
+                            <p className="text-slate-500 text-xs mb-0.5">Phone</p>
+                            <p className="font-medium text-slate-800">{claimData.claimant.phone}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setClaimantCollapsed(false)}
+                      className="flex-shrink-0 ml-4"
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* Expanded editable view */
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-teal-500" />
+                      <span className="text-sm font-semibold text-teal-700 uppercase tracking-wide">Your Details</span>
+                    </div>
+                    {userProfile && claimData.claimant.name && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setClaimantCollapsed(true)}
+                      >
+                        Collapse
+                      </Button>
+                    )}
+                  </div>
+                  <PartyForm party={claimData.claimant} onChange={handleClaimantChange} title="Claimant" />
+                </>
+              )}
             </div>
           )}
 
@@ -793,6 +898,15 @@ export const WizardPage = () => {
                   onChange={handleDueDateChange}
                   min={claimData.invoice.dateIssued}
                   helpText="When payment was due"
+                />
+
+                {/* Service/Delivery Date */}
+                <DateInput
+                  label="Service/Delivery Date"
+                  value={claimData.invoice.serviceDeliveryDate || ''}
+                  onChange={(value) => updateInvoiceDetails('serviceDeliveryDate', value)}
+                  max={new Date().toISOString().split('T')[0]}
+                  helpText="When goods/services were delivered (optional)"
                 />
 
                 {/* Agreement Type */}
@@ -1268,6 +1382,10 @@ export const WizardPage = () => {
               <Button
                 onClick={() => {
                   setClaimData(prev => ({ ...prev, status: 'review' }));
+                  toast.success('Document finalized! Ready for review and sending.', {
+                    duration: 4000,
+                    icon: '✅'
+                  });
                   handleNextStep(Step.REVIEW);
                 }}
                 rightIcon={<ArrowRight className="w-5 h-5" />}
@@ -1356,12 +1474,27 @@ export const WizardPage = () => {
               <span>Saving...</span>
             </div>
           ) : lastSaveTime ? (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200" title={`Last saved: ${lastSaveTime.toLocaleTimeString('en-GB')}`}>
               <CheckCircle className="w-3.5 h-3.5" />
-              <span>Saved</span>
+              <span>Saved {formatRelativeTime(lastSaveTime)}</span>
             </div>
           ) : null}
         </div>
+
+        {/* Save Draft Button */}
+        <Button
+          variant="outline"
+          onClick={async () => {
+            await saveClaim();
+            toast.success('Draft saved successfully', { icon: '💾' });
+          }}
+          icon={<Save className="w-4 h-4" />}
+          className="text-teal-700 border-teal-200 hover:bg-teal-50"
+          title="Save draft"
+          size="sm"
+        >
+          <span className="hidden sm:inline">Save Draft</span>
+        </Button>
 
         {/* Cancel Button */}
         <Button
@@ -1375,7 +1508,7 @@ export const WizardPage = () => {
           <span className="hidden sm:inline">Cancel</span>
         </Button>
       </div>
-  ), [hasUnsavedChanges, lastSaveTime, handleCancelWizard]);
+  ), [hasUnsavedChanges, lastSaveTime, handleCancelWizard, saveClaim]);
 
   // Configure the layout header from this page to avoid double-stacked headers
   useEffect(() => {

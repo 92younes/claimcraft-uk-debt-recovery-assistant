@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Party, PartyType } from '../types';
 import { Input, Select } from './ui/Input';
 import { Button } from './ui/Button';
+import { Modal } from './ui/Modal';
 import { UK_COUNTIES, getCountyFromPostcode } from '../constants';
 import { validateUKPostcode, formatUKPostcode, validateEmail, validateUKPhone, validateCompanyNumber } from '../utils/validation';
 import { searchCompaniesHouse } from '../services/companiesHouse';
-import { Search, Loader2, CheckCircle, AlertCircle, Building2, HelpCircle } from 'lucide-react';
+import { Search, Loader2, CheckCircle, AlertCircle, Building2, HelpCircle, AlertTriangle } from 'lucide-react';
 import { Tooltip } from './ui/Tooltip';
 
 interface PartyFormProps {
@@ -39,45 +40,147 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
   // Issue 10: County lookup warning
   const [countyLookupWarning, setCountyLookupWarning] = useState<string | null>(null);
 
+  // Address mismatch warning after Companies House lookup
+  const [addressMismatchWarning, setAddressMismatchWarning] = useState<string | null>(null);
+
+  // Companies House override confirmation modal state
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [pendingCompaniesHouseData, setPendingCompaniesHouseData] = useState<Partial<Party> | null>(null);
+
   // Check if this is the defendant form (Companies House lookup only for defendant)
   const isDefendant = title.toLowerCase().includes('defendant');
 
+  // Track if we've already searched to avoid duplicate searches
+  const [lastSearchedValue, setLastSearchedValue] = useState<string>('');
+
   // Companies House lookup handler
-  const handleCompaniesHouseLookup = async () => {
+  const handleCompaniesHouseLookup = async (autoTriggered = false) => {
     const searchQuery = party.companyNumber?.trim() || party.name?.trim();
 
     if (!searchQuery) {
-      setSearchError('Enter a company number or name to search');
+      if (!autoTriggered) {
+        setSearchError('Enter a company number or name to search');
+      }
+      return;
+    }
+
+    // Prevent duplicate searches
+    if (searchQuery === lastSearchedValue) {
       return;
     }
 
     setIsSearching(true);
     setSearchError(null);
     setSearchSuccess(false);
+    setAddressMismatchWarning(null);
+    setLastSearchedValue(searchQuery);
+
+    // Store original address for comparison
+    const originalAddress = {
+      address: party.address?.trim().toLowerCase() || '',
+      city: party.city?.trim().toLowerCase() || '',
+      postcode: party.postcode?.trim().toLowerCase().replace(/\s+/g, '') || ''
+    };
 
     try {
       const result = await searchCompaniesHouse(searchQuery);
 
       if (result) {
-        // Merge found data with existing party data
-        onChange({
-          ...party,
-          ...result,
-          type: PartyType.BUSINESS
-        });
-        setSearchSuccess(true);
-        // Clear success message after 3 seconds
-        setTimeout(() => setSearchSuccess(false), 3000);
-      } else {
+        // Compare addresses if user had already entered one
+        const hadOriginalAddress = originalAddress.address || originalAddress.city || originalAddress.postcode;
+        if (hadOriginalAddress && result.address) {
+          const fetchedAddress = {
+            address: result.address?.trim().toLowerCase() || '',
+            city: result.city?.trim().toLowerCase() || '',
+            postcode: result.postcode?.trim().toLowerCase().replace(/\s+/g, '') || ''
+          };
+
+          // Check if addresses differ
+          const addressDiffers = (originalAddress.address && fetchedAddress.address && originalAddress.address !== fetchedAddress.address);
+          const cityDiffers = (originalAddress.city && fetchedAddress.city && originalAddress.city !== fetchedAddress.city);
+          const postcodeDiffers = (originalAddress.postcode && fetchedAddress.postcode && originalAddress.postcode !== fetchedAddress.postcode);
+
+          if (addressDiffers || cityDiffers || postcodeDiffers) {
+            setAddressMismatchWarning(
+              `The address from Companies House differs from what you entered. The Companies House registered address has been used. Please verify this is the correct address for correspondence.`
+            );
+          }
+        }
+
+        // Check if user has existing data that would be overwritten
+        const hasExistingData = party.name?.trim() || party.address?.trim() || party.city?.trim();
+        const wouldOverwrite = hasExistingData && (
+          (result.name && result.name !== party.name) ||
+          (result.address && result.address !== party.address) ||
+          (result.city && result.city !== party.city)
+        );
+
+        if (wouldOverwrite && !autoTriggered) {
+          // Store pending data and show confirmation modal
+          setPendingCompaniesHouseData({
+            ...result,
+            type: PartyType.BUSINESS
+          });
+          setShowOverrideModal(true);
+        } else {
+          // No conflict or auto-triggered - apply directly
+          onChange({
+            ...party,
+            ...result,
+            type: PartyType.BUSINESS
+          });
+          setSearchSuccess(true);
+          // Clear success message after 3 seconds
+          setTimeout(() => setSearchSuccess(false), 3000);
+        }
+      } else if (!autoTriggered) {
         setSearchError('No company found. Try a different search term.');
       }
     } catch (err) {
-      setSearchError('Search failed. Please try again.');
+      if (!autoTriggered) {
+        setSearchError('Search failed. Please try again.');
+      }
       console.error('Companies House lookup error:', err);
     } finally {
       setIsSearching(false);
     }
   };
+
+  // Auto-trigger search when company number is complete (8 digits or valid format with prefix)
+  useEffect(() => {
+    if (!isDefendant || readOnly || party.type !== PartyType.BUSINESS) return;
+
+    const companyNum = party.companyNumber?.trim() || '';
+    // Valid formats: 12345678, SC123456, NI123456, OC123456, etc.
+    const isValidFormat = /^[A-Z]{0,2}\d{6,8}$/i.test(companyNum);
+    const isComplete = companyNum.length >= 8 && isValidFormat;
+
+    if (isComplete && companyNum !== lastSearchedValue && !isSearching) {
+      // Debounce the search slightly
+      const timer = setTimeout(() => {
+        handleCompaniesHouseLookup(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [party.companyNumber, party.type, isDefendant, readOnly, lastSearchedValue, isSearching]);
+
+  // Auto-trigger search when name looks like a company (debounced)
+  useEffect(() => {
+    if (!isDefendant || readOnly) return;
+
+    const name = party.name?.trim() || '';
+    // Check if name looks like a company
+    const companyPatterns = /\b(Ltd\.?|Limited|PLC|LLP|Inc\.?|Corporation|Corp\.?|Company|Co\.?)\b/i;
+    const looksLikeCompany = companyPatterns.test(name) && name.length >= 5;
+
+    if (looksLikeCompany && name !== lastSearchedValue && !party.companyNumber && !isSearching) {
+      // Longer debounce for name-based search
+      const timer = setTimeout(() => {
+        handleCompaniesHouseLookup(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [party.name, party.companyNumber, isDefendant, readOnly, lastSearchedValue, isSearching]);
 
   // Validation logic
   const validateField = (field: keyof Party, value: string): string | undefined => {
@@ -296,7 +399,7 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
                 <div className="pb-[1px]">
                   <Button
                     type="button"
-                    onClick={handleCompaniesHouseLookup}
+                    onClick={() => handleCompaniesHouseLookup(false)}
                     disabled={isSearching}
                     isLoading={isSearching}
                     variant="primary"
@@ -372,6 +475,17 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
         readOnly={readOnly}
       />
 
+      {/* Address mismatch warning after Companies House lookup */}
+      {addressMismatchWarning && isDefendant && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2 mb-4">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-800">Address Mismatch Detected</p>
+            <p className="text-amber-700 mt-1">{addressMismatchWarning}</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-3">
           <Input
@@ -407,8 +521,8 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
             }}
             onBlur={() => handleBlur('county')}
             error={touched.has('county') ? errors.county : undefined}
-            required
             disabled={readOnly}
+            required
           />
           {/* Issue 10: County lookup warning */}
           {countyLookupWarning && !party.county && (
@@ -443,6 +557,77 @@ export const PartyForm: React.FC<PartyFormProps> = ({ title, party, onChange, re
           readOnly={readOnly}
         />
       </div>
+
+      {/* Companies House Override Confirmation Modal */}
+      <Modal
+        isOpen={showOverrideModal}
+        onClose={() => {
+          setShowOverrideModal(false);
+          setPendingCompaniesHouseData(null);
+        }}
+        title="Update with Companies House Data?"
+        description="Companies House returned different information than what you entered."
+        maxWidthClassName="max-w-lg"
+      >
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800">
+              The registered company details differ from what you entered. Would you like to use the official Companies House data?
+            </p>
+          </div>
+
+          {/* Comparison */}
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+              <p className="font-semibold text-slate-700 mb-2">Your Entry</p>
+              {party.name && <p className="text-slate-600 truncate">{party.name}</p>}
+              {party.address && <p className="text-slate-500 text-xs truncate">{party.address}</p>}
+              {party.city && <p className="text-slate-500 text-xs">{party.city}</p>}
+            </div>
+            <div className="bg-teal-50 rounded-lg p-3 border border-teal-200">
+              <p className="font-semibold text-teal-700 mb-2">Companies House</p>
+              {pendingCompaniesHouseData?.name && (
+                <p className="text-teal-600 truncate">{pendingCompaniesHouseData.name}</p>
+              )}
+              {pendingCompaniesHouseData?.address && (
+                <p className="text-teal-500 text-xs truncate">{pendingCompaniesHouseData.address}</p>
+              )}
+              {pendingCompaniesHouseData?.city && (
+                <p className="text-teal-500 text-xs">{pendingCompaniesHouseData.city}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowOverrideModal(false);
+                setPendingCompaniesHouseData(null);
+              }}
+            >
+              Keep My Entry
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingCompaniesHouseData) {
+                  onChange({
+                    ...party,
+                    ...pendingCompaniesHouseData
+                  });
+                  setSearchSuccess(true);
+                  setTimeout(() => setSearchSuccess(false), 3000);
+                }
+                setShowOverrideModal(false);
+                setPendingCompaniesHouseData(null);
+              }}
+            >
+              Use Companies House Data
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

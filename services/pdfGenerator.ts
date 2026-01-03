@@ -870,3 +870,106 @@ export const generateLetterPDF = async (elementId: string): Promise<Blob> => {
 
   return pdf.output('blob');
 };
+
+/**
+ * Capture an HTML element as a canvas (for use in bundle generation)
+ */
+export const captureElementAsCanvas = async (elementId: string): Promise<HTMLCanvasElement | null> => {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.warn(`Element with ID '${elementId}' not found`);
+    return null;
+  }
+
+  return html2canvas(element, {
+    scale: 2,
+    useCORS: true,
+    logging: false,
+    backgroundColor: '#ffffff',
+    windowWidth: element.scrollWidth,
+    windowHeight: element.scrollHeight
+  });
+};
+
+/**
+ * Generate a bundled PDF from pre-captured canvases
+ * Each canvas becomes a separate document section (starts on new page)
+ */
+export const generateBundledPDFFromCanvases = async (canvases: HTMLCanvasElement[]): Promise<Blob> => {
+  if (canvases.length === 0) {
+    throw new Error('No canvases provided for bundle');
+  }
+
+  // A4 dimensions in mm
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 10;
+  const contentWidth = pageWidth - (marginX * 2);
+  const contentHeight = pageHeight - (marginX * 2);
+
+  // Create PDF
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  let isFirstDocument = true;
+
+  for (const canvas of canvases) {
+    // Calculate image dimensions
+    const imgWidth = contentWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    // Add new page for each document after the first
+    if (!isFirstDocument) {
+      pdf.addPage();
+    }
+    isFirstDocument = false;
+
+    // Handle multi-page content for this document
+    let heightLeft = imgHeight;
+    let position = marginX;
+
+    // First page of this document
+    pdf.addImage(
+      canvas.toDataURL('image/png'),
+      'PNG',
+      marginX,
+      position,
+      imgWidth,
+      imgHeight
+    );
+    heightLeft -= contentHeight;
+
+    // Additional pages if this document overflows
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight + marginX;
+      pdf.addPage();
+      pdf.addImage(
+        canvas.toDataURL('image/png'),
+        'PNG',
+        marginX,
+        position,
+        imgWidth,
+        imgHeight
+      );
+      heightLeft -= contentHeight;
+    }
+  }
+
+  return pdf.output('blob');
+};
+
+/**
+ * Generate a bundled PDF containing multiple documents (e.g., LBA + Info Sheet + Reply Form)
+ * Each document starts on a new page
+ * NOTE: All elements must exist in the DOM simultaneously
+ */
+export const generateBundledPDF = async (elementIds: string[]): Promise<Blob> => {
+  const canvases: HTMLCanvasElement[] = [];
+
+  for (const elementId of elementIds) {
+    const canvas = await captureElementAsCanvas(elementId);
+    if (canvas) {
+      canvases.push(canvas);
+    }
+  }
+
+  return generateBundledPDFFromCanvases(canvases);
+};

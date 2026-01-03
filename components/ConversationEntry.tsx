@@ -86,6 +86,8 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
   const [validationWarnings, setValidationWarnings] = useState<{
     currencyWarning?: boolean;
     countyMissing?: boolean;
+    claimantCountyMissing?: boolean;  // Separate flag for claimant county (from profile)
+    defendantCountyMissing?: boolean; // Separate flag for defendant county (from extraction)
     limitationWarning?: boolean;
     debtAgeYears?: number;
     exceedsSmallClaims?: boolean;
@@ -152,7 +154,7 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
   const buildChatHistory = (msgs: ConversationMessage[]): ChatMessage[] => {
     return msgs.map((msg, idx) => ({
       id: `msg-${idx}-${msg.timestamp}`,
-      // Keep roles consistent with the rest of the app: assistant messages are 'ai'
+      // Standardized role: 'user' or 'assistant'
       role: msg.role,
       content: msg.content,
       timestamp: msg.timestamp
@@ -165,13 +167,22 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
   ): Partial<ClaimState> | null => {
     if (!incoming) return prev;
     if (!prev) return incoming;
+
+    // SECURITY GUARD: Log and discard any AI-extracted claimant data
+    // Claimant MUST always come from user profile, never from document extraction
+    // This prevents potential hallucination or confusion between creditor/debtor
+    if (incoming.claimant && (incoming.claimant.name || incoming.claimant.address)) {
+      console.warn('[ConversationEntry] AI attempted to extract claimant data - discarding. Claimant must come from user profile only.', {
+        attemptedClaimant: incoming.claimant.name || 'unknown'
+      });
+    }
+
     return {
       ...prev,
       ...incoming,
       // Deep merge for nested objects
       defendant: { ...prev.defendant, ...incoming.defendant },
-      // CRITICAL: Never merge AI-extracted claimant data - it may be hallucinated
-      // Claimant should always come from user profile, not from document extraction
+      // CRITICAL: Never merge AI-extracted claimant data - always preserve profile data
       claimant: prev.claimant,
       invoice: { ...prev.invoice, ...incoming.invoice },
       timeline: [...(prev.timeline || []), ...(incoming.timeline || [])]
@@ -312,8 +323,13 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
         }
       }
 
-      // Only merge extracted data if AI is ready to extract (two-phase flow)
-      // If readyToExtract is false, AI needs clarification before extracting
+      // TWO-PHASE EXTRACTION FLOW (see ClaimIntakeResult docs in types.ts):
+      // Phase 1: readyToExtract controls whether we merge extracted data
+      //   - false: AI needs clarification (ambiguous data) - don't merge yet
+      //   - true:  Data is unambiguous - safe to merge into state
+      // Phase 2: readyToProceed controls whether user can proceed to wizard
+      //   - false: Missing required fields - keep asking questions
+      //   - true:  Minimum viable data collected - show "Continue" button
       let nextExtractedData: Partial<ClaimState> | null = extractedData;
       if (result.readyToExtract !== false) {
         // Track newly extracted fields for preview panel highlighting
@@ -376,7 +392,7 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
 
       // Add AI message
       const aiMessage: ConversationMessage = {
-        role: 'ai',
+        role: 'assistant',  // Standardized role name
         content: aiContent,
         timestamp: Date.now()
       };
@@ -387,9 +403,15 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
       setLastAcknowledgment(result.acknowledgment);
 
       // Store validation warnings
+      // Check both claimant (from profile) and defendant (from extraction) counties
+      const claimantCountyMissing = !userProfile?.businessAddress?.county;
+      const defendantCountyMissing = result.countyMissing;
+
       setValidationWarnings({
         currencyWarning: result.currencyWarning,
-        countyMissing: result.countyMissing,
+        countyMissing: claimantCountyMissing || defendantCountyMissing, // Either party missing = true
+        claimantCountyMissing,
+        defendantCountyMissing,
         limitationWarning: result.limitationWarning,
         debtAgeYears: result.debtAgeYears,
         exceedsSmallClaims: result.exceedsSmallClaims,
@@ -426,7 +448,7 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
 
       // Add error message to conversation
       const errorMessage: ConversationMessage = {
-        role: 'ai',
+        role: 'assistant',  // Standardized role name
         content: "I'm sorry, I had trouble processing that. You can try again using the retry button below.",
         timestamp: Date.now()
       };
@@ -532,15 +554,45 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
       finalData.evidence = allUploadedFiles;
     }
 
-    // Include recommended document type
+    // Include recommended document type with comprehensive mapping
     if (recommendedDocument) {
       const docTypeMap: Record<string, DocumentType> = {
+        // Primary names
         'Letter Before Action': DocumentType.LBA,
         'Form N1 (Claim Form)': DocumentType.FORM_N1,
         'Polite Payment Reminder': DocumentType.POLITE_CHASER,
-        'Part 36 Settlement Offer': DocumentType.PART_36_OFFER
+        'Part 36 Settlement Offer': DocumentType.PART_36_OFFER,
+        'Installment Agreement': DocumentType.INSTALLMENT_AGREEMENT,
+        'Installment Payment Agreement': DocumentType.INSTALLMENT_AGREEMENT,
+        'Form N225 (Default Judgment)': DocumentType.DEFAULT_JUDGMENT,
+        'Default Judgment': DocumentType.DEFAULT_JUDGMENT,
+        // Common variations
+        'LBA': DocumentType.LBA,
+        'N1': DocumentType.FORM_N1,
+        'Form N1': DocumentType.FORM_N1,
+        'Claim Form': DocumentType.FORM_N1,
+        'Payment Reminder': DocumentType.POLITE_CHASER,
+        'Reminder': DocumentType.POLITE_CHASER,
+        'Part 36': DocumentType.PART_36_OFFER,
+        'Settlement Offer': DocumentType.PART_36_OFFER,
+        'N225': DocumentType.DEFAULT_JUDGMENT,
+        'Form N225': DocumentType.DEFAULT_JUDGMENT
       };
-      finalData.selectedDocType = docTypeMap[recommendedDocument] || DocumentType.LBA;
+
+      // Normalize the recommended document for lookup (trim and case-insensitive matching)
+      const normalizedRecommendation = recommendedDocument.trim();
+      const matchedDocType = docTypeMap[normalizedRecommendation] ||
+        Object.entries(docTypeMap).find(([key]) =>
+          key.toLowerCase() === normalizedRecommendation.toLowerCase()
+        )?.[1];
+
+      if (matchedDocType) {
+        finalData.selectedDocType = matchedDocType;
+      } else {
+        // Log unrecognized document type for debugging but fallback to LBA
+        console.warn(`[ConversationEntry] Unrecognized document type: "${recommendedDocument}", defaulting to LBA`);
+        finalData.selectedDocType = DocumentType.LBA;
+      }
     }
 
     setShowConflictModal(false);
@@ -686,8 +738,32 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
                 </button>
               </Tooltip>
 
-              <p className="text-xs text-slate-400 mt-2">
-                Or describe your claim in the chat below ↓
+              <div className="mt-4 w-full max-w-lg">
+                <p className="text-xs text-slate-500 font-medium mb-2">Try something like:</p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  <button
+                    onClick={() => setInputText("I'm owed £5,000 for unpaid invoices from a client who hasn't paid for 3 months")}
+                    className="text-xs px-3 py-1.5 bg-white border border-slate-200 rounded-full text-slate-600 hover:border-teal-400 hover:text-teal-700 transition-colors"
+                  >
+                    "I'm owed £5,000 for unpaid invoices..."
+                  </button>
+                  <button
+                    onClick={() => setInputText("A customer hasn't paid for web design work completed 60 days ago")}
+                    className="text-xs px-3 py-1.5 bg-white border border-slate-200 rounded-full text-slate-600 hover:border-teal-400 hover:text-teal-700 transition-colors"
+                  >
+                    "A customer hasn't paid for 60 days..."
+                  </button>
+                  <button
+                    onClick={() => setInputText("I need to chase a debt from XYZ Ltd for £3,500")}
+                    className="text-xs px-3 py-1.5 bg-white border border-slate-200 rounded-full text-slate-600 hover:border-teal-400 hover:text-teal-700 transition-colors"
+                  >
+                    "I need to chase a debt from XYZ Ltd..."
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-400 mt-4">
+                Or type your own description in the chat below ↓
               </p>
 
               {onSkipToWizard && (
@@ -770,7 +846,7 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
                 </div>
               </div>
 
-              {(validationWarnings.limitationWarning || validationWarnings.exceedsSmallClaims || validationWarnings.countyMissing) && (
+              {(validationWarnings.limitationWarning || validationWarnings.exceedsSmallClaims || validationWarnings.claimantCountyMissing || validationWarnings.defendantCountyMissing) && (
                 <div className="bg-amber-50/30 border border-slate-200 border-l-4 border-l-amber-500 rounded-lg p-2 mb-3 space-y-1">
                   <div className="flex items-center gap-1 text-amber-700 font-medium text-xs">
                     <AlertTriangle className="w-3 h-3" />
@@ -784,8 +860,11 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
                   {validationWarnings.exceedsSmallClaims && (
                     <p className="text-xs text-amber-800">May exceed £10,000 Small Claims limit</p>
                   )}
-                  {validationWarnings.countyMissing && (
-                    <p className="text-xs text-amber-800">County missing for court forms</p>
+                  {validationWarnings.claimantCountyMissing && (
+                    <p className="text-xs text-amber-800">Your business county is missing - update your profile settings</p>
+                  )}
+                  {validationWarnings.defendantCountyMissing && (
+                    <p className="text-xs text-amber-800">Defendant county is missing for court forms</p>
                   )}
                 </div>
               )}

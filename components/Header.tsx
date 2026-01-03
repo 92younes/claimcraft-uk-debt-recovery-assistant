@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, breadcrumbs, rightC
                    {item.onClick && !item.isCurrentPage ? (
                      <Tooltip content={item.fullLabel || item.label} position="bottom">
                        <button
-                         onClick={() => { console.log('[DEBUG] Breadcrumb clicked:', item.label); item.onClick?.(); }}
+                         onClick={() => item.onClick?.()}
                          className="text-sm text-slate-600 hover:text-teal-600 transition-colors flex items-center gap-1.5 truncate"
                        >
                          {index === 0 && <Home className="w-3.5 h-3.5 flex-shrink-0" />}

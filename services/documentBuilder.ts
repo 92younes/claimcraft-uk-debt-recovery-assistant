@@ -55,6 +55,14 @@ const formatPaymentDetails = (paymentDetails?: PaymentDetails): string => {
 // Backend API URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+// Warn if API URL is not configured (falling back to localhost)
+if (!import.meta.env.VITE_API_URL) {
+  console.warn(
+    'VITE_API_URL environment variable is not set. Falling back to localhost:3001. ' +
+    'Set VITE_API_URL in your .env file for production deployments.'
+  );
+}
+
 interface ValidationResult {
   isValid: boolean;
   errors: string[];
@@ -146,7 +154,7 @@ export class DocumentBuilder {
       : "section 69 of the County Courts Act 1984";
 
     const interestRate = isB2B
-      ? "8% above the Bank of England base rate"
+      ? "8 percentage points above the Bank of England base rate"
       : "8% per annum";
 
     // Calculate totals
@@ -192,7 +200,7 @@ export class DocumentBuilder {
     // Compensation clause (only for B2B)
     const compensationClause = data.compensation > 0
       ? `Fixed compensation of £${data.compensation.toFixed(2)} pursuant to the Late Payment of Commercial Debts (Interest) Act 1998`
-      : "No compensation claimed";
+      : "Not applicable";
 
     // Pre-Action Protocol standard response time for debt claims
     const LBA_RESPONSE_DAYS = 30;
@@ -229,9 +237,50 @@ export class DocumentBuilder {
       .replace(/\[PAYMENT_DETAILS\]/g, formatPaymentDetails(paymentDetails))
       .replace(/\[NUMBER_OF_INSTALLMENTS\]/g, '6') // Default 6 month plan
       .replace(/\[INSTALLMENT_AMOUNT\]/g, (parseFloat(totalClaim) / 6).toFixed(2))
-      .replace(/\[FIRST_PAYMENT_DATE\]/g, this.formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())); // 30 days from now
+      .replace(/\[FIRST_PAYMENT_DATE\]/g, this.formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())) // 30 days from now
+      // Polite Reminder specific placeholders
+      .replace(/\[CLAIMANT_CONTACT_LINE\]/g, this.formatContactLine(data.claimant))
+      .replace(/\[GREETING_NAME\]/g, data.defendant.contactName || 'Accounts Department')
+      // Personalized salutation: use contact name if available, otherwise formal
+      .replace(/\[SALUTATION\]/g, this.formatSalutation(data.defendant.contactName));
 
     return filled;
+  }
+
+  /**
+   * Format a personalized salutation based on contact name availability
+   * If contact name exists, use "Dear Mr/Ms [LastName],"
+   * Otherwise, use formal "Dear Sir/Madam,"
+   */
+  private static formatSalutation(contactName?: string): string {
+    if (!contactName || contactName.trim() === '') {
+      return 'Dear Sir/Madam,';
+    }
+
+    // Extract last name (assume last word is surname)
+    const nameParts = contactName.trim().split(/\s+/);
+    const lastName = nameParts[nameParts.length - 1];
+
+    // Check for common titles already in the name
+    const lowerName = contactName.toLowerCase();
+    if (lowerName.includes('mr ') || lowerName.includes('mr.')) {
+      return `Dear Mr ${lastName},`;
+    }
+    if (lowerName.includes('mrs ') || lowerName.includes('mrs.')) {
+      return `Dear Mrs ${lastName},`;
+    }
+    if (lowerName.includes('ms ') || lowerName.includes('ms.')) {
+      return `Dear Ms ${lastName},`;
+    }
+    if (lowerName.includes('miss ')) {
+      return `Dear Miss ${lastName},`;
+    }
+    if (lowerName.includes('dr ') || lowerName.includes('dr.') || lowerName.includes('doctor')) {
+      return `Dear Dr ${lastName},`;
+    }
+
+    // Default: use full name for professional correspondence
+    return `Dear ${contactName},`;
   }
 
   /**
@@ -698,6 +747,25 @@ OUTPUT: Return ONLY the completed template with all brackets filled. No commenta
     ].filter(p => p && p.trim() !== '');
 
     return parts.join('\n');
+  }
+
+  /**
+   * Format contact line for Polite Reminder (phone and email)
+   * Returns formatted string like "Tel: 0123 456789 | Email: info@company.com"
+   * or empty string if no contact details available
+   */
+  private static formatContactLine(party: Party): string {
+    const parts: string[] = [];
+
+    if (party.phone && party.phone.trim()) {
+      parts.push(`Tel: ${party.phone.trim()}`);
+    }
+
+    if (party.email && party.email.trim()) {
+      parts.push(`Email: ${party.email.trim()}`);
+    }
+
+    return parts.length > 0 ? parts.join(' | ') : '';
   }
 
   /**

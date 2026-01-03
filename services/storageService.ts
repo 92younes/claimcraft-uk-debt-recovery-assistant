@@ -225,22 +225,23 @@ export const exportAllUserData = async (): Promise<Blob> => {
 
 /**
  * Delete all user data from browser storage (GDPR Article 17 - Right to Erasure)
- * This includes claims, settings, OAuth tokens, and connections
+ * This includes claims, user profile, deadlines, settings, OAuth tokens, and connections
  */
 export const deleteAllUserData = async (): Promise<void> => {
     try {
-        // 1. Delete all claims from IndexedDB (batch operation)
         const db = await openDB();
+
+        // 1. Delete all claims from IndexedDB
         await new Promise<void>((resolve, reject) => {
             const transaction = db.transaction(CLAIMS_STORE, 'readwrite');
             const store = transaction.objectStore(CLAIMS_STORE);
-            const request = store.clear(); // Clears all records at once
+            const request = store.clear();
 
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
         });
 
-        // 1b. Delete user profile from IndexedDB
+        // 2. Delete user profile from IndexedDB
         await new Promise<void>((resolve, reject) => {
             const transaction = db.transaction(USER_PROFILE_STORE, 'readwrite');
             const store = transaction.objectStore(USER_PROFILE_STORE);
@@ -250,15 +251,25 @@ export const deleteAllUserData = async (): Promise<void> => {
             request.onerror = () => reject(request.error);
         });
 
-        // 2. Delete OAuth tokens
+        // 3. Delete all deadlines from IndexedDB
+        await new Promise<void>((resolve, reject) => {
+            const transaction = db.transaction(DEADLINES_STORE, 'readwrite');
+            const store = transaction.objectStore(DEADLINES_STORE);
+            const request = store.clear();
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+
+        // 4. Delete OAuth tokens
         localStorage.removeItem('xeroAuth');
         localStorage.removeItem('nangoConnection');
 
-        // 3. Delete application settings
+        // 5. Delete application settings
         localStorage.removeItem('appSettings');
         localStorage.removeItem('disclaimerAccepted');
 
-        // 4. Delete compliance logs (after a brief delay to allow logging the erasure event)
+        // 6. Delete compliance logs (after a brief delay to allow logging the erasure event)
         setTimeout(() => {
             localStorage.removeItem('complianceLogs');
             localStorage.removeItem('lastLogCleanup');

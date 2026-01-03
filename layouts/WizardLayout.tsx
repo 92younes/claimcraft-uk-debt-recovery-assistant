@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { LegalDisclaimerModal } from '../components/LegalDisclaimerModal';
+import { ClaimSummaryCard } from '../components/ClaimSummaryCard';
 import { useClaimStore } from '../store/claimStore';
 import { Sparkles, ClipboardList } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -17,7 +18,7 @@ export const WizardLayout = () => {
   }>({});
   const navigate = useNavigate();
   const location = useLocation();
-  const { step, maxStepReached, setStep, userProfile, isLoading } = useClaimStore();
+  const { step, maxStepReached, setStep, userProfile, isLoading, claimData } = useClaimStore();
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   // Determine view based on route - conversation route gets special sidebar
@@ -67,6 +68,11 @@ export const WizardLayout = () => {
           breadcrumbs={headerConfig.breadcrumbs}
           rightContent={headerConfig.rightContent}
         />
+
+        {/* Claim Summary Card - Show on wizard steps when claim data exists */}
+        {currentView === 'wizard' && claimData && step >= 2 && (
+          <ClaimSummaryCard claim={claimData} />
+        )}
 
         {/* Mode Indicator Bar - Only show during Evidence/Verify steps, hide from Strategy onwards */}
         {step <= 2 && (

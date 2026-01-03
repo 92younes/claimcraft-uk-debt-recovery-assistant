@@ -26,6 +26,7 @@ export const DashboardPage = () => {
     createNewClaim,
     setStep,
     userProfile,
+    setUserProfile,
     deadlines,
     accountingConnection,
     setAccountingConnection,
@@ -80,6 +81,7 @@ export const DashboardPage = () => {
       if (window.confirm('Are you sure you want to delete ALL data? This cannot be undone.')) {
           await deleteAllUserData();
           setDashboardClaims([]);
+          setUserProfile(null);  // Clear user profile from store
           navigate('/');
       }
   };

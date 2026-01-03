@@ -29,12 +29,9 @@ import {
   deleteDeadlinesForClaim
 } from '../services/storageService';
 import { profileToClaimantParty } from '../services/userProfileService';
-import { calculateInterest, calculateCompensation } from '../services/legalRules';
+import { calculateInterest, calculateCompensation, calculateCourtFee } from '../services/legalRules';
 import { analyzeEvidence } from '../services/geminiService';
 import { processEvidenceExtraction, toClaimStateUpdate } from '../services/extractionProcessor';
-
-// Re-export Step for backwards compatibility
-export { Step } from '../types';
 
 interface ClaimStore {
   // === LOADING STATE ===
@@ -299,20 +296,28 @@ export const useClaimStore = create<ClaimStore>()(
       // === CLAIM FIELD UPDATERS ===
       updateClaimant: (party) => {
         set((state) => {
+          // Use updated claimant type with current defendant type
+          const claimantType = party.type;
+          const defendantType = state.claimData.defendant.type;
+
           // Recalculate interest and compensation when claimant changes (affects B2B vs B2C)
           const interest = calculateInterest(
             state.claimData.invoice.totalAmount,
             state.claimData.invoice.dateIssued,
             state.claimData.invoice.dueDate,
-            party.type,
-            state.claimData.defendant.type
+            claimantType,
+            defendantType
           );
 
           const compensation = calculateCompensation(
             state.claimData.invoice.totalAmount,
-            party.type,
-            state.claimData.defendant.type
+            claimantType,
+            defendantType
           );
+
+          // Calculate court fee based on total claim value
+          const totalClaimValue = state.claimData.invoice.totalAmount + interest.totalInterest + compensation;
+          const courtFee = calculateCourtFee(totalClaimValue);
 
           return {
             claimData: {
@@ -320,6 +325,7 @@ export const useClaimStore = create<ClaimStore>()(
               claimant: party,
               interest,
               compensation,
+              courtFee,
               assessment: null
             }
           };
@@ -328,20 +334,28 @@ export const useClaimStore = create<ClaimStore>()(
 
       updateDefendant: (party) => {
         set((state) => {
+          // Use current claimant type with updated defendant type
+          const claimantType = state.claimData.claimant.type;
+          const defendantType = party.type;
+
           // Recalculate interest and compensation when defendant changes (affects B2B vs B2C)
           const interest = calculateInterest(
             state.claimData.invoice.totalAmount,
             state.claimData.invoice.dateIssued,
             state.claimData.invoice.dueDate,
-            state.claimData.claimant.type,
-            party.type
+            claimantType,
+            defendantType
           );
 
           const compensation = calculateCompensation(
             state.claimData.invoice.totalAmount,
-            state.claimData.claimant.type,
-            party.type
+            claimantType,
+            defendantType
           );
+
+          // Calculate court fee based on total claim value
+          const totalClaimValue = state.claimData.invoice.totalAmount + interest.totalInterest + compensation;
+          const courtFee = calculateCourtFee(totalClaimValue);
 
           return {
             claimData: {
@@ -349,6 +363,7 @@ export const useClaimStore = create<ClaimStore>()(
               defendant: party,
               interest,
               compensation,
+              courtFee,
               assessment: null
             }
           };
@@ -377,12 +392,17 @@ export const useClaimStore = create<ClaimStore>()(
             state.claimData.defendant.type
           );
 
+          // Calculate court fee based on total claim value
+          const totalClaimValue = updatedInvoice.totalAmount + interest.totalInterest + compensation;
+          const courtFee = calculateCourtFee(totalClaimValue);
+
           return {
             claimData: {
               ...state.claimData,
               invoice: updatedInvoice,
               interest,
               compensation,
+              courtFee,
               assessment: null
             }
           };
@@ -448,15 +468,29 @@ export const useClaimStore = create<ClaimStore>()(
           };
 
           const dedupeTimeline = (events: any[]) => {
-            const seen = new Set<string>();
-            const out: any[] = [];
+            const seen = new Map<string, any>();
             for (const e of events) {
-              const key = `${e.type}|${e.date}|${(e.description || '').trim().toLowerCase()}`;
-              if (seen.has(key)) continue;
-              seen.add(key);
-              out.push(e);
+              // Use consistent lowercase for deduplication key
+              const normalizedDesc = (e.description || '').trim().toLowerCase();
+              // Normalize date format for consistent comparison
+              const normalizedDate = e.date ? new Date(e.date).toISOString().split('T')[0] : '';
+              const key = `${e.type}|${normalizedDate}|${normalizedDesc}`;
+
+              const existing = seen.get(key);
+              if (!existing) {
+                // First occurrence - keep original casing
+                seen.set(key, e);
+              } else {
+                // Prefer the event with longer/more detailed description
+                if ((e.description || '').length > (existing.description || '').length) {
+                  seen.set(key, e);
+                }
+              }
             }
-            return out;
+            // Sort by date for consistent ordering
+            return Array.from(seen.values()).sort((a, b) =>
+              new Date(a.date).getTime() - new Date(b.date).getTime()
+            );
           };
 
           const mergedDefendant = mergeDefined(claimData.defendant, update.defendant as any);
@@ -482,6 +516,10 @@ export const useClaimStore = create<ClaimStore>()(
             mergedDefendant.type
           );
 
+          // Calculate court fee based on total claim value
+          const totalClaimValue = mergedInvoice.totalAmount + interest.totalInterest + compensation;
+          const courtFee = calculateCourtFee(totalClaimValue);
+
           setClaimData(prev => ({
             ...prev,
             source: 'upload',
@@ -493,6 +531,7 @@ export const useClaimStore = create<ClaimStore>()(
             selectedDocType: prev.userSelectedDocType ? prev.selectedDocType : (update.selectedDocType || prev.selectedDocType),
             interest,
             compensation,
+            courtFee,
             assessment: null
           }));
 

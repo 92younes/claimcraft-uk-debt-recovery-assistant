@@ -301,6 +301,144 @@ export const truncateWords = (text: string, maxWords: number): string => {
   return words.slice(0, maxWords).join(' ') + '...';
 };
 
+/**
+ * Payment term type as defined in InvoiceData
+ */
+export type PaymentTermsType = 'net_7' | 'net_14' | 'net_30' | 'net_60' | 'net_90' | 'custom';
+
+/**
+ * Normalize payment terms from various formats to standard enum values
+ * Handles common variations like "30 days", "Net 30", "1 month", etc.
+ *
+ * @param terms - Raw payment terms string from AI extraction
+ * @returns Normalized payment terms enum value, or undefined if unrecognized
+ */
+export const normalizePaymentTerms = (terms: string | undefined | null): PaymentTermsType | undefined => {
+  if (!terms || typeof terms !== 'string') return undefined;
+
+  const normalized = terms.toLowerCase().trim();
+
+  // Direct enum matches
+  const directMatches: Record<string, PaymentTermsType> = {
+    'net_7': 'net_7',
+    'net_14': 'net_14',
+    'net_30': 'net_30',
+    'net_60': 'net_60',
+    'net_90': 'net_90',
+    'custom': 'custom'
+  };
+
+  if (directMatches[normalized]) {
+    return directMatches[normalized];
+  }
+
+  // Common variations mapping
+  const variations: Array<{ patterns: RegExp[]; value: PaymentTermsType }> = [
+    {
+      patterns: [
+        /^7\s*days?$/,
+        /^net\s*7$/i,
+        /^1\s*week$/,
+        /^one\s*week$/i,
+        /^within\s*7\s*days?$/i
+      ],
+      value: 'net_7'
+    },
+    {
+      patterns: [
+        /^14\s*days?$/,
+        /^net\s*14$/i,
+        /^2\s*weeks?$/,
+        /^two\s*weeks?$/i,
+        /^within\s*14\s*days?$/i,
+        /^fortnight$/i
+      ],
+      value: 'net_14'
+    },
+    {
+      patterns: [
+        /^30\s*days?$/,
+        /^net\s*30$/i,
+        /^1\s*month$/,
+        /^one\s*month$/i,
+        /^within\s*30\s*days?$/i,
+        /^monthly$/i
+      ],
+      value: 'net_30'
+    },
+    {
+      patterns: [
+        /^60\s*days?$/,
+        /^net\s*60$/i,
+        /^2\s*months?$/,
+        /^two\s*months?$/i,
+        /^within\s*60\s*days?$/i
+      ],
+      value: 'net_60'
+    },
+    {
+      patterns: [
+        /^90\s*days?$/,
+        /^net\s*90$/i,
+        /^3\s*months?$/,
+        /^three\s*months?$/i,
+        /^within\s*90\s*days?$/i,
+        /^quarterly$/i
+      ],
+      value: 'net_90'
+    }
+  ];
+
+  for (const { patterns, value } of variations) {
+    for (const pattern of patterns) {
+      if (pattern.test(normalized)) {
+        return value;
+      }
+    }
+  }
+
+  // If no match found but there's a value, mark as custom
+  if (normalized.length > 0) {
+    return 'custom';
+  }
+
+  return undefined;
+};
+
+/**
+ * Convert payment terms enum to number of days
+ * @param terms - Payment terms enum value
+ * @returns Number of days, or 30 as default
+ */
+export const paymentTermsToDays = (terms: PaymentTermsType | undefined): number => {
+  const mapping: Record<PaymentTermsType, number> = {
+    'net_7': 7,
+    'net_14': 14,
+    'net_30': 30,
+    'net_60': 60,
+    'net_90': 90,
+    'custom': 30 // Default to 30 for custom
+  };
+  return terms ? mapping[terms] : 30;
+};
+
+/**
+ * Format payment terms for display
+ * @param terms - Payment terms enum value
+ * @returns Human-readable string
+ */
+export const formatPaymentTerms = (terms: PaymentTermsType | undefined): string => {
+  const mapping: Record<PaymentTermsType, string> = {
+    'net_7': 'Net 7 days',
+    'net_14': 'Net 14 days',
+    'net_30': 'Net 30 days',
+    'net_60': 'Net 60 days',
+    'net_90': 'Net 90 days',
+    'custom': 'Custom terms'
+  };
+  return terms ? mapping[terms] : 'Not specified';
+};
+
 export default {
   formatMoney,
   formatMoneyForForm,
@@ -318,5 +456,8 @@ export default {
   truncate,
   truncateWords,
   isValidDate,
-  safeFormatDate
+  safeFormatDate,
+  normalizePaymentTerms,
+  paymentTermsToDays,
+  formatPaymentTerms
 };

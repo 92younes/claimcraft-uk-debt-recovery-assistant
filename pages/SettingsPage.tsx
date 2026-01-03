@@ -20,7 +20,7 @@ import { getTodayISO } from '../utils/formatters';
 
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { userProfile, saveUserProfile, setDashboardClaims } = useClaimStore();
+  const { userProfile, saveUserProfile, setDashboardClaims, setUserProfile } = useClaimStore();
   const [tab, setTab] = useState<'profile' | 'data'>('profile');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -57,6 +57,7 @@ export const SettingsPage: React.FC = () => {
   const handleConfirmDelete = async () => {
     await deleteAllUserData();
     setDashboardClaims([]);
+    setUserProfile(null);  // Clear user profile from store
     setShowDeleteModal(false);
     navigate('/');
   };

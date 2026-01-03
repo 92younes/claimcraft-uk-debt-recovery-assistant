@@ -111,6 +111,27 @@ export const assessClaimViability = (state: ClaimState): AssessmentResult => {
  * B2B = Late Payment of Commercial Debts (Interest) Act 1998 (BoE + 8%)
  * B2C = County Courts Act 1984 s.69 (8% per annum)
  */
+/**
+ * Safely parse a date string and validate it
+ * Returns null if the date is invalid
+ */
+const parseAndValidateDate = (dateStr: string | undefined): Date | null => {
+  if (!dateStr || typeof dateStr !== 'string' || dateStr.trim() === '') {
+    return null;
+  }
+  const date = new Date(dateStr);
+  // Check for Invalid Date (NaN check)
+  if (isNaN(date.getTime())) {
+    return null;
+  }
+  // Sanity check: date should be reasonable (between 1900 and 2100)
+  const year = date.getFullYear();
+  if (year < 1900 || year > 2100) {
+    return null;
+  }
+  return date;
+};
+
 export const calculateInterest = (
   amount: number,
   dateIssued: string,
@@ -118,7 +139,17 @@ export const calculateInterest = (
   claimantType: PartyType,
   defendantType: PartyType
 ): InterestData => {
-  if (!dateIssued || !amount) {
+  if (!dateIssued || !amount || amount <= 0) {
+    return {
+      daysOverdue: 0,
+      dailyRate: 0,
+      totalInterest: 0
+    };
+  }
+
+  // Validate dateIssued first
+  const issuedDate = parseAndValidateDate(dateIssued);
+  if (!issuedDate) {
     return {
       daysOverdue: 0,
       dailyRate: 0,
@@ -127,13 +158,14 @@ export const calculateInterest = (
   }
 
   // Determine the payment due date
-  // If dueDate is provided, use it. Otherwise, assume default payment terms.
+  // If dueDate is provided and valid, use it. Otherwise, assume default payment terms.
   let paymentDue: Date;
-  if (dueDate) {
-    paymentDue = new Date(dueDate);
+  const parsedDueDate = parseAndValidateDate(dueDate);
+  if (parsedDueDate) {
+    paymentDue = parsedDueDate;
   } else {
     // Fallback: invoice date + default payment terms
-    paymentDue = new Date(dateIssued);
+    paymentDue = new Date(issuedDate);
     paymentDue.setDate(paymentDue.getDate() + DEFAULT_PAYMENT_TERMS_DAYS);
   }
 
@@ -147,7 +179,8 @@ export const calculateInterest = (
   const isDefendantBusiness = defendantType === PartyType.BUSINESS || defendantType === PartyType.SOLE_TRADER;
   const isB2B = isClaimantBusiness && isDefendantBusiness;
   
-  const interestRate = isB2B ? LATE_PAYMENT_ACT_RATE : 8.0; // 12.75% for B2B, 8% for B2C
+  // B2B: Late Payment Act rate (BoE base rate + 8%), B2C: County Courts Act s.69 (8% fixed)
+  const interestRate = isB2B ? LATE_PAYMENT_ACT_RATE : 8.0;
 
   const annualRate = interestRate / 100;
   const dailyRate = (amount * annualRate) / DAILY_INTEREST_DIVISOR;

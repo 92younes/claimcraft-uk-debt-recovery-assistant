@@ -15,7 +15,7 @@ export const LETTER_BEFORE_ACTION_TEMPLATE = `[CLAIMANT_NAME]
 [DEFENDANT_NAME]
 [DEFENDANT_ADDRESS]
 
-Dear Sir/Madam,
+[SALUTATION]
 
 RE: PRE-ACTION PROTOCOL FOR DEBT CLAIMS - OUTSTANDING DEBT OF £[TOTAL_CLAIM]
 
@@ -134,37 +134,22 @@ AND the Claimant claims:
  */
 export const POLITE_CHASER_TEMPLATE = `[CLAIMANT_NAME]
 [CLAIMANT_ADDRESS]
+[CLAIMANT_CONTACT_LINE]
 
 [DATE]
 
 [DEFENDANT_NAME]
 [DEFENDANT_ADDRESS]
 
-Dear Sir/Madam,
+Dear [GREETING_NAME],
 
-RE: FRIENDLY REMINDER - INVOICE [INVOICE_NUMBER]
+Re: Invoice [INVOICE_NUMBER] - Payment Reminder
 
-I hope this letter finds you well. I am writing regarding an outstanding invoice that may have been overlooked:
+We hope this finds you well. We are writing regarding invoice [INVOICE_NUMBER] dated [INVOICE_DATE] for £[AMOUNT_DUE], which appears to remain outstanding on our records.
 
-INVOICE DETAILS
+The payment was due on [DUE_DATE] and is now [DAYS_OVERDUE] days overdue.
 
-Invoice Number: [INVOICE_NUMBER]
-Invoice Date: [INVOICE_DATE]
-Amount Due: £[AMOUNT_DUE]
-Description: [INVOICE_DESCRIPTION]
-Payment Due Date: [DUE_DATE]
-
-Our records show that payment is now [DAYS_OVERDUE] days overdue. I wanted to reach out personally as there may be a simple explanation.
-
-POSSIBLE REASONS
-
-- The invoice may not have reached your accounts department
-- There may be a query about the goods or services provided
-- Payment may have simply been overlooked in a busy period
-
-If any of these apply, please do get in touch so we can sort this out together.
-
-HOW TO PAY
+If there are any queries regarding this invoice, or if you are experiencing any difficulties, please don't hesitate to contact us. We would be happy to discuss payment arrangements if that would help.
 
 Payment can be made by bank transfer to:
 
@@ -172,18 +157,13 @@ Payment can be made by bank transfer to:
 
 Please use invoice number [INVOICE_NUMBER] as your payment reference.
 
-NEED TO DISCUSS?
+We would appreciate payment or a response within 14 days.
 
-If there is anything you would like to discuss about this invoice, or if you are experiencing any difficulties, please contact me:
+If you have already arranged payment, please disregard this reminder and accept our thanks.
 
-[CLAIMANT_NAME]
-[CLAIMANT_ADDRESS]
+We value our business relationship and look forward to hearing from you.
 
-We value our relationship and are happy to discuss payment arrangements if that would help.
-
-I look forward to hearing from you soon.
-
-Yours faithfully,
+Kind regards,
 
 [CLAIMANT_NAME]
 `;

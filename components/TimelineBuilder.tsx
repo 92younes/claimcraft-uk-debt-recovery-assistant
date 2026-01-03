@@ -4,6 +4,7 @@ import { Calendar, Plus, Trash2, MessageCircle, FileText, PoundSterling, Mail, Z
 import { Input, Select } from './ui/Input';
 import { DateInput } from './ui/DateInput';
 import { Button } from './ui/Button';
+import { Tooltip } from './ui/Tooltip';
 import { safeFormatDate, isValidDate } from '../utils/formatters';
 import { getDeadlineFromTimelineEvent, calculateSuggestedDeadlines } from '../services/deadlineService';
 
@@ -104,7 +105,7 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({
 
     // Invoice should come before payment due (if both exist)
     if (invoiceDate !== null && paymentDueDate !== null && invoiceDate > paymentDueDate) {
-      return 'Warning: Invoice date is after payment due date - payment due date should follow the invoice';
+      return 'Warning: Invoice date is after payment due date. The invoice should be dated before the payment due date.';
     }
 
     // LBA should come after payment due (if both exist)
@@ -254,25 +255,27 @@ export const TimelineBuilder: React.FC<TimelineBuilderProps> = ({
                      {' '}(+14 days overdue)
                    </span>
                 </button>
-                <button
-                  onClick={() => addQuickEvent(58, 'lba_sent', 'Letter Before Action sent via Recorded Delivery')}
-                  className="flex-1 min-w-[200px] px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:border-red-400 hover:bg-red-50 hover:text-red-600 transition-all duration-200 flex flex-col items-start gap-1 group shadow-sm"
-                >
-                   <div className="flex items-center gap-2 w-full">
-                     <Scale className="w-4 h-4 text-red-500" />
-                     <span>Letter Before Action</span>
-                   </div>
-                   <span className="text-[10px] text-slate-500 font-normal group-hover:text-red-500">
-                     {(() => {
-                       if (!isValidDate(invoiceDate)) return '(+28 days overdue)';
-                       const date = new Date(invoiceDate!);
-                       date.setDate(date.getDate() + 58);
-                       return safeFormatDate(date, { format: 'short' });
-                     })()}
-                     {' '}(+28 days overdue)
-                   </span>
-                   <span className="text-[10px] text-red-500 font-bold">REQUIRED before court</span>
-                </button>
+                <Tooltip content="A Letter Before Action (LBA) is a formal legal notice required under the Pre-Action Protocol before court proceedings. It gives the debtor 30 days to respond." position="top">
+                  <button
+                    onClick={() => addQuickEvent(58, 'lba_sent', 'Letter Before Action sent via Recorded Delivery')}
+                    className="flex-1 min-w-[200px] px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:border-red-400 hover:bg-red-50 hover:text-red-600 transition-all duration-200 flex flex-col items-start gap-1 group shadow-sm"
+                  >
+                     <div className="flex items-center gap-2 w-full">
+                       <Scale className="w-4 h-4 text-red-500" />
+                       <span>Letter Before Action</span>
+                     </div>
+                     <span className="text-[10px] text-slate-500 font-normal group-hover:text-red-500">
+                       {(() => {
+                         if (!isValidDate(invoiceDate)) return '(+28 days overdue)';
+                         const date = new Date(invoiceDate!);
+                         date.setDate(date.getDate() + 58);
+                         return safeFormatDate(date, { format: 'short' });
+                       })()}
+                       {' '}(+28 days overdue)
+                     </span>
+                     <span className="text-[10px] text-red-500 font-bold">REQUIRED before court</span>
+                  </button>
+                </Tooltip>
                 <button
                   onClick={() => addQuickEvent(35, 'payment_reminder', 'Payment Reminder sent via Email')}
                   className="flex-1 min-w-[200px] px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-all duration-200 flex flex-col items-start gap-1 group shadow-sm"

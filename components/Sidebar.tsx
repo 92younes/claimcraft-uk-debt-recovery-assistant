@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
   // 5-step wizard flow (ASSESSMENT merged into VERIFY)
   const steps = [
     { id: 1, displayNum: 1, label: 'Evidence', sublabel: 'Upload or import', icon: Upload },
-    { id: 2, displayNum: 2, label: 'Verify & Assess', sublabel: 'Review & legal check', icon: FileText },
+    { id: 2, displayNum: 2, label: 'Verify Details', sublabel: 'Review extracted info', icon: FileText },
     { id: 3, displayNum: 3, label: 'Strategy', sublabel: 'Select document', icon: ShieldCheck },
     { id: 4, displayNum: 4, label: 'Draft', sublabel: 'Generate & edit', icon: FileSignature },
     { id: 5, displayNum: 5, label: 'Review', sublabel: 'Ready to send', icon: CheckCircle2 },
@@ -100,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                 <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-3 tracking-wider">Main Menu</p>
                 <button
                   type="button"
-                  onClick={() => { console.log('[DEBUG] Dashboard nav clicked from:', view); onDashboardClick(); onCloseMobile?.(); }}
+                  onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
                   className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
                     view === 'dashboard'
                       ? 'bg-teal-100 text-teal-800 border-l-4 border-teal-500 shadow-sm'
@@ -139,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                {/* Back to Dashboard */}
                <button
                   type="button"
-                  onClick={() => { console.log('[DEBUG] Back to Dashboard clicked from: conversation'); onDashboardClick(); onCloseMobile?.(); }}
+                  onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
                   className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-150 mb-6 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                >
                    <LayoutDashboard className="w-4 h-4" />
@@ -167,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                {/* Back to Dashboard */}
                <button
                   type="button"
-                  onClick={() => { console.log('[DEBUG] Back to Dashboard clicked from: wizard'); onDashboardClick(); onCloseMobile?.(); }}
+                  onClick={() => { onDashboardClick(); onCloseMobile?.(); }}
                   className="w-full text-left flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-150 mb-6 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                >
                    <LayoutDashboard className="w-4 h-4" />
@@ -176,7 +176,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
 
                {/* Workflow Steps */}
                <p className="px-3 text-[11px] font-semibold text-slate-400 uppercase mb-4 tracking-wider">Workflow Steps</p>
-               <div className="space-y-1">
+               <div
+                 className="space-y-1"
+                 role="tablist"
+                 aria-label="Wizard steps"
+                 onKeyDown={(e) => {
+                   const effectiveMax = maxStepReached ?? currentStep;
+                   if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                     e.preventDefault();
+                     const nextStep = Math.min(currentStep + 1, effectiveMax);
+                     if (nextStep <= effectiveMax && onStepSelect) {
+                       onStepSelect(nextStep);
+                     }
+                   } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                     e.preventDefault();
+                     const prevStep = Math.max(currentStep - 1, 1);
+                     if (onStepSelect) {
+                       onStepSelect(prevStep);
+                     }
+                   }
+                 }}
+               >
                  {steps.map((step) => {
                     const isActive = currentStep === step.id;
                     const effectiveMax = maxStepReached ?? currentStep;
@@ -187,6 +207,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                        <button
                          type="button"
                          key={step.id}
+                         role="tab"
+                         aria-selected={isActive}
+                         tabIndex={isActive ? 0 : -1}
                          onClick={() => {
                              if (canClick && onStepSelect) {
                                  onStepSelect(step.id);
@@ -195,13 +218,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ view, currentStep, maxStepReac
                          }}
                          disabled={!canClick}
                          aria-current={isActive ? 'step' : undefined}
+                         aria-label={`Step ${step.displayNum}: ${step.label}${isCompleted ? ' (completed)' : ''}${!canClick ? ' (locked)' : ''}`}
                          title={!canClick ? 'Complete previous steps first' : isCompleted ? `Go back to ${step.label}` : step.label}
-                         className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-r-xl transition-all duration-200 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 ${
+                         className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-r-xl transition-all duration-200 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-inset ${
                             isActive
-                              ? 'bg-teal-50 border-l-4 border-teal-500'
+                              ? 'bg-teal-50 border-l-4 border-teal-500 shadow-sm'
                               : canClick
-                                ? 'hover:bg-slate-50 cursor-pointer border-l-4 border-transparent'
-                                : 'opacity-50 cursor-not-allowed border-l-4 border-transparent'
+                                ? 'hover:bg-slate-50 hover:border-slate-300 hover:translate-x-1 cursor-pointer border-l-4 border-transparent'
+                                : 'opacity-40 cursor-not-allowed border-l-4 border-transparent'
                          }`}
                        >
                           {/* Step Number */}
