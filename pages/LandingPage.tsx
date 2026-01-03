@@ -47,7 +47,7 @@ export const LandingPage = () => {
          </div>
 
          {/* Hero Section */}
-         <div className="relative pt-40 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-slate-50">
+         <div className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden bg-slate-50">
             {/* Abstract Background Elements - constrained to prevent horizontal overflow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[800px] bg-teal-100/40 blur-[130px] rounded-full pointer-events-none"></div>
             <div className="absolute bottom-0 right-0 w-full max-w-[800px] h-[800px] bg-teal-100/40 blur-[120px] rounded-full pointer-events-none"></div>
@@ -104,7 +104,7 @@ export const LandingPage = () => {
 
          {/* Trust/Stats Banner */}
          <div className="border-y border-slate-200 bg-white">
-            <div className="container mx-auto px-4 py-12">
+            <div className="container mx-auto px-4 py-10">
                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                   <div className="text-center">
                      <p className="text-2xl md:text-3xl font-bold text-slate-900 mb-1">Local-first</p>
@@ -130,7 +130,7 @@ export const LandingPage = () => {
          </div>
 
          {/* Features Grid */}
-         <div id="features" className="py-24 bg-slate-50 relative">
+         <div id="features" className="py-16 md:py-20 bg-slate-50 relative">
             <div className="container mx-auto px-4">
                <div className="text-center max-w-3xl mx-auto mb-16">
                   <h2 className="text-3xl md:text-4xl font-display font-bold mb-6 text-slate-900">Everything you need to get paid</h2>
@@ -195,7 +195,7 @@ export const LandingPage = () => {
          </div>
          
          {/* How It Works */}
-         <div id="how-it-works" className="py-24 bg-white">
+         <div id="how-it-works" className="py-16 md:py-20 bg-white">
             <div className="container mx-auto px-4">
                 <div className="text-center mb-16">
                     <h2 className="text-3xl md:text-4xl font-display font-bold mb-4 text-slate-900">How it works</h2>
@@ -220,7 +220,7 @@ export const LandingPage = () => {
          </div>
 
          {/* CTA Section */}
-         <div className="py-24 relative overflow-hidden bg-slate-900">
+         <div className="py-16 md:py-20 relative overflow-hidden bg-slate-900">
             <div className="absolute inset-0 bg-gradient-to-br from-teal-900/20 to-slate-900 z-0"></div>
             <div className="container mx-auto px-4 relative z-10 text-center">
                <h2 className="text-4xl md:text-5xl font-display font-bold mb-8 text-white">Stop chasing. Start recovering.</h2>
@@ -240,7 +240,7 @@ export const LandingPage = () => {
          </div>
          
          {/* Footer */}
-         <footer className="border-t border-slate-200 py-12 bg-white text-slate-500 text-sm">
+         <footer className="border-t border-slate-200 py-10 bg-white text-slate-500 text-sm">
             <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div>&copy; 2025 ClaimCraft UK. All rights reserved.</div>
                 <div className="flex gap-6">

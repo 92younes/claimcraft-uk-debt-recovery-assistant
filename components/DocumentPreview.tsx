@@ -3,7 +3,7 @@ import { ClaimState, DocumentType, PartyType } from '../types';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { Printer, ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle, Lock, XCircle, PenTool, Send, Loader2, FileDown, RefreshCw, ExternalLink, CreditCard, Settings, Mail, ZoomIn, ZoomOut, Maximize2, FileText, Info, MessageSquare, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrencySymbol } from '../utils/calculations';
-import { Button } from './ui/Button';
+import { Button, IconButton } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { Modal } from './ui/Modal';
 import { SegmentedControl } from './ui/SegmentedControl';
@@ -12,7 +12,18 @@ import { FinalReviewModal } from './FinalReviewModal';
 import { ConfirmModal } from './ConfirmModal';
 import { PaymentModal } from './PaymentModal';
 import { SendConfirmationModal } from './SendConfirmationModal';
-import { generateN1PDF, generateN225PDF, generateN225APDF, generateN180PDF, generateLetterPDF, captureElementAsCanvas, generateBundledPDFFromCanvases } from '../services/pdfGenerator';
+import {
+  generateN1PDF,
+  generateN225PDF,
+  generateN225APDF,
+  generateN180PDF,
+  generateLetterPDF,
+  generateBundledLetterPDF,
+  generateInfoSheetPDF,
+  generateReplyFormPDF,
+  captureElementAsCanvas,
+  generateBundledPDFFromCanvases
+} from '../services/pdfGenerator';
 
 interface DocumentPreviewProps {
   data: ClaimState;
@@ -68,7 +79,7 @@ const getLegalContext = (issue: string): string | null => {
 // Mobile responsive: full width on small screens, A4 width on larger screens
 // Tablet: scales to fit viewport without horizontal scroll
 const Page = ({ children, className = "", watermark = false, id }: { children?: React.ReactNode; className?: string; watermark?: boolean; id?: string }) => (
-  <div id={id} className={`bg-white shadow-xl w-full max-w-full md:w-[210mm] md:max-w-none min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-8 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-visible flex-shrink-0 ${className}`}>
+  <div id={id} className={`bg-white shadow-xl w-full max-w-full md:w-[210mm] md:max-w-none min-h-[297mm] mx-auto p-4 md:p-[10mm] mb-2 relative text-black text-sm border border-slate-200 print:shadow-none print:border-none print:w-full print:p-0 print:m-0 print:mb-[20mm] break-after-page overflow-visible flex-shrink-0 ${className}`}>
     {watermark && (
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10 opacity-15 select-none overflow-hidden">
         <div className="transform -rotate-45 text-3xl sm:text-5xl md:text-8xl font-bold text-slate-900 whitespace-nowrap border-4 md:border-[10px] border-slate-900 p-4 md:p-10 rounded-2xl mix-blend-multiply">
@@ -357,18 +368,15 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   };
 
   const performDownload = async (downloadType: DownloadType = 'main') => {
-    // Handle specific attachment downloads for letters
+    // Handle specific attachment downloads for letters (vector PDF - small file size)
     if (isLetter && (downloadType === 'info-sheet' || downloadType === 'reply-form')) {
       setIsGeneratingPdf(true);
       try {
-        const containerId = downloadType === 'info-sheet' ? 'info-sheet-container' : 'reply-form-container';
-        // Temporarily switch view mode to render the attachment
-        const previousMode = viewMode;
-        setViewMode(downloadType);
-        // Wait for render
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Use vector PDF generation - no DOM rendering needed
+        const blob = downloadType === 'info-sheet'
+          ? await generateInfoSheetPDF(data)
+          : await generateReplyFormPDF(data);
 
-        const blob = await generateLetterPDF(containerId);
         const filename = downloadType === 'info-sheet'
           ? `Pre_Action_Protocol_Info_Sheet.pdf`
           : `Reply_Form_${data.invoice.invoiceNumber}.pdf`;
@@ -381,9 +389,6 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-
-        // Restore view mode
-        setViewMode(previousMode);
       } catch (error) {
         console.error(`Failed to generate ${downloadType} PDF`, error);
         setPdfError(error instanceof Error ? error.message : 'Unknown error');
@@ -393,43 +398,14 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       return;
     }
 
-    // Handle bundle download (main + attachments)
+    // Handle bundle download (main + attachments) - vector PDF, much smaller file size
     if (isLetter && downloadType === 'bundle') {
       setIsGeneratingPdf(true);
-      const previousMode = viewMode;
-      const capturedCanvases: HTMLCanvasElement[] = [];
 
       try {
-        // For LBA, include: Main Letter + Info Sheet + Reply Form
-        // For other letters (Polite Chaser), just the main document
-
-        // Capture main letter first
-        setViewMode('letter');
-        await new Promise(resolve => setTimeout(resolve, 200)); // Wait for render
-        const letterCanvas = await captureElementAsCanvas('letter-preview-container');
-        if (letterCanvas) capturedCanvases.push(letterCanvas);
-
-        // For LBA, also capture annexes
-        if (showAnnexes) {
-          // Capture Info Sheet
-          setViewMode('info-sheet');
-          await new Promise(resolve => setTimeout(resolve, 200));
-          const infoCanvas = await captureElementAsCanvas('info-sheet-container');
-          if (infoCanvas) capturedCanvases.push(infoCanvas);
-
-          // Capture Reply Form
-          setViewMode('reply-form');
-          await new Promise(resolve => setTimeout(resolve, 200));
-          const replyCanvas = await captureElementAsCanvas('reply-form-container');
-          if (replyCanvas) capturedCanvases.push(replyCanvas);
-        }
-
-        if (capturedCanvases.length === 0) {
-          throw new Error('No documents could be captured for the bundle');
-        }
-
-        // Generate the bundled PDF from captured canvases
-        const blob = await generateBundledPDFFromCanvases(capturedCanvases);
+        // Generate vector PDF bundle - includes main letter + annexes (for LBA)
+        // No DOM rendering or canvas capture needed - direct PDF generation
+        const blob = await generateBundledLetterPDF(data);
         const docTypeSlug = data.selectedDocType.replace(/\s+/g, '_');
         const filename = `${docTypeSlug}_Complete_Bundle_${data.invoice.invoiceNumber || 'document'}.pdf`;
 
@@ -445,8 +421,6 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         console.error("Failed to generate bundle PDF", error);
         setPdfError(error instanceof Error ? error.message : 'Unknown error');
       } finally {
-        // Restore original view mode
-        setViewMode(previousMode);
         setIsGeneratingPdf(false);
       }
       return;
@@ -519,11 +493,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         setIsGeneratingPdf(false);
       }
     } else if (isLetter) {
-      // For letter documents (LBA, Polite Chaser, etc.), use html2canvas + jsPDF
+      // For letter documents (LBA, Polite Chaser, etc.), use vector PDF generation
+      // This produces small file sizes (~50-100KB) with selectable text
       setIsGeneratingPdf(true);
       setPdfError(null);
       try {
-        const blob = await generateLetterPDF('letter-preview-container');
+        const blob = await generateLetterPDF(data);
         const docTypeSlug = data.selectedDocType.replace(/\s+/g, '_');
         const filename = `${docTypeSlug}_${data.invoice.invoiceNumber || 'document'}.pdf`;
 
@@ -1030,16 +1005,16 @@ ${data.claimant.name}`);
   );
 
   return (
-    <div className="max-w-7xl mx-auto pb-10">
+    <div className="max-w-7xl mx-auto pb-4">
 
       {/* Actions Bar - Always at top, full width */}
-      <div className="flex flex-col md:flex-row justify-end items-center mb-6 no-print gap-4 px-4 md:px-0">
+      <div className="flex flex-col md:flex-row md:justify-center items-center mb-2 no-print gap-2 px-4 md:px-0">
         <div className="flex flex-wrap gap-2 items-center justify-center">
-           {isLetter && (
+          {isLetter && (
              <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
                <button
                  onClick={() => setViewMode('letter')}
-                 className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                 className={`flex items-center gap-1.5 px-4 sm:px-5 py-1.5 min-h-[32px] rounded-md text-sm font-medium transition-all ${
                    viewMode === 'letter'
                      ? 'bg-white text-teal-700 shadow-sm'
                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
@@ -1051,39 +1026,42 @@ ${data.claimant.name}`);
                {showAnnexes && (
                  <button
                    onClick={() => setViewMode('info-sheet')}
-                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                   className={`flex items-center gap-1.5 px-4 sm:px-5 py-1.5 min-h-[32px] rounded-md text-sm font-medium transition-all ${
                      viewMode === 'info-sheet'
                        ? 'bg-white text-teal-700 shadow-sm'
                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
                    }`}
                  >
                    <Info className="w-4 h-4" />
-                   <span>Info Sheet</span>
+                   <span className="hidden sm:inline">Info Sheet</span>
+                   <span className="sm:hidden">Info</span>
                  </button>
                )}
                {showAnnexes && (
                  <button
                    onClick={() => setViewMode('reply-form')}
-                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                   className={`flex items-center gap-1.5 px-4 sm:px-5 py-1.5 min-h-[32px] rounded-md text-sm font-medium transition-all ${
                      viewMode === 'reply-form'
                        ? 'bg-white text-teal-700 shadow-sm'
                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
                    }`}
                  >
                    <MessageSquare className="w-4 h-4" />
-                   <span>Reply Form</span>
+                   <span className="hidden sm:inline">Reply Form</span>
+                   <span className="sm:hidden">Reply</span>
                  </button>
                )}
              </div>
            )}
 
           {isFinalized ? (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 justify-center">
                 {onOpenMcol && !isLetter && (
                   <Button
                     onClick={onOpenMcol}
-                    className="bg-slate-800 hover:bg-slate-900"
+                    className="bg-slate-800 hover:bg-slate-900 px-4"
                     icon={<ExternalLink className="w-4 h-4" />}
+                    size="xs"
                   >
                     <span className="hidden md:inline">File on MCOL</span>
                     <span className="md:hidden">MCOL</span>
@@ -1094,8 +1072,9 @@ ${data.claimant.name}`);
                   <Button
                     onClick={onMarkAsFiled}
                     variant="secondary"
-                    className="border-teal-500 text-teal-700 hover:bg-teal-50"
+                    className="border-teal-500 text-teal-700 hover:bg-teal-50 px-4"
                     icon={<CheckCircle className="w-4 h-4" />}
+                    size="xs"
                   >
                     <span className="hidden md:inline">Mark as Filed</span>
                     <span className="md:hidden">Filed</span>
@@ -1107,15 +1086,12 @@ ${data.claimant.name}`);
                         variant={data.hasPaid ? 'secondary' : 'primary'}
                         onClick={handleDownloadPDF}
                         isLoading={isGeneratingPdf}
-                        className={data.hasPaid ? 'border-slate-200' : 'border-teal-600'}
+                        className={`${data.hasPaid ? 'border-slate-200' : 'border-teal-600'} px-4`}
                         icon={!isGeneratingPdf && (data.hasPaid ? <FileDown className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />)}
+                        size="xs"
                     >
-                        <span className="hidden md:inline">
-                          {data.hasPaid ? 'Download PDF' : 'Download PDF (£2.50)'}
-                        </span>
-                        <span className="md:hidden">
-                          {data.hasPaid ? 'PDF' : '£2.50'}
-                        </span>
+                        <span className="hidden md:inline">Download PDF</span>
+                        <span className="md:hidden">PDF</span>
                     </Button>
                 )}
                 <Button
@@ -1123,6 +1099,8 @@ ${data.claimant.name}`);
                   onClick={handlePrint}
                   icon={<Printer className="w-4 h-4" />}
                   aria-label="Print document"
+                  size="xs"
+                  className="px-4"
                 >
                   <span className="hidden md:inline">Print</span>
                 </Button>
@@ -1134,16 +1112,13 @@ ${data.claimant.name}`);
                       variant={data.hasPaid ? 'secondary' : 'primary'}
                       onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                       isLoading={isGeneratingPdf}
-                      className={data.hasPaid ? 'border-slate-200' : 'border-teal-600'}
+                      className={`${data.hasPaid ? 'border-slate-200' : 'border-teal-600'} px-4`}
                       icon={!isGeneratingPdf && (data.hasPaid ? <FileDown className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />)}
                       aria-label="Download PDF"
+                      size="xs"
                     >
-                      <span className="hidden md:inline">
-                        {data.hasPaid ? 'Download' : 'Download (£2.50)'}
-                      </span>
-                      <span className="md:hidden">
-                        {data.hasPaid ? 'PDF' : '£2.50'}
-                      </span>
+                      <span className="hidden md:inline">Download</span>
+                      <span className="md:hidden">PDF</span>
                       <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${showDownloadMenu ? 'rotate-180' : ''}`} />
                     </Button>
 
@@ -1193,12 +1168,12 @@ ${data.claimant.name}`);
                   <Button
                     variant={data.hasPaid ? 'secondary' : 'primary'}
                     onClick={handleEmailLba}
-                    className={data.hasPaid ? 'border-slate-200' : 'border-teal-600'}
+                    className={`${data.hasPaid ? 'border-slate-200' : 'border-teal-600'} px-4`}
                     icon={<Mail className="w-4 h-4" />}
+                    size="xs"
                   >
-                    <span className="hidden md:inline">
-                      {data.hasPaid ? 'Email LBA' : 'Unlock & Email'}
-                    </span>
+                    <span className="hidden md:inline">Email</span>
+                    <span className="md:hidden sr-only">Email</span>
                   </Button>
                 )}
 
@@ -1207,20 +1182,23 @@ ${data.claimant.name}`);
                     onClick={handleSend}
                     disabled={isSending}
                     isLoading={isSending}
-                    icon={!isSending && (data.hasPaid ? <Send className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />)}
-                    className={data.hasPaid ? 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500' : ''}
+                    icon={!isSending && <Send className="w-4 h-4" />}
+                    className="bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500 px-4"
+                    size="xs"
                   >
-                    {data.hasPaid ? 'Send via Post (£2.00)' : 'Unlock & Send (£2.50)'}
+                    <span className="hidden md:inline">Send Post</span>
+                    <span className="md:hidden sr-only">Send</span>
                   </Button>
                 )}
               </div>
            ) : (
-              <Tooltip content="Complete document review to unlock sending options" position="top">
+              <Tooltip content="Approve & Finalize to unlock downloads and sending" position="top">
                 <Button
                   disabled
                   variant="secondary"
-                  className="bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                  className="bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 px-4"
                   icon={<Lock className="w-4 h-4" />}
+                  size="xs"
                 >
                   Sending Options Locked
                 </Button>
@@ -1229,83 +1207,81 @@ ${data.claimant.name}`);
         </div>
       </div>
 
-      {/* Stacked Layout: Document first, then Quality Recommendations below */}
-      <div className="flex flex-col gap-6 px-4 md:px-0">
+      {/* Stacked Layout: Warnings/approval first (so unlock action is visible), then document preview */}
+      <div className="flex flex-col gap-4 px-4 md:px-0">
+
+        {/* Quality / Compliance / Payment panels */}
+        <div className="w-full">
+          {renderWarningPanels()}
+        </div>
 
         {/* Document Preview - Full width */}
         <div className="w-full">
           {/* Zoom Controls - Enhanced with labels and better visibility */}
-          <div className="flex items-center justify-center gap-3 mb-4 print:hidden bg-slate-100 rounded-xl p-3">
+          <div className="flex items-center justify-center gap-1.5 mb-2 print:hidden bg-slate-50 rounded-lg p-1">
             {isTablet ? (
               /* Tablet: Show auto-fit indicator */
-              <div className="flex items-center gap-2 text-sm text-slate-600">
+              <div className="flex items-center gap-2 text-xs text-slate-600 min-h-[28px]">
                 <Maximize2 className="w-4 h-4" />
                 <span>Auto-fit ({Math.round(effectiveZoom)}%)</span>
               </div>
             ) : (
               /* Desktop/Mobile: Show enhanced manual zoom controls */
               <>
-                <span className="text-sm font-medium text-slate-600">Zoom:</span>
-                <Button
+                <span className="text-xs font-medium text-slate-600">Zoom</span>
+                <IconButton
                   variant="secondary"
-                  size="sm"
+                  size="xs"
+                  icon={<ZoomOut className="w-4 h-4" />}
                   onClick={handleZoomOut}
                   disabled={zoom <= 50}
-                  className="px-3 gap-1"
                   aria-label="Zoom out"
-                >
-                  <ZoomOut className="w-4 h-4" />
-                  <span className="hidden sm:inline">-</span>
-                </Button>
-                <div className="flex items-center bg-white px-3 py-1.5 rounded-lg border border-slate-200 min-w-[60px] justify-center">
-                  <span className="text-sm font-bold text-slate-700">{zoom}%</span>
+                  title="Zoom out"
+                />
+                <div className="flex items-center bg-white px-2.5 py-1 rounded-md border border-slate-200 min-w-[52px] min-h-[28px] justify-center">
+                  <span className="text-xs font-bold text-slate-700 tabular-nums">{zoom}%</span>
                 </div>
-                <Button
+                <IconButton
                   variant="secondary"
-                  size="sm"
+                  size="xs"
+                  icon={<ZoomIn className="w-4 h-4" />}
                   onClick={handleZoomIn}
                   disabled={zoom >= 150}
-                  className="px-3 gap-1"
                   aria-label="Zoom in"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                  <span className="hidden sm:inline">+</span>
-                </Button>
-                <Button
+                  title="Zoom in"
+                />
+                <IconButton
                   variant="ghost"
-                  size="sm"
+                  size="xs"
+                  icon={<RefreshCw className="w-4 h-4" />}
                   onClick={handleZoomReset}
-                  className="ml-2 gap-1"
                   aria-label="Reset zoom"
-                >
-                  <Maximize2 className="w-4 h-4" />
-                  <span className="hidden sm:inline text-xs">Reset</span>
-                </Button>
-                <div className="w-px h-6 bg-slate-300 mx-2" />
-                <Button
+                  title="Reset zoom"
+                  className="ml-1"
+                />
+                <div className="w-px h-5 bg-slate-300 mx-1.5" />
+                <IconButton
                   variant="secondary"
-                  size="sm"
+                  size="xs"
+                  icon={<Maximize2 className="w-4 h-4" />}
                   onClick={() => setIsFullscreen(true)}
-                  className="gap-1"
                   aria-label="Full screen preview"
-                >
-                  <Maximize2 className="w-4 h-4" />
-                  <span className="hidden sm:inline text-xs">Full Screen</span>
-                </Button>
+                  title="Full screen"
+                />
               </>
             )}
           </div>
 
           {/* Document Container */}
-          <div className="print-container font-sans text-black bg-slate-100/50 p-2 md:p-8 rounded-xl md:rounded-2xl border border-slate-200/50 overflow-auto max-h-[75vh]">
+          <div className="print-container font-sans text-black bg-slate-100 p-2 md:p-4 rounded-lg overflow-auto">
             <div
-              className="w-full md:min-w-[210mm] mx-auto bg-white shadow-xl md:shadow-2xl transition-transform origin-top"
+              className="w-full mx-auto transition-transform origin-top"
               style={{ transform: `scale(${effectiveZoom / 100})` }}
             >
               {isLetter ? (
                 <>
                    {viewMode === 'letter' && (
-                      <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0" id="letter-preview-container">
+                      <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !mb-0" id="letter-preview-container">
                     {/* Saved/Unsaved indicator */}
                     {!isFinalized && (
                       <div className="absolute top-2 right-2 no-print z-10">
@@ -1413,7 +1389,7 @@ ${data.claimant.name}`);
                )}
                
                {viewMode === 'info-sheet' && (
-                  <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0" id="info-sheet-container">
+                  <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !mb-0" id="info-sheet-container">
                      <div className="max-w-[90%] mx-auto pt-6 text-sm break-words">
                         <h1 className="text-xl font-bold mb-6 text-center uppercase border-b-2 border-black pb-4">Annex 1: Information Sheet</h1>
                         <p className="font-bold text-justify mb-4">
@@ -1469,7 +1445,7 @@ ${data.claimant.name}`);
                )}
 
                {viewMode === 'reply-form' && (
-                  <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !m-0 !mb-0" id="reply-form-container">
+                  <Page watermark={!isFinalized || !data.hasPaid} className="!shadow-none !mb-0" id="reply-form-container">
                      <div className="max-w-[95%] mx-auto pt-4 text-sm break-words">
                         <h1 className="text-xl font-bold mb-4 text-center uppercase">Annex 2: Reply Form</h1>
                         <div className="bg-slate-50 border border-slate-300 p-3 mb-4 text-xs">
@@ -1551,7 +1527,7 @@ ${data.claimant.name}`);
                     <p className="text-slate-400 text-sm mt-2">Using HMCTS template (N1_1224, Dec 2024)</p>
                   </div>
                ) : pdfPreviewUrl ? (
-                  <div className="w-full px-4">
+                  <div className="w-full">
                     <div className="bg-teal-50 border-l-4 border-teal-500 p-4 mb-4 rounded">
                       <div className="flex items-start gap-3">
                         <ShieldCheck className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" />
@@ -1580,7 +1556,7 @@ ${data.claimant.name}`);
                     )}
                     <iframe
                       src={`${pdfPreviewUrl}#page=1`}
-                      className="w-full h-[70vh] md:h-[80vh] border-2 border-slate-300 rounded-lg shadow-xl bg-white"
+                      className="w-full h-[75vh] md:h-[85vh] border border-slate-200 rounded-lg shadow-md bg-white"
                       title="N1 Claim Form Preview"
                     />
                   </div>
@@ -1627,11 +1603,6 @@ ${data.claimant.name}`);
           )}
             </div>
           </div>
-        </div>
-
-        {/* Quality Recommendations - Below document */}
-        <div className="w-full">
-          {renderWarningPanels()}
         </div>
 
         {/* Post-download Guidance Panel */}
@@ -1689,37 +1660,6 @@ ${data.claimant.name}`);
         )}
       </div>
 
-      {/* Sticky Action Bar - Shows when document is finalized */}
-      {isFinalized && !showPostDownloadGuidance && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-lg z-30 print:hidden">
-          <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <CheckCircle className="w-4 h-4 text-green-500" />
-              <span>Document ready for action</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => handleDownloadPDF('main')}
-                icon={<FileDown className="w-4 h-4" />}
-              >
-                Download PDF
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setPendingSendMethod('email');
-                  setShowSendConfirmModal(true);
-                }}
-                icon={<Send className="w-4 h-4" />}
-              >
-                Send Document
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Fullscreen Preview Modal */}
       <Modal
@@ -1806,7 +1746,7 @@ ${data.claimant.name}`);
         onClose={() => setShowParticularsModal(false)}
         title="Edit Particulars of Claim"
         description="Make corrections to the text that will appear on your N1 form."
-        maxWidthClassName="max-w-3xl"
+        maxWidthClassName="max-w-xl"
         footer={
           <>
             <Button variant="secondary" onClick={() => setShowParticularsModal(false)}>

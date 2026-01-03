@@ -4,7 +4,6 @@ import { ClaimState, DocumentType, AccountingConnection, Deadline, DeadlinePrior
 import { Plus, FileText, CheckCircle2, Trash2, Upload, Briefcase, Calendar, ChevronRight, Zap, Link as LinkIcon, Download, XCircle, Search, Filter, PoundSterling, CircleCheck, AlertTriangle, Clock, ChevronLeft, ArrowUpDown, ArrowUp, ArrowDown, X, Edit3, Scale, MessageSquareText, Sparkles } from 'lucide-react';
 import { Button } from './ui/Button';
 import { ConfirmModal } from './ConfirmModal';
-import { QuickEditModal } from './QuickEditModal';
 import { Tooltip } from './ui/Tooltip';
 import { Shimmer, ShimmerTableRow } from './ui/Shimmer';
 import { getDaysUntilDeadline } from '../services/deadlineService';
@@ -80,9 +79,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedClaims, setSelectedClaims] = useState<Set<string>>(new Set());
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
 
-  // Quick edit modal state
-  const [quickEditModalOpen, setQuickEditModalOpen] = useState(false);
-  const [claimToEdit, setClaimToEdit] = useState<ClaimState | null>(null);
   const totalRecoverable = claims.reduce((acc, curr) => acc + curr.invoice.totalAmount + curr.interest.totalInterest + curr.compensation, 0);
   // Exclude claims with £0 value and no defendant name from active count (they're incomplete drafts)
   const activeClaims = claims.filter(c =>
@@ -271,19 +267,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  // Handle quick edit
-  const handleQuickEditClick = (e: React.MouseEvent, claim: ClaimState) => {
-    e.stopPropagation();
-    setClaimToEdit(claim);
-    setQuickEditModalOpen(true);
-  };
-
-  const handleQuickEditSave = async (updatedClaim: ClaimState) => {
-    if (onUpdateClaim) {
-      await onUpdateClaim(updatedClaim);
-    }
-  };
-
   // Check if all current page items are selected
   const isAllSelected = paginatedClaims.length > 0 && paginatedClaims.every(c => selectedClaims.has(c.id));
   const isSomeSelected = paginatedClaims.some(c => selectedClaims.has(c.id)) && !isAllSelected;
@@ -462,16 +445,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 setStatusFilter('all');
                 setSearchQuery('');
               }}
-              className="bg-gradient-to-br from-teal-50 to-white p-3 rounded-lg border border-teal-100 flex items-center gap-2.5 relative overflow-hidden hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer text-left w-full"
+              className="group bg-gradient-to-br from-teal-50/80 via-white to-white p-3.5 rounded-xl border border-teal-100/80 flex items-center gap-3 relative overflow-hidden hover:border-teal-300 hover:shadow-[0_2px_8px_rgba(20,184,166,0.1)] transition-all duration-200 cursor-pointer text-left w-full"
               aria-label="Show all claims with recoverable amounts"
             >
-               <div className="absolute top-0 right-0 w-16 h-16 bg-teal-100/50 rounded-full -mr-4 -mt-4"></div>
-               <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
+               <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-teal-100/40 to-transparent rounded-full -mr-6 -mt-6 group-hover:scale-110 transition-transform duration-300"></div>
+               <div className="w-9 h-9 bg-gradient-to-br from-teal-100 to-teal-50 rounded-xl flex items-center justify-center text-teal-600 flex-shrink-0 shadow-[0_1px_2px_rgba(20,184,166,0.1)] group-hover:shadow-[0_2px_4px_rgba(20,184,166,0.15)] transition-shadow duration-200">
                   <PoundSterling className="w-4 h-4" />
                </div>
                <div className="relative z-10">
                   <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Total Recoverable</p>
-                  <p className="text-lg font-bold text-slate-900">£{totalRecoverable.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-lg font-bold text-slate-900 tabular-nums">£{totalRecoverable.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</p>
                </div>
             </button>
 
@@ -481,15 +464,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 setStatusFilter('all');
                 setSearchQuery('');
               }}
-              className="bg-white p-3 rounded-lg border border-slate-200 flex items-center gap-2.5 hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer text-left w-full"
+              className="group bg-white p-3.5 rounded-xl border border-slate-200/80 flex items-center gap-3 hover:border-teal-300 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200 cursor-pointer text-left w-full"
               aria-label="Show all active claims"
             >
-               <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
+               <div className="w-9 h-9 bg-gradient-to-br from-teal-50 to-teal-100/60 rounded-xl flex items-center justify-center text-teal-600 flex-shrink-0 group-hover:shadow-[0_2px_4px_rgba(20,184,166,0.12)] transition-shadow duration-200">
                   <Briefcase className="w-4 h-4" />
                </div>
                <div>
                   <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Active Claims</p>
-                  <p className="text-lg font-bold text-slate-900">{activeClaims}</p>
+                  <p className="text-lg font-bold text-slate-900 tabular-nums">{activeClaims}</p>
                </div>
             </button>
 
@@ -501,15 +484,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   setSearchQuery('');
                 }
               }}
-              className={`bg-white p-3 rounded-lg border flex items-center gap-2.5 transition-all text-left w-full ${
+              className={`group p-3.5 rounded-xl border flex items-center gap-3 transition-all duration-200 text-left w-full ${
                 urgentActions > 0
-                  ? 'border-amber-200 bg-amber-50 hover:border-amber-400 hover:shadow-sm cursor-pointer'
-                  : 'border-slate-200 cursor-default'
+                  ? 'border-amber-200/80 bg-gradient-to-br from-amber-50/80 to-white hover:border-amber-300 hover:shadow-[0_2px_8px_rgba(245,158,11,0.1)] cursor-pointer'
+                  : 'bg-white border-slate-200/80 cursor-default'
               }`}
               disabled={urgentActions === 0}
               aria-label={urgentActions > 0 ? 'Show overdue claims' : 'No claims need action'}
             >
-               <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${urgentActions > 0 ? 'bg-amber-100 text-amber-600' : 'bg-teal-50 text-teal-500'}`}>
+               <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-shadow duration-200 ${
+                 urgentActions > 0
+                   ? 'bg-gradient-to-br from-amber-100 to-amber-50 text-amber-600 group-hover:shadow-[0_2px_4px_rgba(245,158,11,0.15)]'
+                   : 'bg-gradient-to-br from-teal-50 to-teal-100/60 text-teal-500'
+               }`}>
                   {urgentActions > 0 ? <AlertTriangle className="w-4 h-4" /> : <CircleCheck className="w-4 h-4" />}
                </div>
                <div>
@@ -565,24 +552,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           {/* Search */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <div className="flex-1 relative group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-teal-500 transition-colors duration-200" />
             <input
               type="text"
               placeholder="Search claims..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all duration-200 text-sm"
+              className="w-full pl-10 pr-3 py-2.5 bg-white border border-slate-200/80 rounded-xl text-slate-900 placeholder-slate-400/70 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 focus:shadow-[0_0_0_3px_rgba(20,184,166,0.08)] transition-all duration-200 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
             />
           </div>
 
           {/* Status Filter */}
-          <div className="relative flex-shrink-0">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <div className="relative flex-shrink-0 group">
+            <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none group-focus-within:text-teal-500 transition-colors duration-200" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="pl-9 pr-6 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 appearance-none cursor-pointer min-w-[130px] transition-all duration-200 text-sm"
+              className="pl-10 pr-8 py-2.5 bg-white border border-slate-200/80 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 focus:shadow-[0_0_0_3px_rgba(20,184,166,0.08)] appearance-none cursor-pointer min-w-[140px] transition-all duration-200 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
             >
               <option value="all">All Status</option>
               <option value="draft">Draft</option>
@@ -695,9 +682,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       ) : claims.length === 0 ? (
         <DashboardEmptyState onCreateNew={onCreateNew} />
       ) : (
-        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 gap-3 px-3 md:px-4 py-2 border-b border-slate-100 text-xs font-medium text-slate-500 uppercase tracking-wider bg-slate-50/50">
+        <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_4px_rgba(0,0,0,0.02)]">
+          {/* Table Header - Premium styling */}
+          <div className="grid grid-cols-12 gap-3 px-3 md:px-4 py-2.5 border-b border-slate-100/80 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-gradient-to-b from-slate-50/80 to-slate-50/40">
              {/* Checkbox column */}
              <div className="col-span-1 flex items-center">
                <input
@@ -786,15 +773,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div
               key={claim.id}
               onClick={() => onResume(claim)}
-              className={`group grid grid-cols-12 gap-3 px-3 md:px-4 py-2 items-center transition-all duration-200 cursor-pointer ${
+              className={`group grid grid-cols-12 gap-3 px-3 md:px-4 py-2.5 items-center transition-all duration-200 ease-out cursor-pointer ${
                 isSelected
-                  ? 'bg-teal-50/50 hover:bg-teal-100/50'
+                  ? 'bg-teal-50/60 hover:bg-teal-100/60 ring-1 ring-inset ring-teal-200/50'
                   : idx % 2 === 1
-                    ? 'bg-slate-50/40 hover:bg-slate-100'
-                    : 'bg-white hover:bg-slate-50'
+                    ? 'bg-slate-50/30 hover:bg-slate-100/80'
+                    : 'bg-white hover:bg-slate-50/80'
               } ${
-                idx !== paginatedClaims.length - 1 ? 'border-b border-slate-100' : ''
-              }`}
+                idx !== paginatedClaims.length - 1 ? 'border-b border-slate-100/60' : ''
+              } hover:shadow-[inset_2px_0_0_rgba(20,184,166,0.5)]`}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onResume(claim); }}
@@ -814,9 +801,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                </div>
 
                {/* Debtor */}
-               <div className="col-span-3 flex items-center gap-2">
-                  <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-600 transition-colors flex-shrink-0">
-                     <FileText className="w-3 h-3" />
+               <div className="col-span-3 flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100/80 flex items-center justify-center text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-600 group-hover:shadow-[0_2px_4px_rgba(20,184,166,0.1)] transition-all duration-200 flex-shrink-0">
+                     <FileText className="w-3.5 h-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
                      <Tooltip content={isUnknownDefendant ? 'Add defendant details to complete this claim' : defendantName}>
@@ -861,48 +848,46 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   )}
                </div>
 
-               {/* Status Badge */}
+               {/* Status Badge - Premium pill design */}
                <div className="col-span-2">
-                   <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wide border ${stageBadgeColor}`}>
+                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide border shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${stageBadgeColor}`}>
+                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 mr-1.5" />
                        {claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
                    </span>
                </div>
 
                {/* Last Updated + Actions */}
-               <div className="col-span-2 hidden md:flex items-center justify-end gap-1.5">
-                   <span className="text-xs text-slate-500">
+               <div className="col-span-2 hidden md:flex items-center justify-end gap-2">
+                   <span className="text-xs text-slate-500 tabular-nums">
                      {new Date(claim.lastModified).toLocaleDateString('en-GB')}
                    </span>
 
-                   {/* Quick Edit button - visible on hover */}
-                   {onUpdateClaim && (
-                     <Button
-                        variant="ghost"
-                        size="sm"
-                        iconOnly
-                        onClick={(e) => handleQuickEditClick(e, claim)}
-                        icon={<Edit3 className="w-3.5 h-3.5" />}
-                        aria-label={`Quick edit claim for ${defendantName}`}
-                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition-opacity p-1"
-                     />
-                   )}
+                   {/* Edit button - navigates to full wizard */}
+                   <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onResume(claim);
+                      }}
+                      aria-label={`Edit claim for ${defendantName}`}
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50/80 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50"
+                   >
+                     <Edit3 className="w-3.5 h-3.5" />
+                   </button>
 
                    {/* Delete button - visible on hover */}
-                   <Button
-                      variant="ghost"
-                      size="sm"
-                      iconOnly
+                   <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteClick(claim.id, defendantName);
                       }}
-                      icon={<Trash2 className="w-3.5 h-3.5" />}
                       aria-label={`Delete claim for ${defendantName}`}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-opacity p-1"
-                   />
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50/80 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                   >
+                     <Trash2 className="w-3.5 h-3.5" />
+                   </button>
 
-                   {/* Visual indicator that row is clickable */}
-                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-0.5 transition-all" />
+                   {/* Visual indicator that row is clickable - enhanced */}
+                   <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all duration-200" />
                </div>
             </div>
             );
@@ -995,17 +980,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         confirmText={`Delete ${selectedClaims.size} Claim${selectedClaims.size !== 1 ? 's' : ''}`}
         cancelText="Cancel"
         variant="danger"
-      />
-
-      {/* Quick Edit Modal */}
-      <QuickEditModal
-        isOpen={quickEditModalOpen}
-        onClose={() => {
-          setQuickEditModalOpen(false);
-          setClaimToEdit(null);
-        }}
-        claim={claimToEdit}
-        onSave={handleQuickEditSave}
       />
     </div>
   );

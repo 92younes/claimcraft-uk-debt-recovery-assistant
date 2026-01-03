@@ -218,7 +218,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
       onClose={onClose}
       title="Connect Your Accounting Software"
       description="Quickly import overdue invoices from your accounting system to start recovering payments."
-      maxWidthClassName="max-w-4xl"
+      maxWidthClassName="max-w-md"
       bodyClassName="p-0"
       titleIcon={(
         <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
@@ -231,7 +231,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
         </Button>
       )}
     >
-      <div className="p-6 space-y-6">
+      <div className="p-5 space-y-5">
           {/* Error/Success Messages */}
           {error && (
             <div className="bg-red-50/30 border border-slate-200 border-l-4 border-l-red-500 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
@@ -251,7 +251,7 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
           )}
 
           {/* Provider Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`grid gap-4 ${PROVIDERS.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
             {PROVIDERS.map(provider => {
               const connection = connections.get(provider.id);
               const isConnected = !!connection;
@@ -388,30 +388,30 @@ export const AccountingIntegration: React.FC<AccountingIntegrationProps> = ({
           </div>
 
           {/* Security & Privacy */}
-          <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-200 rounded-xl p-5 shadow-sm">
+          <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-200 rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-slate-900 mb-2">Your data is secure</h4>
-                <ul className="space-y-1.5 text-sm text-slate-600">
-                  <li className="flex items-start gap-2">
-                    <span className="text-teal-600 shrink-0 mt-0.5">✓</span>
+                <h4 className="text-sm font-semibold text-slate-900 mb-1.5">Your data is secure</h4>
+                <ul className="space-y-1 text-xs text-slate-600">
+                  <li className="flex items-center gap-2">
+                    <span className="text-teal-600 shrink-0">✓</span>
                     <span>Bank-level encryption protects your connection</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-teal-600 shrink-0 mt-0.5">✓</span>
+                  <li className="flex items-center gap-2">
+                    <span className="text-teal-600 shrink-0">✓</span>
                     <span>We only read invoices and customer details</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-teal-600 shrink-0 mt-0.5">✓</span>
+                  <li className="flex items-center gap-2">
+                    <span className="text-teal-600 shrink-0">✓</span>
                     <span>We never modify or delete your accounting data</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-teal-600 shrink-0 mt-0.5">✓</span>
+                  <li className="flex items-center gap-2">
+                    <span className="text-teal-600 shrink-0">✓</span>
                     <span>Disconnect anytime without affecting your accounts</span>
                   </li>
                 </ul>

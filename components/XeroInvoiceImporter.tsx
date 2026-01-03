@@ -207,7 +207,7 @@ export const XeroInvoiceImporter: React.FC<XeroInvoiceImporterProps> = ({
           ? 'Loading invoices...'
           : `Found ${invoiceRows.length} overdue invoice${invoiceRows.length === 1 ? '' : 's'} in your Xero account`
       }
-      maxWidthClassName="max-w-4xl"
+      maxWidthClassName="max-w-xl"
       bodyClassName="p-0"
       titleIcon={(
         <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">

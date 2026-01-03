@@ -151,7 +151,7 @@ export const ConversationPage = () => {
   };
 
   return (
-    <div className="h-screen h-[100dvh] bg-white flex flex-col overflow-hidden">
+    <div className="h-full bg-white flex flex-col overflow-hidden">
         <ConversationEntry
             userProfile={userProfile}
             onComplete={handleConversationComplete}

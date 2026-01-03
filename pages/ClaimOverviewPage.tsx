@@ -174,34 +174,36 @@ export const ClaimOverviewPage = () => {
   const StatusIcon = statusBadge.icon;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 animate-fade-in py-4">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 animate-fade-in py-3">
       {/* Header */}
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          icon={<ArrowLeft className="w-4 h-4" />}
-          onClick={() => navigate('/dashboard')}
-          className="mb-4"
-        >
-          Back to Dashboard
-        </Button>
+      <div className="mb-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <Button
+              variant="ghost"
+              icon={<ArrowLeft className="w-4 h-4" />}
+              onClick={() => navigate('/dashboard')}
+              className="mt-1 flex-shrink-0"
+            >
+              Back
+            </Button>
 
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-slate-900 font-display mb-2">
-              Claim Overview
-            </h1>
-            <div className="flex items-center gap-3">
-              <p className="text-slate-500">
-                Claim ID: <span className="font-mono text-slate-700">{claimData.id.toUpperCase().slice(0, 8)}</span>
-              </p>
-              <span
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold ${statusBadge.bg} ${statusBadge.text} cursor-default select-none`}
-                title="Claim status (view only)"
-              >
-                <StatusIcon className="w-4 h-4" />
-                {statusBadge.label}
-              </span>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-3xl font-bold text-slate-900 font-display mb-2">
+                Claim Overview
+              </h1>
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-slate-500">
+                  Claim ID: <span className="font-mono text-slate-700">{claimData.id.toUpperCase().slice(0, 8)}</span>
+                </p>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold ${statusBadge.bg} ${statusBadge.text} cursor-default select-none`}
+                  title="Claim status (view only)"
+                >
+                  <StatusIcon className="w-4 h-4" />
+                  {statusBadge.label}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -212,6 +214,7 @@ export const ClaimOverviewPage = () => {
               navigate('/wizard');
             }}
             icon={<Edit3 className="w-4 h-4" />}
+            className="flex-shrink-0"
           >
             Edit Claim
           </Button>
@@ -402,7 +405,7 @@ export const ClaimOverviewPage = () => {
                 )}
               </div>
             ) : (
-              <div className="text-center py-8 bg-gradient-to-br from-slate-50 to-white rounded-lg border-2 border-dashed border-slate-200">
+              <div className="text-center py-6 bg-gradient-to-br from-slate-50 to-white rounded-lg border-2 border-dashed border-slate-200">
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-8 h-8 text-slate-400" />
                 </div>

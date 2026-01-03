@@ -437,8 +437,8 @@ export const WizardPage = () => {
   // --- Render Steps ---
 
   const renderEvidenceStep = () => (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 animate-fade-in py-4">
-        <div className="mb-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 animate-fade-in py-3">
+        <div className="mb-4">
           <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">
             Evidence & Documents
           </h2>
@@ -499,7 +499,7 @@ export const WizardPage = () => {
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end">
+        <div className="mt-5 flex justify-end">
           <Button
             onClick={() => handleNextStep(Step.VERIFY)}
             rightIcon={<ArrowRight className="w-5 h-5" />}
@@ -682,19 +682,20 @@ export const WizardPage = () => {
     };
 
     return (
-      <div className="space-y-6 animate-fade-in py-4 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-        <Button
-          variant="ghost"
-          icon={<ArrowLeft className="w-4 h-4" />}
-          onClick={() => handleNextStep(Step.EVIDENCE)}
-          className="w-fit"
-        >
-          Back to Evidence
-        </Button>
-
-        <div className="text-center mb-5">
-          <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">Review Your Claim Details</h2>
-          <p className="text-slate-500">Complete each section to proceed with your claim.</p>
+      <div className="space-y-5 animate-fade-in py-3 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="flex justify-between items-start mb-5">
+          <div>
+            <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">Review Your Claim Details</h2>
+            <p className="text-slate-500">Complete each section to proceed with your claim.</p>
+          </div>
+          <Button
+            variant="ghost"
+            icon={<ArrowLeft className="w-4 h-4" />}
+            onClick={() => handleNextStep(Step.EVIDENCE)}
+            className="w-fit"
+          >
+            Back to Evidence
+          </Button>
         </div>
 
         {/* Validation Summary - Show all missing fields at a glance */}
@@ -1084,12 +1085,16 @@ export const WizardPage = () => {
     ];
 
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-12">
-        <Button variant="ghost" icon={<ArrowLeft className="w-4 h-4"/>} onClick={() => handleNextStep(Step.VERIFY)} className="mb-4">
-          Back to Verify
-        </Button>
-        <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">Select Document Type</h2>
-        <p className="text-slate-500 mb-6">Choose the best legal document based on your situation.</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pb-8">
+        <div className="flex justify-between items-start gap-4 mb-4">
+          <div>
+            <h2 className="text-3xl font-bold text-slate-900 font-display mb-2">Select Document Type</h2>
+            <p className="text-slate-500">Choose the best legal document based on your situation.</p>
+          </div>
+          <Button variant="ghost" icon={<ArrowLeft className="w-4 h-4"/>} onClick={() => handleNextStep(Step.VERIFY)} className="w-fit">
+            Back to Verify
+          </Button>
+        </div>
 
         {/* AI Recommendation Banner */}
         {recommendation && (
@@ -1206,21 +1211,21 @@ export const WizardPage = () => {
                 )}
 
                 <doc.icon className={`w-8 h-8 mb-4 ${
-                  isSelected ? 'text-teal-400' :
+                  isSelected ? 'text-teal-200' :
                   isRecommended ? 'text-teal-600' :
                   'text-teal-600'
                 }`} />
                 <h3 className="font-bold text-lg mb-2">{doc.title}</h3>
                 <p className={`text-sm mb-3 ${
-                  isSelected ? 'text-slate-300' : 'text-slate-500'
+                  isSelected ? 'text-teal-100' : 'text-slate-500'
                 }`}>{doc.desc}</p>
 
                 {/* Use Case Description */}
                 <div className={`pt-3 border-t ${
-                  isSelected ? 'border-slate-700' : 'border-slate-200'
+                  isSelected ? 'border-teal-500' : 'border-slate-200'
                 }`}>
                   <p className={`text-xs ${
-                    isSelected ? 'text-slate-400' : 'text-slate-500'
+                    isSelected ? 'text-teal-200' : 'text-slate-500'
                   }`}>{doc.useCase}</p>
                 </div>
 
@@ -1265,7 +1270,7 @@ export const WizardPage = () => {
           </div>
         )}
 
-        <div className="mt-8 flex justify-end">
+        <div className="mt-6 flex justify-end">
           <Button onClick={() => handleNextStep(Step.DRAFT)} rightIcon={<ArrowRight className="w-5 h-5"/>}>
             Continue to Draft
           </Button>
@@ -1275,18 +1280,35 @@ export const WizardPage = () => {
   };
 
   const renderDraftStep = () => (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-12 h-full flex flex-col">
-          <div className="flex justify-between items-center mb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pb-5 h-full flex flex-col">
+          <div className="flex justify-between items-center mb-3">
             <Button variant="ghost" icon={<ArrowLeft className="w-4 h-4"/>} onClick={() => handleNextStep(Step.STRATEGY)}>Back to Strategy</Button>
             <h2 className="text-2xl font-bold text-slate-900">Draft Your Document</h2>
           </div>
 
-          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[360px] md:min-h-[480px]">
+          <div className="flex-1 bg-white rounded-xl overflow-hidden min-h-[360px] md:min-h-[480px]">
              {/* Only show spinner when generating AND no document exists yet */}
              {isGeneratingDocument && !claimData.generated && !docError && (
-               <div className="p-6 text-sm text-slate-600 flex items-center gap-3">
-                 <div className="w-5 h-5 border-2 border-teal-200 border-t-teal-600 rounded-full animate-spin"></div>
-                 Generating your document…
+               <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8">
+                 <div className="relative mb-6">
+                   {/* Outer pulsing ring */}
+                   <div className="absolute inset-0 w-16 h-16 border-4 border-teal-100 rounded-full animate-ping opacity-30"></div>
+                   {/* Main spinner */}
+                   <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin"></div>
+                   {/* Inner icon */}
+                   <div className="absolute inset-0 flex items-center justify-center">
+                     <FileText className="w-6 h-6 text-teal-600" />
+                   </div>
+                 </div>
+                 <h3 className="text-lg font-semibold text-slate-900 mb-2">Generating Your Document</h3>
+                 <p className="text-sm text-slate-500 text-center max-w-sm">
+                   We're drafting your {claimData.selectedDocType === DocumentType.LBA ? 'Letter Before Action' : 'document'} based on your claim details...
+                 </p>
+                 <div className="flex gap-1 mt-4">
+                   <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                   <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                   <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                 </div>
                </div>
              )}
              {docError && !claimData.generated && (
@@ -1398,8 +1420,8 @@ export const WizardPage = () => {
   );
 
   const renderReviewStep = () => (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-12 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pb-5 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-3">
         <Button
           variant="ghost"
           icon={<ArrowLeft className="w-4 h-4" />}
@@ -1414,7 +1436,7 @@ export const WizardPage = () => {
         <h2 className="text-2xl font-bold text-slate-900">Review & Send</h2>
       </div>
 
-      <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[360px] md:min-h-[480px]">
+      <div className="flex-1 bg-white rounded-xl overflow-hidden min-h-[360px] md:min-h-[480px]">
         {claimData.generated ? (
           <DocumentPreview
             data={claimData}
@@ -1555,7 +1577,7 @@ export const WizardPage = () => {
         {/* Step content with transition effect */}
         <div className={`transition-opacity duration-150 ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
           {isTransitioning ? (
-            <div className="py-8">
+            <div className="py-6">
               <Shimmer variant="card" />
             </div>
           ) : (

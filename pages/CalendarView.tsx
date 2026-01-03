@@ -399,7 +399,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         {/* Deadlines */}
         <div className="p-4">
           {dayDeadlines.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="text-center py-8">
               <CalendarIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-500">No deadlines for this day</p>
             </div>
@@ -517,8 +517,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         )}
         maxWidthClassName="max-w-lg"
         footer={(
-          <div className="w-full flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
-            <Button variant="secondary" onClick={() => setSelectedDeadline(null)} className="flex-1">
+          <div className="w-full flex flex-wrap gap-2 sm:gap-3">
+            <Button variant="secondary" onClick={() => setSelectedDeadline(null)} className="flex-1 min-w-[80px]">
               Close
             </Button>
 
@@ -528,7 +528,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 onDeadlineClick(selectedDeadline);
                 setSelectedDeadline(null);
               }}
-              className="flex-1"
+              className="flex-1 min-w-[80px]"
               icon={<Eye className="w-4 h-4" />}
             >
               View
@@ -537,7 +537,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <Button
               variant="secondary"
               onClick={() => handleExportSingle(selectedDeadline)}
-              className="flex-1"
+              className="flex-1 min-w-[80px]"
               icon={<Download className="w-4 h-4" />}
             >
               Export
@@ -550,7 +550,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   onCompleteDeadline(selectedDeadline);
                   setSelectedDeadline(null);
                 }}
-                className="flex-1"
+                className="flex-1 min-w-[140px]"
                 icon={<CheckCircle2 className="w-4 h-4" />}
               >
                 Mark Complete
@@ -564,7 +564,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   onDeleteDeadline(selectedDeadline.id);
                   setSelectedDeadline(null);
                 }}
-                className="flex-1"
+                className="flex-1 min-w-[80px]"
                 icon={<Trash2 className="w-4 h-4" />}
               >
                 Delete
@@ -634,9 +634,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   }, [filteredDeadlines]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 animate-fade-in py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 animate-fade-in py-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-slate-500 hover:text-slate-700 transition-colors font-medium"
@@ -670,8 +670,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       <div>
         {/* Page title and stats */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="mb-5">
+          <div className="flex items-center gap-3 mb-3">
             <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
               <CalendarIcon className="w-6 h-6 text-teal-600" />
             </div>
@@ -682,7 +682,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
 
           {/* Stats cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             {isLoading ? (
               <>
                 {Array.from({ length: 4 }).map((_, idx) => (
@@ -857,7 +857,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
         {/* Empty state */}
         {filteredDeadlines.length === 0 && (
-          <div className="text-center py-20 bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 relative overflow-hidden">
+          <div className="text-center py-12 md:py-16 bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 relative overflow-hidden">
             {/* Decorative background elements */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-teal-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-teal-50 rounded-full -ml-12 -mb-12 opacity-50"></div>

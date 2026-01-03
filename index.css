@@ -2,30 +2,467 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   CLAIMCRAFT DESIGN SYSTEM - Premium CSS Foundation
+   World-class design tokens inspired by Stripe, Linear, and Vercel
+   ============================================================================ */
+
 @layer base {
+  /* --------------------------------------------------------------------------
+     CSS Custom Properties (Design Tokens)
+     Enables theming, consistency, and runtime flexibility
+     -------------------------------------------------------------------------- */
+  :root {
+    /* === Color System === */
+    /* Primary Brand - Teal */
+    --color-primary-50: 240 253 250;
+    --color-primary-100: 204 251 241;
+    --color-primary-200: 153 246 228;
+    --color-primary-300: 94 234 212;
+    --color-primary-400: 45 212 191;
+    --color-primary-500: 20 184 166;
+    --color-primary-600: 13 148 136;
+    --color-primary-700: 15 118 110;
+    --color-primary-800: 17 94 89;
+    --color-primary-900: 19 78 74;
+
+    /* Neutral - Slate (refined for better contrast) */
+    --color-neutral-25: 253 253 254;
+    --color-neutral-50: 248 250 252;
+    --color-neutral-100: 241 245 249;
+    --color-neutral-200: 226 232 240;
+    --color-neutral-300: 203 213 225;
+    --color-neutral-400: 148 163 184;
+    --color-neutral-500: 100 116 139;
+    --color-neutral-600: 71 85 105;
+    --color-neutral-700: 51 65 85;
+    --color-neutral-800: 30 41 59;
+    --color-neutral-900: 15 23 42;
+    --color-neutral-950: 2 6 23;
+
+    /* Semantic Colors */
+    --color-success: 16 185 129;
+    --color-warning: 245 158 11;
+    --color-error: 239 68 68;
+    --color-info: 59 130 246;
+
+    /* === Typography === */
+    --font-display: 'Crimson Text', Georgia, serif;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, monospace;
+
+    /* Font Sizes with line-height (fluid scale) */
+    --text-2xs: 0.625rem;
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+    --text-4xl: 2.25rem;
+
+    /* Line Heights */
+    --leading-none: 1;
+    --leading-tight: 1.25;
+    --leading-snug: 1.375;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.625;
+    --leading-loose: 2;
+
+    /* Letter Spacing */
+    --tracking-tighter: -0.05em;
+    --tracking-tight: -0.025em;
+    --tracking-normal: 0em;
+    --tracking-wide: 0.025em;
+    --tracking-wider: 0.05em;
+    --tracking-widest: 0.1em;
+
+    /* === Spacing System === */
+    --space-px: 1px;
+    --space-0: 0;
+    --space-0-5: 0.125rem;
+    --space-1: 0.25rem;
+    --space-1-5: 0.375rem;
+    --space-2: 0.5rem;
+    --space-2-5: 0.625rem;
+    --space-3: 0.75rem;
+    --space-3-5: 0.875rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-7: 1.75rem;
+    --space-8: 2rem;
+    --space-9: 2.25rem;
+    --space-10: 2.5rem;
+    --space-12: 3rem;
+    --space-14: 3.5rem;
+    --space-16: 4rem;
+    --space-20: 5rem;
+
+    /* === Border Radius === */
+    --radius-none: 0;
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    --radius-3xl: 1.5rem;
+    --radius-full: 9999px;
+
+    /* === Shadows (Stripe-inspired depth system) === */
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+    /* Colored shadows for depth */
+    --shadow-primary: 0 4px 14px 0 rgb(20 184 166 / 0.25);
+    --shadow-primary-lg: 0 8px 25px 0 rgb(20 184 166 / 0.3);
+
+    /* Soft shadows for cards */
+    --shadow-soft: 0 2px 8px -2px rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+    --shadow-soft-lg: 0 4px 16px -4px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+    --shadow-soft-xl: 0 8px 30px -6px rgb(0 0 0 / 0.12), 0 4px 8px -3px rgb(0 0 0 / 0.08);
+
+    /* Inner shadows */
+    --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+    --shadow-inner-sm: inset 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+    /* === Transitions & Animations === */
+    --duration-instant: 0ms;
+    --duration-fast: 100ms;
+    --duration-normal: 150ms;
+    --duration-moderate: 200ms;
+    --duration-slow: 300ms;
+    --duration-slower: 400ms;
+    --duration-slowest: 500ms;
+
+    /* Easing curves (carefully tuned) */
+    --ease-linear: linear;
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    /* === Z-Index Scale === */
+    --z-base: 0;
+    --z-dropdown: 10;
+    --z-sticky: 20;
+    --z-fixed: 30;
+    --z-drawer: 40;
+    --z-modal-backdrop: 50;
+    --z-modal: 60;
+    --z-popover: 70;
+    --z-tooltip: 80;
+    --z-toast: 90;
+    --z-max: 100;
+
+    /* === Focus Ring === */
+    --focus-ring-width: 2px;
+    --focus-ring-offset: 2px;
+    --focus-ring-color: rgb(20 184 166 / 0.5);
+
+    /* === Borders === */
+    --border-width: 1px;
+    --border-color: rgb(226 232 240);
+    --border-color-subtle: rgb(241 245 249);
+    --border-color-strong: rgb(203 213 225);
+  }
+
+  /* --------------------------------------------------------------------------
+     Base Element Styles
+     -------------------------------------------------------------------------- */
   html,
   body,
   #root {
     height: 100%;
   }
 
-  body {
-    margin: 0;
+  html {
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
-  /* Make in-page anchors land below sticky headers when applicable */
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background-color: rgb(var(--color-neutral-50));
+    color: rgb(var(--color-neutral-900));
+    line-height: var(--leading-normal);
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Make in-page anchors land below sticky headers */
   [id] {
     scroll-margin-top: 5rem;
   }
+
+  /* Selection styling */
+  ::selection {
+    background-color: rgb(var(--color-primary-200));
+    color: rgb(var(--color-primary-900));
+  }
+
+  /* Focus visible for keyboard navigation */
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Scrollbar styling (webkit) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgb(var(--color-neutral-100));
+    border-radius: var(--radius-full);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--color-neutral-300));
+    border-radius: var(--radius-full);
+    border: 2px solid rgb(var(--color-neutral-100));
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--color-neutral-400));
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--color-neutral-300)) rgb(var(--color-neutral-100));
+  }
 }
 
+/* --------------------------------------------------------------------------
+   Component Layer - Reusable Patterns
+   -------------------------------------------------------------------------- */
+@layer components {
+  /* Premium focus ring utility */
+  .focus-ring {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+  }
+
+  /* Glass morphism effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .glass-dark {
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Subtle gradient backgrounds */
+  .bg-gradient-subtle {
+    background: linear-gradient(135deg, rgb(var(--color-neutral-50)) 0%, rgb(var(--color-neutral-100)) 100%);
+  }
+
+  .bg-gradient-primary-subtle {
+    background: linear-gradient(135deg, rgb(var(--color-primary-50)) 0%, rgb(var(--color-neutral-50)) 100%);
+  }
+
+  /* Shimmer animation for skeletons */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+    background: rgb(var(--color-neutral-200));
+  }
+
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent
+    );
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Premium card styles */
+  .card {
+    @apply bg-white rounded-xl border border-slate-200 shadow-soft;
+  }
+
+  .card-elevated {
+    @apply bg-white rounded-xl border border-slate-100 shadow-soft-lg;
+  }
+
+  .card-interactive {
+    @apply bg-white rounded-xl border border-slate-200 shadow-soft
+           transition-all duration-200 ease-out
+           hover:shadow-soft-lg hover:border-slate-300 hover:-translate-y-0.5;
+  }
+
+  /* Premium button base (extends Tailwind) */
+  .btn-press {
+    @apply transition-all duration-150 ease-out active:scale-[0.98] active:shadow-inner-sm;
+  }
+
+  /* Text truncation with fade */
+  .text-fade {
+    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  }
+
+  /* Gradient text */
+  .text-gradient-primary {
+    @apply bg-gradient-to-r from-teal-600 to-teal-500 bg-clip-text text-transparent;
+  }
+
+  /* Hide scrollbar utility */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Smooth scroll container */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Dot separator for inline lists */
+  .dot-separator > *:not(:last-child)::after {
+    content: '\2022';
+    margin: 0 0.5rem;
+    color: rgb(var(--color-neutral-300));
+  }
+
+  /* Loading pulse */
+  .pulse-subtle {
+    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-subtle {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Utility Layer - Additional helpers
+   -------------------------------------------------------------------------- */
+@layer utilities {
+  /* Shadow utilities with design tokens */
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-soft-lg {
+    box-shadow: var(--shadow-soft-lg);
+  }
+
+  .shadow-soft-xl {
+    box-shadow: var(--shadow-soft-xl);
+  }
+
+  .shadow-primary {
+    box-shadow: var(--shadow-primary);
+  }
+
+  .shadow-primary-lg {
+    box-shadow: var(--shadow-primary-lg);
+  }
+
+  .shadow-inner-sm {
+    box-shadow: var(--shadow-inner-sm);
+  }
+
+  /* Animation timing utilities */
+  .duration-instant { transition-duration: var(--duration-instant); }
+  .duration-fast { transition-duration: var(--duration-fast); }
+  .duration-moderate { transition-duration: var(--duration-moderate); }
+  .duration-slow { transition-duration: var(--duration-slow); }
+  .duration-slower { transition-duration: var(--duration-slower); }
+  .duration-250 { transition-duration: 250ms; }
+
+  /* Easing utilities */
+  .ease-spring { transition-timing-function: var(--ease-spring); }
+  .ease-bounce { transition-timing-function: var(--ease-bounce); }
+  .ease-smooth { transition-timing-function: var(--ease-smooth); }
+  .ease-expressive { transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+
+  /* Backdrop blur utilities */
+  .backdrop-blur-xs { backdrop-filter: blur(2px); }
+
+  /* Transform utilities */
+  .translate-z-0 { transform: translateZ(0); }
+
+  /* GPU acceleration for smooth animations */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  /* Ring offset colors */
+  .ring-offset-surface {
+    --tw-ring-offset-color: rgb(var(--color-neutral-50));
+  }
+
+  /* Tabular numbers for data display */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Premium text rendering */
+  .text-render-optimize {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Accessibility - Reduced Motion Support
+   -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   html:focus-within {
     scroll-behavior: auto;
   }
+
   *,
   *::before,
   *::after {
@@ -33,5 +470,28 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Print Styles
+   -------------------------------------------------------------------------- */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Dark Mode Support (future-ready)
+   -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark mode tokens can be added here when ready */
+    /* --color-neutral-50: 30 41 59; etc. */
   }
 }

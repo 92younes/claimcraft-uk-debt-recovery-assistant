@@ -686,34 +686,34 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
         <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
           {/* Header - compact, only show when no messages */}
           {messages.length === 0 && (
-            <div className="py-4 px-4 text-center flex-shrink-0">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 mb-3 shadow-lg shadow-teal-500/25">
-                <Sparkles className="w-6 h-6 text-white" />
+            <div className="py-2 px-4 text-center flex-shrink-0">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 mb-2 shadow-lg shadow-teal-500/25">
+                <Sparkles className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-xl font-display font-bold text-slate-900 mb-1">
+              <h1 className="text-lg font-display font-bold text-slate-900 mb-0.5">
                 {getGreeting()}{userName ? `, ${userName}` : ''}
               </h1>
-              <p className="text-slate-500 text-sm">
+              <p className="text-slate-500 text-xs">
                 Let's recover what you're owed
               </p>
             </div>
           )}
 
         {/* Main Content - positioned at top, not centered */}
-        <div className={`flex-1 flex flex-col max-w-3xl mx-auto w-full px-4 ${messages.length === 0 ? 'pt-2' : 'pb-2'}`}>
+        <div className={`flex flex-col max-w-3xl mx-auto w-full px-4 ${messages.length === 0 ? 'pt-2' : 'flex-1 pb-2'}`}>
           {/* Initial Options (shown when no messages yet) */}
           {messages.length === 0 && (
-            <div className="flex flex-col items-center space-y-4 py-4 w-full">
+            <div className="flex flex-col items-center space-y-2 py-2 w-full">
               {/* Explanation Card */}
-              <div className="bg-teal-50/30 border border-slate-200 border-l-4 border-l-teal-500 rounded-xl p-4 w-full max-w-lg">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Sparkles className="w-4 h-4 text-teal-600" />
+              <div className="bg-teal-50/30 border border-slate-200 border-l-4 border-l-teal-500 rounded-lg p-3 w-full max-w-lg">
+                <div className="flex items-start gap-2">
+                  <div className="w-6 h-6 bg-teal-100 rounded-md flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-3 h-3 text-teal-600" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-slate-900 text-sm mb-1">How this works</h3>
-                    <p className="text-xs text-slate-700 leading-relaxed">
-                      Start your claim in two ways: upload your invoice/contract for AI extraction, or describe your situation in plain language. I'll ask follow-up questions if needed, then guide you through verification and document generation.
+                    <h3 className="font-semibold text-slate-900 text-xs mb-0.5">How this works</h3>
+                    <p className="text-xs text-slate-600 leading-snug">
+                      Upload your invoice/contract for AI extraction, or describe your situation below.
                     </p>
                   </div>
                 </div>
@@ -723,14 +723,14 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
               <Tooltip content="Upload invoices, contracts, or emails. AI will extract debtor details, amounts, and dates automatically." position="top">
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-xl transition-all group w-full max-w-sm"
+                  className="flex items-center gap-2 p-3 bg-slate-50 hover:bg-slate-100 border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-lg transition-all group w-full max-w-sm"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors">
-                    <Upload className="w-5 h-5 text-teal-500" />
+                  <div className="w-8 h-8 rounded-md bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors">
+                    <Upload className="w-4 h-4 text-teal-500" />
                   </div>
                   <div className="text-left flex-1">
                     <div className="flex items-center gap-1">
-                      <p className="font-semibold text-slate-900 text-sm">Upload Documents</p>
+                      <p className="font-semibold text-slate-900 text-xs">Upload Documents</p>
                       <HelpCircle className="w-3 h-3 text-slate-400" />
                     </div>
                     <p className="text-xs text-slate-500">AI extracts claim details automatically</p>
@@ -738,9 +738,9 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
                 </button>
               </Tooltip>
 
-              <div className="mt-4 w-full max-w-lg">
-                <p className="text-xs text-slate-500 font-medium mb-2">Try something like:</p>
-                <div className="flex flex-wrap gap-2 justify-center">
+              <div className="w-full max-w-lg">
+                <p className="text-xs text-slate-500 font-medium mb-1.5">Try something like:</p>
+                <div className="flex flex-wrap gap-1.5 justify-center">
                   <button
                     onClick={() => setInputText("I'm owed £5,000 for unpaid invoices from a client who hasn't paid for 3 months")}
                     className="text-xs px-3 py-1.5 bg-white border border-slate-200 rounded-full text-slate-600 hover:border-teal-400 hover:text-teal-700 transition-colors"
@@ -762,20 +762,18 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
                 </div>
               </div>
 
-              <p className="text-xs text-slate-400 mt-4">
-                Or type your own description in the chat below ↓
+              <p className="text-xs text-slate-400 mt-2">
+                Or type your own description below ↓
               </p>
 
               {onSkipToWizard && (
-                <Tooltip content="Use a traditional step-by-step form instead of conversational AI intake" position="bottom">
-                  <button
-                    onClick={onSkipToWizard}
-                    className="text-slate-500 hover:text-slate-700 text-xs flex items-center gap-1 transition-colors"
-                  >
-                    Prefer step-by-step? Use the guided wizard
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
-                </Tooltip>
+                <button
+                  onClick={onSkipToWizard}
+                  className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-0.5 transition-colors"
+                >
+                  Prefer step-by-step?
+                  <ChevronRight className="w-3 h-3" />
+                </button>
               )}
             </div>
           )}
@@ -955,7 +953,7 @@ export const ConversationEntry: React.FC<ConversationEntryProps> = ({
       </div>
 
       {/* Fixed Input Area at Bottom - Made more prominent */}
-      <div className="flex-shrink-0 border-t border-slate-200 bg-white p-4">
+      <div className="flex-shrink-0 border-t border-slate-200 bg-white p-3">
         <div className="max-w-3xl mx-auto">
           {files.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">

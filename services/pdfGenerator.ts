@@ -798,17 +798,79 @@ export const generateN180PDF = async (data: ClaimState): Promise<Uint8Array> => 
 
 
 // ============================================================================
-// HTML-TO-PDF GENERATOR FOR LETTER DOCUMENTS (LBA, Polite Chaser, etc.)
+// VECTOR PDF GENERATOR FOR LETTER DOCUMENTS (LBA, Polite Chaser, etc.)
+// ============================================================================
+
+import {
+  generateLetterPdfBlob,
+  generateMainLetterOnly,
+  generateInfoSheetPdf,
+  generateReplyFormPdf,
+  isLetterDocument
+} from './letterPdfGenerator';
+
+// Re-export for convenience
+export { isLetterDocument };
+
+/**
+ * Generate a vector PDF for letter documents (LBA, Polite Chaser, etc.)
+ * Uses pdf-lib for true vector text output - small file size, selectable text
+ *
+ * @param data - ClaimState with generated content
+ * @returns PDF as Blob
+ */
+export const generateLetterPDF = async (data: ClaimState): Promise<Blob> => {
+  return generateLetterPdfBlob(data);
+};
+
+/**
+ * Generate bundled PDF containing letter + annexes (for LBA)
+ * This is now the default - generates vector PDF with all annexes included
+ *
+ * @param data - ClaimState with generated content
+ * @returns PDF as Blob
+ */
+export const generateBundledLetterPDF = async (data: ClaimState): Promise<Blob> => {
+  return generateLetterPdfBlob(data);
+};
+
+/**
+ * Generate only the main letter without annexes
+ */
+export const generateMainLetterPDF = async (data: ClaimState): Promise<Blob> => {
+  const pdfBytes = await generateMainLetterOnly(data);
+  return new Blob([pdfBytes], { type: 'application/pdf' });
+};
+
+/**
+ * Generate only Info Sheet (Annex 1) as separate PDF
+ */
+export const generateInfoSheetPDF = async (data: ClaimState): Promise<Blob> => {
+  const pdfBytes = await generateInfoSheetPdf(data);
+  return new Blob([pdfBytes], { type: 'application/pdf' });
+};
+
+/**
+ * Generate only Reply Form (Annex 2) as separate PDF
+ */
+export const generateReplyFormPDF = async (data: ClaimState): Promise<Blob> => {
+  const pdfBytes = await generateReplyFormPdf(data);
+  return new Blob([pdfBytes], { type: 'application/pdf' });
+};
+
+// ============================================================================
+// LEGACY HTML-TO-PDF (kept for fallback - deprecated)
 // ============================================================================
 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 /**
- * Generate a PDF from an HTML element (for letter documents like LBA, Polite Chaser)
- * Uses html2canvas to capture the HTML and jsPDF to create the PDF
+ * @deprecated Use generateLetterPDF(data: ClaimState) instead.
+ * This legacy function creates large rasterized PDFs (~44MB).
+ * Kept for emergency fallback only.
  */
-export const generateLetterPDF = async (elementId: string): Promise<Blob> => {
+export const generateLetterPDFLegacy = async (elementId: string): Promise<Blob> => {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Element with ID '${elementId}' not found`);

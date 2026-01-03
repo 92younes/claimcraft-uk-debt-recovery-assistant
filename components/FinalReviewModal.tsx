@@ -64,7 +64,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
       onClose={handleClose}
       title="Final Review Checklist"
       description="Last check before filing"
-      maxWidthClassName="max-w-2xl"
+      maxWidthClassName="max-w-lg"
       bodyClassName="p-0"
       headerClassName="bg-gradient-to-r from-teal-600 to-teal-500 text-white border-b-0"
       titleClassName="text-white"
@@ -95,7 +95,7 @@ export const FinalReviewModal: React.FC<FinalReviewModalProps> = ({
         </div>
       )}
     >
-      <div className="p-6 md:p-8 space-y-6">
+      <div className="p-5 space-y-5">
           {/* Claim Summary */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
             <h3 className="font-bold text-slate-900 text-lg mb-4 flex items-center gap-2">
